@@ -1,0 +1,11 @@
+{
+  "name": "printtally", "version": "0.1.0", "private": true, "license": "MIT",
+  "description": "Per-job print cost accounting for Canon imagePROGRAF printers",
+  "type": "module", "workspaces": ["packages/*", "apps/server"],
+  "engines": {"bun": ">=1.3.9"},
+  "scripts": {
+    "typecheck": "tsc --noEmit", "test": "bun test",
+    "cli": "bun apps/server/src/cli.ts", "dev:server": "bun --watch apps/server/src/cli.ts serve"
+  },
+  "devDependencies": {"@peculiar/x509": "^2.1.0", "@types/bun": "^1.3.0", "reflect-metadata": "^0.2.0", "typescript": "^5.9.0", "print-accounting-contracts": "workspace:*", "print-accounting-core": "workspace:*", "print-accounting-database": "workspace:*", "print-accounting-ivec": "workspace:*"}
+}

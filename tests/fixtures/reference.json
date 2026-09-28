@@ -1,0 +1,155 @@
+{
+  "snapshot": {
+    "printer": {
+      "host": "192.0.2.10",
+      "mac": "020000000001"
+    },
+    "collected_at": "2026-09-01T12:00:00+00:00",
+    "requested_range": [
+      1,
+      1
+    ],
+    "schema": [
+      {
+        "name": "job_record_number",
+        "type": "uint"
+      },
+      {
+        "name": "job_name",
+        "type": "string"
+      },
+      {
+        "name": "job_owner",
+        "type": "string"
+      },
+      {
+        "name": "job_time_at_processing",
+        "type": "string"
+      },
+      {
+        "name": "job_time_at_completed",
+        "type": "string"
+      },
+      {
+        "name": "job_complete_state",
+        "type": "string"
+      },
+      {
+        "name": "job_type",
+        "type": "string"
+      },
+      {
+        "name": "job_media_type_name",
+        "type": "string"
+      },
+      {
+        "name": "job_data_size_width",
+        "type": "uint",
+        "unit": "mm",
+        "factor": "100"
+      },
+      {
+        "name": "job_data_size_height",
+        "type": "uint",
+        "unit": "mm",
+        "factor": "100"
+      },
+      {
+        "name": "job_used_area",
+        "type": "uint",
+        "unit": "m2",
+        "factor": "10000"
+      },
+      {
+        "name": "job_impressions_completed",
+        "type": "uint"
+      },
+      {
+        "name": "job_color_page_count",
+        "type": "uint"
+      },
+      {
+        "name": "job_monochrome_page_count",
+        "type": "uint"
+      },
+      {
+        "name": "job_duplex",
+        "type": "string"
+      },
+      {
+        "name": "job_used_ink_C",
+        "type": "uint",
+        "unit": "ml",
+        "factor": "1000"
+      },
+      {
+        "name": "job_used_ink_CO",
+        "type": "uint",
+        "unit": "ml",
+        "factor": "1000"
+      }
+    ],
+    "records": [
+      {
+        "raw": {
+          "job_record_number": 1,
+          "job_name": "Synthetic print",
+          "job_owner": "test",
+          "job_time_at_processing": "20260901100000",
+          "job_time_at_completed": "20260901100500",
+          "job_complete_state": "success",
+          "job_type": "print",
+          "job_media_type_name": "custom-media-type-canon-11111111-1111-1111-1111-111111111111",
+          "job_data_size_width": 21000,
+          "job_data_size_height": 29700,
+          "job_used_area": 623,
+          "job_impressions_completed": 1,
+          "job_color_page_count": 1,
+          "job_monochrome_page_count": 0,
+          "job_duplex": "OFF",
+          "job_used_ink_C": 125,
+          "job_used_ink_CO": null
+        },
+        "media": {
+          "name": "Configured stock"
+        }
+      }
+    ],
+    "media_catalogue": {
+      "printer_mac": "020000000001",
+      "collected_at": "2026-09-01T12:00:00+00:00",
+      "entries": {
+        "custom-media-type-canon-11111111-1111-1111-1111-111111111111": {
+          "names": {
+            "EN": "Configured stock",
+            "DE": "Papier"
+          },
+          "short_name": null,
+          "checksum": "1234",
+          "observed_at": "2026-09-01T12:00:00+00:00",
+          "present_on_printer": true,
+          "visible": true
+        }
+      }
+    }
+  },
+  "identity_hash": "447f110c5f7ba85fa2bdc9de471990dd3844ec1feecf53e54ead7a568e6cb513",
+  "content_hash": "0c42240ffe41a84f6054881358a738f3be4456485c5adbde60b484769ff32419",
+  "normalized": {
+    "raw": {
+      "job_record_number": 7,
+      "job_name": "A, quoted job",
+      "job_used_ink_C": 125
+    },
+    "quantities": {
+      "job_used_ink_C": {
+        "value": "0.125",
+        "unit": "ml"
+      }
+    },
+    "ink_ml": {
+      "C": "0.125"
+    },
+    "total_ink_ml": "0.125"
+  }
+}

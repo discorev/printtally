@@ -1,0 +1,1 @@
+{"name":"print-accounting-database","version":"0.1.0","private":true,"type":"module","exports":"./src/index.ts","dependencies":{"drizzle-orm":"^0.45.3","print-accounting-contracts":"workspace:*","print-accounting-core":"workspace:*"},"devDependencies":{"drizzle-kit":"^0.31.11"}}

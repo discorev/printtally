@@ -1,0 +1,1 @@
+{"name":"print-accounting-ivec","version":"0.1.0","private":true,"type":"module","exports":{".":"./src/index.ts","./files":"./src/files.ts","./media":"./src/media.ts","./protocol":"./src/protocol.ts"},"dependencies":{"print-accounting-contracts":"workspace:*","print-accounting-core":"workspace:*","@xmldom/xmldom":"^0.8.11","csv-parse":"^7.0.3"}}
