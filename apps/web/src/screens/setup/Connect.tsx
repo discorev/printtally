@@ -48,7 +48,7 @@ function DesktopConnect() {
         : <>Print Tally is running next to the printer on another computer. Run <Mono>printtally pair</Mono> there to get a pairing link or code.</>} />
       <DocketSection className="border-t-0">
         <form onSubmit={submit} noValidate>
-          <div className="flex flex-col gap-2.5">
+          <div role="radiogroup" aria-label="How to connect" className="flex flex-col gap-2.5">
             <Option on={mode === 'link'} onSelect={() => { setMode('link'); setMessage(undefined); }} title="Paste a pairing link"
               detail={<>From <Mono>printtally pair</Mono> on that computer</>}>
               <Field label="Pairing link" error={mode === 'link' && message}>

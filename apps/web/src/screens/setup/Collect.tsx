@@ -3,7 +3,7 @@ import type { ImportRun, PrinterStatus } from 'print-accounting-contracts';
 import { api } from '../../api/endpoints.ts';
 import { useEdit, useImports } from '../../api/queries.ts';
 import { connection, useHealth } from '../../connection/index.ts';
-import { Button, ButtonLink, DocketSection, KV, Mono, Notice, Pad, PadBody, PadHead, RowActions, Sub, Sweep } from '../../components/index.ts';
+import { Button, ButtonLink, DocketSection, KV, Loading, Mono, Notice, Pad, PadBody, PadHead, RowActions, Sub, Sweep } from '../../components/index.ts';
 import { clock, count, dateMedium, dateTime, monthShort, plural } from '../../lib/format.ts';
 import { problem } from './problem.ts';
 import { useLedgerSpan } from './ledger.ts';
@@ -41,9 +41,12 @@ export function Collect() {
     ? `${collected.newJobs ? plural(collected.newJobs, 'new job') : 'No new jobs'}${log?.requested_last ? ` · the log ${collected.newJobs ? 'now' : 'still'} ends at job ${count(log.requested_last)}` : ''}`
     : [last?.newJobs ? plural(last.newJobs, 'new job') : span?.last ? `No new jobs since ${dateMedium(span.last)}` : 'No jobs yet', kept].filter(Boolean).join(' · ');
 
+  const head = <PadHead title="Collect" meta="Print Tally reads the printer's job log and keeps every job; the printer keeps only its most recent." />;
+  // Everything here comes from the server's health; before its first answer there's nothing to show.
+  if (!health) return <Pad label="Collect" className="max-w-[720px]">{head}<PadBody><Loading what="the last collection" /></PadBody></Pad>;
   return (
     <Pad label="Collect" className="max-w-[720px]">
-      <PadHead title="Collect" meta="Print Tally reads the printer's job log and keeps every job; the printer keeps only its most recent." />
+      {head}
       <PadBody>
         <DocketSection label="Last collection" className="border-t-0">
           <div className="flex flex-col gap-1.5">

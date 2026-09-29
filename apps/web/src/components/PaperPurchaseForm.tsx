@@ -20,14 +20,16 @@ const SIZES = SIZE_GROUPS.flatMap(([, list]) => list);
 /**
  * Adding stock: a pack of sheets or a roll you bought, for an existing paper and size, or setting up a new
  * size or a whole new paper with it (vPurchaseForm). Used from the Papers docket, "Add stock", and a job's
- * "New paper…" (with `embedded`: no paper choice and no section of its own). Creates what's new, then the
- * purchase; `onSaved` gets the ids only once the server confirmed every step.
+ * "New paper…" (with `embedded`: no paper choice and no section of its own). What's new and the purchase are
+ * created in one request, all or nothing; `onSaved` gets the ids once the server confirmed it. If `onSaved`
+ * returns a promise that rejects (assigning the new paper to a print), its error shows here and the button
+ * retries only that step, with the same ids.
  */
 /** What the form is setting up so far, for a docket head that follows it ("New paper", "Prints as …"). */
 export interface PaperPurchaseDraft { paper: PaperChoice; name: string; media: string }
 export function PaperPurchaseForm({ papers, mediaTypes = [], initial = {}, embedded, submitLabel = 'Add stock', onSaved, onCancel, onDraft }: {
   papers: PaperView[]; mediaTypes?: MediaTypeView[]; initial?: PaperPurchaseInitial; embedded?: boolean; submitLabel?: string;
-  onSaved: (saved: PaperPurchaseSaved) => void; onCancel: () => void; onDraft?: (draft: PaperPurchaseDraft) => void;
+  onSaved: (saved: PaperPurchaseSaved) => void | Promise<unknown>; onCancel: () => void; onDraft?: (draft: PaperPurchaseDraft) => void;
 }) {
   const firstStock = (paperId: PaperChoice): number | 'new' => papers.find(p => p.id === paperId)?.stock[0]?.id ?? 'new';
   const [paper, setPaper] = useState<PaperChoice>(initial.paperId ?? null);
@@ -54,19 +56,30 @@ export function PaperPurchaseForm({ papers, mediaTypes = [], initial = {}, embed
     && (roll ? lengthUm > 0 : whole(packs) && whole(perPack));
 
   const save = useEdit(async (): Promise<PaperPurchaseSaved> => {
-    const paperId = isNew ? (await api.paper.create({ name: name.trim(), media_types: media ? [media] : [] })).id : chosen!.id;
     const sheet = SIZES.find(s => s.name === size)!;
-    const stockId = !newItem ? stock as number : (await api.stock.create(kind === 'roll'
-      ? { paper_id: paperId, format: 'roll', name: `${width}" roll`, width_um: width * 25_400 }
-      : { paper_id: paperId, format: 'sheet', name: size + (deckle ? ' deckle' : ''), width_um: Math.round(sheet.widthMm * 1000), height_um: Math.round(sheet.heightMm * 1000), deckle })).id;
-    const { id } = await api.paperPurchase.create(roll
-      ? { paper_stock_id: stockId, purchased_on: date, length_um: lengthUm, price_micros: priceMicros! }
-      : { paper_stock_id: stockId, purchased_on: date, packs: Number(packs), sheets_per_pack: Number(perPack), price_micros: priceMicros! });
-    return { paperId, stockId, purchaseId: id, date };
+    const result = await api.setupPaperPurchase({
+      ...isNew ? { paper: { name: name.trim(), media_types: media ? [media] : [] } } : newItem ? { paper_id: chosen!.id } : { paper_stock_id: stock as number },
+      ...newItem && { stock: kind === 'roll' ? { format: 'roll', name: `${width}" roll`, width_um: width * 25_400 }
+        : { format: 'sheet', name: size + (deckle ? ' deckle' : ''), width_um: Math.round(sheet.widthMm * 1000), height_um: Math.round(sheet.heightMm * 1000), deckle } },
+      purchase: roll ? { purchased_on: date, length_um: lengthUm, price_micros: priceMicros! }
+        : { purchased_on: date, packs: Number(packs), sheets_per_pack: Number(perPack), price_micros: priceMicros! },
+    });
+    return { paperId: result.paper_id, stockId: result.paper_stock_id, purchaseId: result.id, date };
   });
+  // Once saved, the button only finishes (onSaved again): nothing is created twice.
+  const [finishing, setFinishing] = useState<{ pending: boolean; error?: unknown }>({ pending: false });
+  const finish = (saved: PaperPurchaseSaved) => {
+    const pending = onSaved(saved);
+    if (!pending) return;
+    setFinishing({ pending: true });
+    pending.then(() => setFinishing({ pending: false }), (error: unknown) => setFinishing({ pending: false, error }));
+  };
+  const busy = save.isPending || finishing.pending;
 
   const fields = (
     <FieldStack>
+      {/* Saved but not finished: what's set up stays as it was saved. */}
+      <fieldset disabled={save.isSuccess} className="contents">
       {!embedded && (
         <Field label="Paper">{id => (
           <PaperSelect id={id} papers={papers} value={paper} placeholder="Choose a paper" allowNew
@@ -125,13 +138,15 @@ export function PaperPurchaseForm({ papers, mediaTypes = [], initial = {}, embed
         </FieldPair>
         <Field label="Price paid" className="max-w-[180px]">{id => <MoneyInput id={id} value={price} onChange={e => setPrice(e.target.value)} />}</Field>
       </>}
+      </fieldset>
       <div>
         <RowActions className="mt-0">
-          <Button variant="primary" edit disabled={!ready || save.isPending} onClick={() => save.mutate(undefined, { onSuccess: onSaved })}>
-            {save.isPending ? 'Saving…' : submitLabel}</Button>
+          <Button variant="primary" edit disabled={!ready || busy} onClick={() => save.data ? finish(save.data) : save.mutate(undefined, { onSuccess: finish })}>
+            {busy ? 'Saving…' : submitLabel}</Button>
           <Button variant="text" onClick={onCancel}>Cancel</Button>
         </RowActions>
         {save.isError && <StatusLine error>{describeError(save.error)}</StatusLine>}
+        {finishing.error !== undefined && <StatusLine error>{describeError(finishing.error)}</StatusLine>}
       </div>
     </FieldStack>
   );

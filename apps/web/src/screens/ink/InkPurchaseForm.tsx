@@ -8,8 +8,8 @@ import { productName, purchasableChannels, type InkChannelView } from './channel
 
 /**
  * Adding stock (vInkPurchaseForm): cartridges bought for a channel, on a date, for a price. A channel with no
- * cartridge set up yet asks for the product's name and size too, and it's created first. `onSaved` runs only
- * once the server confirmed every step.
+ * cartridge set up yet asks for the product's name and size too, and it's created with the purchase (all or
+ * nothing). `onSaved` runs only once the server confirmed it.
  */
 export function InkPurchaseForm({ channels, initial, onSaved, onCancel }: {
   channels: InkChannelView[]; initial?: string; onSaved: (channel: string) => void; onCancel: () => void;
@@ -29,9 +29,12 @@ export function InkPurchaseForm({ channels, initial, onSaved, onCancel }: {
   const ready = code !== '' && priceMicros !== null && /^\d{4}-\d\d-\d\d$/.test(date) && /^\d+$/.test(count) && Number(count) > 0
     && (!!product || (newName.trim() !== '' && capacityNl > 0));
 
+  // A new cartridge product is created with its purchase in one request, so a failure leaves nothing to retry around.
   const save = useEdit(async () => {
-    const id = product?.id ?? (await api.cartridge.create({ name: newName.trim(), channel: code, capacity_nl: capacityNl })).id;
-    await api.inkPurchase.create({ ink_product_id: id, purchased_on: date, cartridges: Number(count), price_micros: priceMicros! });
+    await api.setupInkPurchase({
+      ...product ? { ink_product_id: product.id } : { cartridge: { name: newName.trim(), channel: code, capacity_nl: capacityNl } },
+      purchase: { purchased_on: date, cartridges: Number(count), price_micros: priceMicros! },
+    });
     return code;
   });
 

@@ -6,7 +6,7 @@ import { useInkChannels } from '../../screens/ink/useInkChannels.ts';
 export const Route = createFileRoute('/_app/ink')({ component: Ink });
 
 function Ink() {
-  const { channels, settings } = useInkChannels();
+  const { channels, settings, totals, error } = useInkChannels();
   const { channel } = useParams({ strict: false });
-  return <><InkPad channels={channels} settings={settings} selected={channel} /><Outlet /></>;
+  return <><InkPad channels={channels} settings={settings} totals={totals} selected={channel} error={error} /><Outlet /></>;
 }

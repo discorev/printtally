@@ -4,7 +4,7 @@ import { api } from '../api/endpoints.ts';
 import { onRequestOutcome, setEditGate } from '../api/client.ts';
 import { queryClient } from '../api/queries.ts';
 import { ConnectionMonitor } from './monitor.ts';
-import type { ConnectionState } from './state.ts';
+import { serverName, type ConnectionState } from './state.ts';
 
 export { canEdit, backoffMs, type ConnectionState, type ConnectionStatus } from './state.ts';
 
@@ -13,6 +13,7 @@ export const connection = new ConnectionMonitor({ fetchHealth: api.health });
 onRequestOutcome(outcome => connection.report(outcome));
 setEditGate(connection.canEdit);
 connection.subscribe((state, previous) => {
+  if (state.health) remember(state.health.hostName);
   // Back from lost: refetch everything, so what's shown is current again.
   if (previous.status === 'lost' && state.status === 'connected') void queryClient.invalidateQueries();
   // A collection brought new jobs (on start, every 15 minutes, or from another device): show them.
@@ -27,8 +28,12 @@ export const useCanEdit = (): boolean => useConnection().status === 'connected';
 export const useHealth = (): HealthResponse | null => useConnection().health;
 /** Gaps in the printer's log that were never collected (the Jobs screen's missed-jobs strip). */
 export const useMissedJobs = (): MissedJobs[] => useHealth()?.missedJobs ?? [];
-/** The computer Print Tally runs on, e.g. "studio-mac": the server's own name, else the address in use. */
-export const useServerName = (): string => useHealth()?.hostName ?? location.hostname;
+// The server's name, remembered per address, so a page opened while the server is lost still names it.
+const nameKey = () => `printtally.hostName:${location.host}`;
+const remembered = (): string | null => { try { return localStorage.getItem(nameKey()); } catch { return null; } };
+function remember(name: string): void { try { if (remembered() !== name) localStorage.setItem(nameKey(), name); } catch { /* storage unavailable */ } }
+/** The computer Print Tally runs on, e.g. "studio-mac": the name it last gave (kept while it's lost), else the address in use. */
+export const useServerName = (): string => serverName(useHealth(), remembered(), location.hostname);
 
 /** Seconds until the next retry while the server is lost, ticking each second; null otherwise. */
 export function useRetryCountdown(): number | null {

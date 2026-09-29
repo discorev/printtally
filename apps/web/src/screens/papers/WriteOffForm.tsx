@@ -1,23 +1,15 @@
 import { useState } from 'react';
-import type { PaperView, StockView } from 'print-accounting-contracts';
+import type { PaperView } from 'print-accounting-contracts';
 import { Button, DateInput, DocketSection, Field, FieldPair, FieldStack, NumberInput, PaperSelect, RowActions, Select, StatusLine, TextInput, Toggle } from '../../components/index.ts';
 import { api } from '../../api/endpoints.ts';
 import { describeError } from '../../api/client.ts';
-import { useEdit } from '../../api/queries.ts';
+import { useEdit, useWriteOffPreview } from '../../api/queries.ts';
 import { today } from '../../lib/format.ts';
 import { stockAmount } from './common.ts';
 
 // Writing off paper that's gone without being printed (vWriteoffForm): some sheets or metres, or what's left
-// of the open pack or roll. It shows as waste in totals, never inside a print's cost.
-
-/** What "everything left" writes off on `date`: the rest of the oldest pack or roll with stock left, as the ledger counts it. */
-function openLeft(paper: PaperView, stock: StockView, date: string): number {
-  const open = paper.purchases.filter(p => p.paper_stock_id === stock.id && p.purchased_on <= date && p.remaining > 0)
-    .sort((a, b) => a.purchased_on.localeCompare(b.purchased_on) || a.id - b.id)[0];
-  if (!open) return 0;
-  const unit = open.length_um ?? open.sheets_per_pack ?? open.quantity;
-  return open.remaining % unit || unit;
-}
+// of the open pack or roll. It shows as waste in totals, never inside a print's cost. What "everything left"
+// takes on the chosen date comes from the ledger (the write-off preview), never worked out here.
 
 export function WriteOffForm({ papers, paperId, onSaved, onCancel }: {
   papers: PaperView[]; paperId: number; onSaved: (paperId: number) => void; onCancel: () => void;
@@ -31,7 +23,7 @@ export function WriteOffForm({ papers, paperId, onSaved, onCancel }: {
   const [reason, setReason] = useState('');
   const stock = chosen?.stock.find(s => s.id === stockId), roll = stock?.format === 'roll';
   const amount = Number(quantity), units = roll ? Math.round(amount * 1e6) : amount;
-  const left = chosen && stock ? openLeft(chosen, stock, date) : 0;
+  const preview = useWriteOffPreview(stock && { paper_stock_id: stock.id }, date).data, left = preview?.written_off ?? 0;
   const ready = !!stock && /^\d{4}-\d\d-\d\d$/.test(date) && (how === 'all' ? left > 0 : Number.isFinite(units) && units > 0 && (roll || Number.isInteger(amount)));
 
   const save = useEdit(() => api.writeOff.create({
@@ -58,8 +50,8 @@ export function WriteOffForm({ papers, paperId, onSaved, onCancel }: {
           <Field label="How much" htmlFor="writeoff-some">
             <Toggle type="radio" id="writeoff-some" name="writeoff-how" checked={how === 'some'} onChange={() => setHow('some')} label={roll ? 'Some of the roll' : 'Some sheets'} />
             <Toggle type="radio" name="writeoff-how" className="whitespace-normal" checked={how === 'all'} onChange={() => setHow('all')}
-              label={stock && left === stock.remaining ? `Everything left (${stockAmount(stock, left)})`
-                : `The rest of the open ${roll ? 'roll' : 'pack'}${stock ? ` (${stockAmount(stock, left)})` : ''}`} />
+              label={stock && preview && left === preview.remaining ? `Everything left (${stockAmount(stock, left)})`
+                : `The rest of the open ${roll ? 'roll' : 'pack'}${stock && preview ? ` (${stockAmount(stock, left)})` : ''}`} />
           </Field>
         </FieldPair>
         {how === 'some' && (

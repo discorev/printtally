@@ -91,3 +91,44 @@ test('API manages papers, stock, purchases, ink and write-offs and returns coste
   assert.equal(((await call('GET', '/media-types')).body as unknown as MediaTypesResponse).media_types[0].papers[0].id, paper);
   assert.deepEqual((await call('DELETE', '/write-offs/' + off)).body, { deleted: true });
 });
+test('a purchase is set up with its new stock, paper or cartridge in one go or not at all; previews and ink totals come from the ledger', async t => {
+  const f = await apiFixture(t), db = f.db;
+  db.importSnapshot(batch([{ day: '2026-02-01' }, { day: '2026-02-02', imp: 2 }]));
+  const call = async (method: string, path: string, body?: unknown) => {
+    const reply = await f.request('/api/v1' + path, { method, body });
+    return { status: reply.status, body: reply.json<Record<string, unknown>>() };
+  };
+  const purchase = { purchased_on: '2026-01-01', packs: 1, sheets_per_pack: 25, price_micros: 25_000_000 };
+  const a4 = { name: 'A4', format: 'sheet', width_um: 210000, height_um: 297000 };
+  // A roll bought in packs fails at the last step: neither the paper nor its stock is left behind, so a retry just works.
+  const failed = await call('POST', '/paper-purchases/setup', { paper: { name: 'Museum Etching', media_types: [MEDIA] }, stock: { name: '17" roll', format: 'roll', width_um: 431800 }, purchase });
+  assert.deepEqual([failed.status, failed.body.error], [400, 'purchase_does_not_match_stock']);
+  assert.deepEqual([db.all('SELECT * FROM papers').length, db.all('SELECT * FROM paper_stocks').length], [0, 0]);
+  const made = await call('POST', '/paper-purchases/setup', { paper: { name: 'Museum Etching', media_types: [MEDIA] }, stock: a4, purchase });
+  assert.equal(made.status, 201);
+  const { paper_id, paper_stock_id } = made.body as { paper_id: number; paper_stock_id: number };
+  const again = await call('POST', '/paper-purchases/setup', { paper_stock_id, purchase: { ...purchase, purchased_on: '2026-03-01' } });
+  assert.deepEqual([again.status, again.body.paper_id, again.body.paper_stock_id], [201, paper_id, paper_stock_id]);
+  assert.equal((await call('POST', '/paper-purchases/setup', { paper_id, paper_stock_id, purchase })).status, 400, 'a stock item or a new one, not both');
+  assert.equal((await call('POST', '/paper-purchases/setup', { paper_id: 999, stock: a4, purchase })).status, 400);
+  assert.equal(db.all('SELECT * FROM paper_stocks').length, 1);
+
+  // "Everything left" as of a day: the open pack then, and all that was left of the item then.
+  const preview = (query: string) => call('GET', '/write-offs/preview?' + query);
+  assert.deepEqual((await preview(`paper_stock_id=${paper_stock_id}&written_off_on=2026-02-15`)).body, { written_off: 22, cost_micros: 22_000_000, remaining: 22 });
+  assert.deepEqual((await preview(`paper_stock_id=${paper_stock_id}&written_off_on=2026-03-01`)).body, { written_off: 22, cost_micros: 22_000_000, remaining: 47 });
+  assert.equal((await preview(`paper_stock_id=999&written_off_on=2026-03-01`)).status, 404);
+  assert.equal((await preview(`paper_stock_id=${paper_stock_id}&written_off_on=soon`)).status, 400);
+
+  // A new cartridge fails with its purchase (no price), then succeeds; totals leave hidden prints out.
+  assert.equal((await call('POST', '/ink-purchases/setup', { cartridge: { name: 'PFI-1000 C', channel: 'C', capacity_nl: 80_000_000 }, purchase: { purchased_on: '2026-01-01', cartridges: 1 } })).status, 400);
+  assert.equal(db.all('SELECT * FROM ink_products').length, 0);
+  const ink = await call('POST', '/ink-purchases/setup', { cartridge: { name: 'PFI-1000 C', channel: 'C', capacity_nl: 80_000_000 }, purchase: { purchased_on: '2026-01-01', cartridges: 1, price_micros: 40_000_000 } });
+  assert.equal(ink.status, 201);
+  assert.equal((await call('GET', `/write-offs/preview?ink_product_id=${ink.body.ink_product_id}&written_off_on=2026-02-03`)).body.written_off, 80_000_000 - 2 * 125_000);
+  await call('PATCH', '/jobs/1/annotation', { hidden: 1 });
+  const totals = ((await call('GET', '/ink')).body as unknown as InkResponse).totals, overall = ((await call('GET', '/totals')).body as unknown as TotalsResponse).overall;
+  assert.deepEqual([totals.jobs, totals.ink_micros, totals.waste_micros], [1, overall.ink_micros, 0]);
+  const papers = ((await call('GET', '/papers')).body as unknown as PapersResponse).papers;
+  assert.deepEqual([papers[0].totals.jobs, papers[0].totals.unknown_paper_jobs], [1, 0]);
+});

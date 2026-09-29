@@ -1,27 +1,26 @@
-import { useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { costingMethods, type CostingMethod, type KnownPrinter } from 'print-accounting-contracts';
 import { api } from '../../api/endpoints.ts';
 import { describeError } from '../../api/client.ts';
-import { useEdit, useKnownPrinters, useSettings, useTotals } from '../../api/queries.ts';
+import { keys, useEdit, useKnownPrinters, useSettings, useTotals } from '../../api/queries.ts';
 import { useCanEdit, useHealth, useServerName } from '../../connection/index.ts';
 import { desktop, useDesktopConnection } from '../../desktop.ts';
 import {
-  Button, ButtonLink, Field, Fingerprint, KV, LinkButton, Mono, Money, Pad, PadBody, PadHead, RowActions, SectionLabel, Select, StatusLine, Sub, TextLink,
+  Button, ButtonLink, Fingerprint, KV, LinkButton, Mono, Money, Pad, PadBody, PadHead, RowActions, SectionLabel, StatusLine, Sub, TextLink, useLoadingText,
 } from '../../components/index.ts';
 import { clock, dateShort, plural } from '../../lib/format.ts';
 import { cx } from '../../lib/cx.ts';
 import { useLedgerSpan } from './ledger.ts';
+import { PasswordForm } from './PasswordForm.tsx';
 
-// Settings: the costing method and currency (ledger settings on the server), the printer, which computer this
-// client uses (with "Switch computer" in the desktop app), and what the ledger keeps.
+// Settings: the costing method (a ledger setting on the server), the printer, which computer this client uses
+// (with "Switch computer" in the desktop app), and what the ledger keeps.
 const METHODS: Record<CostingMethod, [name: string, description: string]> = {
   oldest: ['Oldest', 'The price of the pack, roll or cartridge the print most likely came from.'],
   average: ['Average', 'The average of everything you had bought by the day of the print.'],
   max: ['Max', 'The most you had paid by then. Use it when pricing work.'],
 };
-// One currency per ledger; changing it relabels amounts, it doesn't convert them. Two-decimal currencies only,
-// as prices are typed in pounds and pence (or the equivalent).
-const CURRENCIES = ['GBP', 'EUR', 'USD', 'CAD', 'AUD', 'NZD', 'CHF', 'SEK', 'NOK', 'DKK'];
 
 export function Settings() {
   return (
@@ -30,7 +29,6 @@ export function Settings() {
       <PadBody>
         <div className="flex max-w-[760px] flex-col gap-4 px-5 py-4 phone:px-3.5 phone:py-3">
           <CostingCard />
-          <CurrencyCard />
           <PrinterCard />
           <ComputerCard />
           <LedgerCard />
@@ -49,67 +47,59 @@ function Card({ label, lockable, children }: { label: ReactNode; lockable?: bool
   );
 }
 
-/** The costing method: only the chosen method's figures are shown (plan decision 1), so the total sits on its card. */
+/** The costing method: only the chosen method's figures are shown (plan decision 1), so the total sits on its card.
+ *  The card shows the method the server has; a choice is marked "Saving…" until the server confirms it. */
 function CostingCard() {
-  const settings = useSettings().data, totals = useTotals().data?.overall, canEdit = useCanEdit();
-  const save = useEdit((costing_method: CostingMethod) => api.updateSettings({ costing_method }));
-  const chosen = save.isPending ? save.variables : settings?.costing_method;
-  const choose = (method: CostingMethod) => { if (method !== settings?.costing_method) save.mutate(method); };
+  const settings = useSettings().data, totals = useTotals().data?.overall, canEdit = useCanEdit(), client = useQueryClient();
+  const save = useEdit(async (costing_method: CostingMethod) => {
+    const saved = await api.updateSettings({ costing_method });
+    client.setQueryData(keys.settings, saved); // Confirmed: show it now, not after the refetch.
+    return saved;
+  });
+  const loading = useLoadingText('the costing method');
+  const confirmed = settings?.costing_method, pending = save.isPending ? save.variables : undefined;
+  const choose = (method: CostingMethod) => { if (method !== confirmed && !save.isPending) save.mutate(method); };
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
-    if (!step || !chosen) return;
+    if (!step || !confirmed || save.isPending) return;
     event.preventDefault();
-    const next = costingMethods[(costingMethods.indexOf(chosen) + step + costingMethods.length) % costingMethods.length];
+    const next = costingMethods[(costingMethods.indexOf(confirmed) + step + costingMethods.length) % costingMethods.length];
     choose(next);
     event.currentTarget.querySelector<HTMLButtonElement>(`[data-method=${next}]`)?.focus();
   };
   return (
     <Card label="Costing method" lockable>
       <Sub>How a sheet, a metre of roll or a millilitre of ink is priced when you've bought it more than once. Costs are worked out when viewed, so changing this recalculates everything and never rewrites the ledger.</Sub>
-      <div role="radiogroup" aria-label="Costing method" onKeyDown={onKeyDown} className="mt-2 grid grid-cols-3 gap-2.5 phone:grid-cols-1">
-        {costingMethods.map(method => {
-          const on = chosen === method;
-          return (
-            <button key={method} type="button" role="radio" aria-checked={on} data-method={method} tabIndex={on || !chosen ? 0 : -1} disabled={!canEdit || !settings}
-              onClick={() => choose(method)}
-              className={cx('flex flex-col gap-1 rounded-[3px] border bg-transparent px-3 py-2.5 text-left text-ink disabled:cursor-default',
-                on ? 'border-green shadow-[inset_0_0_0_1px_var(--color-green)]' : 'border-rule-2 hover:bg-hover')}>
-              <span className="font-slab text-[15px] leading-5 font-semibold">{METHODS[method][0]}</span>
-              {on && totals && !save.isPending && (
-                <span className="font-medium"><Money micros={totals.total_micros} /> <span className="font-normal text-muted">for {plural(totals.jobs, 'print')}</span></span>
-              )}
-              <span className="text-[12.5px] leading-[17px] text-muted">{METHODS[method][1]}</span>
-            </button>
-          );
-        })}
-      </div>
+      {!settings ? <Sub className="mt-2">{loading}</Sub> : (
+        <div role="radiogroup" aria-label="Costing method" aria-busy={save.isPending} onKeyDown={onKeyDown} className="mt-2 grid grid-cols-3 gap-2.5 phone:grid-cols-1">
+          {costingMethods.map(method => {
+            const on = confirmed === method, saving = pending === method;
+            return (
+              <button key={method} type="button" role="radio" aria-checked={on} data-method={method} tabIndex={on ? 0 : -1} disabled={!canEdit}
+                onClick={() => choose(method)}
+                className={cx('flex flex-col gap-1 rounded-[3px] border bg-transparent px-3 py-2.5 text-left text-ink disabled:cursor-default',
+                  on ? 'border-green shadow-[inset_0_0_0_1px_var(--color-green)]' : saving ? 'border-dashed border-green' : 'border-rule-2 enabled:hover:bg-hover')}>
+                <span className="font-slab text-[15px] leading-5 font-semibold">{METHODS[method][0]}</span>
+                {on && totals && !save.isPending && (
+                  <span className="font-medium"><Money micros={totals.total_micros} /> <span className="font-normal text-muted">for {plural(totals.jobs, 'print')}</span></span>
+                )}
+                {saving && <span className="font-medium text-muted">Saving…</span>}
+                <span className="text-[12.5px] leading-[17px] text-muted">{METHODS[method][1]}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
       {save.isError && <StatusLine error>{describeError(save.error)}</StatusLine>}
     </Card>
   );
 }
-
-function CurrencyCard() {
-  const settings = useSettings().data, canEdit = useCanEdit();
-  const save = useEdit((currency: string) => api.updateSettings({ currency }));
-  const current = save.isPending ? save.variables : settings?.currency;
-  const options = current && !CURRENCIES.includes(current) ? [current, ...CURRENCIES] : CURRENCIES;
-  return (
-    <Card label="Currency" lockable>
-      <Sub>The ledger records every price in one currency. Changing it relabels every amount; nothing is converted.</Sub>
-      <Select aria-label="Currency" className="mt-2.5 max-w-[240px]" value={current ?? ''} disabled={!canEdit || !settings} onChange={event => save.mutate(event.target.value)}>
-        {options.map(code => <option key={code} value={code}>{code} · {currencyName(code)}</option>)}
-      </Select>
-      {save.isError && <StatusLine error>{describeError(save.error)}</StatusLine>}
-    </Card>
-  );
-}
-const currencyNames = new Intl.DisplayNames(['en-GB'], { type: 'currency' });
-const currencyName = (code: string): string => currencyNames.of(code) ?? code;
 
 function PrinterCard() {
-  const printers = useKnownPrinters().data?.printers;
+  const printers = useKnownPrinters().data?.printers, loading = useLoadingText('the printer');
   return (
     <Card label="Printer" lockable>
+      {!printers && <Sub>{loading}</Sub>}
       {printers?.length === 0 && <><Sub>No printer is set up yet.</Sub><RowActions><ButtonLink size="sm" to="/setup">Set up your printer</ButtonLink></RowActions></>}
       {printers?.map(printer => <Printer key={printer.id} printer={printer} />)}
       {!!printers?.length && <RowActions className="mt-3.5"><ButtonLink size="sm" to="/setup">Set up a different printer</ButtonLink></RowActions>}
@@ -140,30 +130,9 @@ function Printer({ printer }: { printer: KnownPrinter }) {
 }
 
 function ChangePassword({ printer, onDone }: { printer: KnownPrinter; onDone: (saved?: string) => void }) {
-  const [password, setPassword] = useState(''), [shown, setShown] = useState(false), [message, setMessage] = useState<string>();
-  const save = useEdit((value: string) => api.savePrinterPassword(printer.id, value));
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!password) { setMessage("Enter the printer's administrator password."); return; }
-    try { await save.mutateAsync(password); onDone(`Password saved ${clock(new Date().toISOString())}. It's used from the next collection.`); }
-    catch (error) { setMessage(describeError(error)); }
-  };
-  return (
-    <form onSubmit={submit} noValidate className="mt-3 max-w-[360px]">
-      <Field label="Administrator password" hint="The password you use on the printer's Remote UI." error={message}>
-        {id => (
-          <div className="flex items-center gap-2">
-            <input id={id} type={shown ? 'text' : 'password'} value={password} onChange={event => setPassword(event.target.value)} autoComplete="off" autoFocus />
-            <LinkButton onClick={() => setShown(!shown)}>{shown ? 'Hide' : 'Show'}</LinkButton>
-          </div>
-        )}
-      </Field>
-      <RowActions>
-        <Button type="submit" variant="primary" size="sm" edit disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save password'}</Button>
-        <Button variant="text" size="sm" onClick={() => onDone()}>Cancel</Button>
-      </RowActions>
-    </form>
-  );
+  return <PasswordForm printer={printer} size="sm" className="mt-3 max-w-[360px]"
+    onSaved={() => onDone(`Password saved ${clock(new Date().toISOString())}. It's used from the next collection.`)}
+    actions={() => <Button variant="text" size="sm" onClick={() => onDone()}>Cancel</Button>} />;
 }
 
 /** Which computer this client uses. Only the desktop app can switch (plan decision 4); a browser uses the
@@ -192,10 +161,10 @@ function ComputerCard() {
 }
 
 function LedgerCard() {
-  const span = useLedgerSpan();
+  const span = useLedgerSpan(), loading = useLoadingText('the ledger');
   return (
     <Card label="Ledger">
-      <KV rows={[['Kept', !span ? '…' : span.total
+      <KV rows={[['Kept', !span ? loading : span.total
         ? <>{plural(span.total, 'job')}{span.first && ` since ${dateShort(span.first)}`} · {span.hidden} hidden</>
         : 'No jobs yet']]} />
     </Card>

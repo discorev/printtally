@@ -1,10 +1,12 @@
 import { eq, sql } from 'drizzle-orm';
 import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core';
 import {
-  cartridgePatchSchema, cartridgeSchema, inkPurchasePatchSchema, inkPurchaseSchema, jobDetailsSchema, paperPatchSchema, paperPurchasePatchSchema,
-  paperPurchaseSchema, paperSchema, settingsSchema, stockPatchSchema, stockSchema, writeOffPatchSchema, writeOffSchema,
-  type CartridgeView, type CostTotals, type InkResponse, type JobDetails, type JobsResponse, type LedgerJob, type MediaTypesResponse,
-  type PapersResponse, type Settings, type StockFormat, type TotalsResponse, type WriteOffView,
+  cartridgePatchSchema, cartridgeSchema, inkPurchasePatchSchema, inkPurchaseSchema, inkPurchaseSetupSchema, jobDetailsSchema, paperPatchSchema,
+  paperPurchasePatchSchema, paperPurchaseSchema, paperPurchaseSetupSchema, paperSchema, settingsSchema, stockPatchSchema, stockSchema,
+  writeOffPatchSchema, writeOffSchema,
+  type CartridgeView, type CostTotals, type InkPurchaseSetupResult, type InkResponse, type JobDetails, type JobsResponse, type LedgerJob,
+  type MediaTypesResponse, type PaperPurchaseSetupResult, type PapersResponse, type Settings, type StockFormat, type TotalsResponse,
+  type WriteOffPreview, type WriteOffView,
 } from 'print-accounting-contracts';
 import { computeLedger, type LedgerInput, type LedgerResult } from 'print-accounting-core';
 import type { AccountingDatabase } from './index.ts';
@@ -25,9 +27,9 @@ function constraint(error: unknown, deleting: boolean): never {
   throw error;
 }
 const flag = (value: boolean | undefined) => value === undefined ? undefined : Number(value);
-const blank = (): CostTotals => ({ jobs: 0, unknown_jobs: 0, paper_micros: 0, ink_micros: 0, total_micros: 0, waste_micros: 0, ink_nl: 0 });
+const blank = (): CostTotals => ({ jobs: 0, unknown_jobs: 0, unknown_paper_jobs: 0, paper_micros: 0, ink_micros: 0, total_micros: 0, waste_micros: 0, ink_nl: 0 });
 const addJob = (totals: CostTotals, job: LedgerJob) => {
-  totals.jobs++; if (job.total_micros === null) totals.unknown_jobs++;
+  totals.jobs++; if (job.total_micros === null) totals.unknown_jobs++; if (job.paper_micros === null) totals.unknown_paper_jobs++;
   totals.paper_micros += job.paper_micros ?? 0; totals.ink_micros += job.ink_micros; totals.total_micros = totals.paper_micros + totals.ink_micros;
   totals.ink_nl += job.ink.reduce((sum, line) => sum + (line.volume_nl ?? 0), 0);
 };
@@ -117,6 +119,19 @@ export class Ledger {
     });
   }
   deletePaperPurchase(id: number): void { this.remove(paper_purchases, id); }
+  /** A purchase with its new stock item (and new paper), in one transaction, so a failure leaves nothing behind. */
+  setupPaperPurchase(input: unknown): PaperPurchaseSetupResult {
+    const { paper, paper_id, stock, paper_stock_id, purchase } = paperPurchaseSetupSchema.parse(input);
+    return this.write(() => {
+      let paperId = paper_id;
+      if (paper) { const { media_types, ...row } = paper; paperId = this.insert(papers, row); this.setMedia(paperId, media_types); }
+      const stockId = stock ? this.insert(paper_stocks, { ...stock, paper_id: paperId, deckle: flag('deckle' in stock ? stock.deckle : undefined) }) : paper_stock_id!;
+      this.checkPurchase(stockId, purchase);
+      const id = this.insert(paper_purchases, { ...purchase, paper_stock_id: stockId });
+      paperId ??= this.db.orm.select({ paper_id: paper_stocks.paper_id }).from(paper_stocks).where(eq(paper_stocks.id, stockId)).get()!.paper_id;
+      return { paper_id: paperId, paper_stock_id: stockId, id };
+    });
+  }
 
   createCartridge(input: unknown): number { const cartridge = cartridgeSchema.parse(input); return this.write(() => this.insert(ink_products, cartridge)); }
   updateCartridge(id: number, input: unknown): void { const changes = cartridgePatchSchema.parse(input); this.write(() => this.update(ink_products, id, changes)); }
@@ -125,6 +140,14 @@ export class Ledger {
   createInkPurchase(input: unknown): number { const purchase = inkPurchaseSchema.parse(input); return this.write(() => this.insert(ink_purchases, purchase)); }
   updateInkPurchase(id: number, input: unknown): void { const changes = inkPurchasePatchSchema.parse(input); this.write(() => this.update(ink_purchases, id, changes)); }
   deleteInkPurchase(id: number): void { this.remove(ink_purchases, id); }
+  /** A purchase with its new cartridge product, in one transaction. */
+  setupInkPurchase(input: unknown): InkPurchaseSetupResult {
+    const { cartridge, ink_product_id, purchase } = inkPurchaseSetupSchema.parse(input);
+    return this.write(() => {
+      const productId = cartridge ? this.insert(ink_products, cartridge) : ink_product_id!;
+      return { ink_product_id: productId, id: this.insert(ink_purchases, { ...purchase, ink_product_id: productId }) };
+    });
+  }
 
   createWriteOff(input: unknown): number {
     const { all_remaining, ...writeOff } = writeOffSchema.parse(input);
@@ -139,6 +162,15 @@ export class Ledger {
     this.write(() => this.update(stock_write_offs, id, values));
   }
   deleteWriteOff(id: number): void { this.remove(stock_write_offs, id); }
+  /** What writing off all that's left of a stock item or cartridge on `day` would take, as if saved now. */
+  writeOffPreview(target: { paper_stock_id?: number; ink_product_id?: number }, day: string): WriteOffPreview {
+    const writeOff = writeOffSchema.parse({ ...target, written_off_on: day, all_remaining: true });
+    const [table, id] = writeOff.paper_stock_id != null ? [paper_stocks, writeOff.paper_stock_id] : [ink_products, writeOff.ink_product_id!];
+    if (!this.db.orm.select({ id: table.id }).from(table).where(eq(table.id, id)).get()) throw new LedgerError(404, 'not_found');
+    const { input } = this.load(), preview = Number.MAX_SAFE_INTEGER; // After every saved write-off that day, as a new one would be.
+    const result = computeLedger({ ...input, writeOffs: [...input.writeOffs, { paper_stock_id: null, ink_product_id: null, quantity: null, ...writeOff, id: preview, all_remaining: true }] });
+    return result.writeOffs.get(preview)!;
+  }
 
   private load() {
     const orm = this.db.orm;
@@ -214,7 +246,7 @@ export class Ledger {
   }
 
   private writeOffViews(writeOffs: ReturnType<Ledger['load']>['writeOffs'], result: LedgerResult): WriteOffView[] {
-    return writeOffs.map(row => ({ ...row, ...result.writeOffs.get(row.id)! }));
+    return writeOffs.map(row => { const { remaining, ...cost } = result.writeOffs.get(row.id)!; return { ...row, ...cost }; });
   }
   papers(): PapersResponse {
     const { settings, result, jobs, paperRows, stock, purchases, writeOffs } = this.load();
@@ -242,12 +274,19 @@ export class Ledger {
   }
   ink(): InkResponse {
     const { settings, result, jobs, cartridges, inkPurchases, writeOffs } = this.load();
-    const views = this.writeOffViews(writeOffs, result);
+    const views = this.writeOffViews(writeOffs, result), totals = blank();
+    // Visible prints' ink as Jobs and Totals count it (unknown_jobs: those with an ink cost unknown), and ink written off.
+    for (const job of jobs) if (!job.hidden) {
+      totals.jobs++; totals.ink_micros += job.ink_micros; totals.ink_nl += job.ink.reduce((sum, line) => sum + (line.volume_nl ?? 0), 0);
+      if (job.ink.some(line => line.cost_micros === null)) totals.unknown_jobs++;
+    }
+    totals.total_micros = totals.ink_micros;
+    totals.waste_micros = views.reduce((sum, w) => sum + (w.ink_product_id !== null ? w.cost_micros ?? 0 : 0), 0);
     const channels = this.db.all('SELECT DISTINCT channel FROM job_ink_usage ORDER BY channel').map(row => String(row.channel));
     // Ink is used oldest first across a channel, so the cartridge in use is the channel's oldest purchase with ink left.
     const channelOf = new Map(cartridges.map(c => [c.id, c.channel])), inUse = new Map<string, number>();
     for (const p of inkPurchases) if (result.lots.get('ink:' + p.id)!.remaining > 0 && !inUse.has(channelOf.get(p.ink_product_id)!)) inUse.set(channelOf.get(p.ink_product_id)!, p.id);
-    return { settings, channels, cartridges: cartridges.map((cartridge): CartridgeView => {
+    return { settings, channels, totals, cartridges: cartridges.map((cartridge): CartridgeView => {
       const bought = inkPurchases.filter(p => p.ink_product_id === cartridge.id).map(p => ({ ...p, remaining_nl: result.lots.get('ink:' + p.id)!.remaining }));
       const printed = jobs.filter(job => job.ink.some(line => line.from.some(use => use.ink_product_id === cartridge.id)));
       const lines = printed.flatMap(job => job.ink.flatMap(line => line.from)).filter(use => use.ink_product_id === cartridge.id);

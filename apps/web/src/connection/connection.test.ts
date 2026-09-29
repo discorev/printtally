@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import type { HealthResponse } from 'print-accounting-contracts';
 import { ApiError, onRequestOutcome, request, setEditGate } from '../api/client.ts';
 import { ConnectionMonitor } from './monitor.ts';
-import { backoffMs, canEdit } from './state.ts';
+import { backoffMs, canEdit, serverName } from './state.ts';
 
 const health: HealthResponse = {
   service: 'printtally', apiVersion: 1, hostName: 'studio-mac', collecting: false, state: 'ready',
@@ -120,4 +120,23 @@ test('edits are validated with the contract schema before sending', async () => 
   const counting = (async () => { sent++; return new Response('{}'); }) as unknown as typeof fetch;
   await expect(request('PATCH', '/jobs/1/annotation', { body: {}, schema: annotationSchema, fetchFn: counting })).rejects.toMatchObject({ kind: 'invalid' });
   expect(sent).toBe(0);
+});
+
+test('loaded data stays when a refetch fails because the server is lost; only a first load has nothing', async () => {
+  const { queryClient } = await import('../api/queries.ts');
+  let up = true;
+  const read = async () => { if (!up) throw new ApiError('unreachable', "Can't reach Print Tally."); return { jobs: 3 }; };
+  await queryClient.fetchQuery({ queryKey: ['kept'], queryFn: read });
+  up = false;
+  await queryClient.refetchQueries({ queryKey: ['kept'] });
+  expect(queryClient.getQueryState(['kept'])).toMatchObject({ status: 'error', data: { jobs: 3 } });
+  await queryClient.fetchQuery({ queryKey: ['never'], queryFn: read }).catch(() => undefined);
+  expect(queryClient.getQueryState(['never'])).toMatchObject({ status: 'error', data: undefined });
+  queryClient.clear();
+});
+
+test('the server is named by its last answer, then by the name it gave before at this address, then by the address', () => {
+  expect(serverName(health, 'old-name', '127.0.0.1')).toBe('studio-mac');
+  expect(serverName(null, 'studio-mac', '127.0.0.1')).toBe('studio-mac');
+  expect(serverName(null, null, '127.0.0.1')).toBe('127.0.0.1');
 });

@@ -1,11 +1,11 @@
 import {
   annotationSchema, cartridgePatchSchema, cartridgeSchema, confirmPrinterSchema, enrolmentRequestSchema, inkPurchasePatchSchema,
-  inkPurchaseSchema, paperPatchSchema, paperPurchasePatchSchema, paperPurchaseSchema, paperSchema, printerPasswordSchema,
+  inkPurchaseSchema, inkPurchaseSetupSchema, paperPatchSchema, paperPurchaseSetupSchema, paperPurchasePatchSchema, paperPurchaseSchema, paperSchema, printerPasswordSchema,
   settingsSchema, stockPatchSchema, stockSchema, writeOffPatchSchema, writeOffSchema,
   type Annotation, type CartridgeInput, type DiscoveredPrinter, type EnrolmentRequest, type HealthResponse, type ImportResult, type ImportsResponse,
-  type InkPurchaseInput, type InkResponse, type JobResponse, type JobsResponse, type KnownPrinter, type LedgerJob,
-  type MediaTypesResponse, type PaperInput, type PaperPurchaseInput, type PapersResponse, type PrinterTrustPreview, type Settings,
-  type StockInput, type TotalsResponse, type WriteOffInput,
+  type InkPurchaseInput, type InkPurchaseSetup, type InkPurchaseSetupResult, type InkResponse, type JobResponse, type JobsResponse, type KnownPrinter, type LedgerJob,
+  type MediaTypesResponse, type PaperInput, type PaperPurchaseInput, type PaperPurchaseSetup, type PaperPurchaseSetupResult, type PapersResponse, type PrinterTrustPreview, type Settings,
+  type StockInput, type TotalsResponse, type WriteOffInput, type WriteOffPreview,
 } from 'print-accounting-contracts';
 import type { ZodType } from 'zod';
 import { request } from './client.ts';
@@ -40,12 +40,21 @@ export const api = {
   paper: collection<PaperInput>('papers', paperSchema, paperPatchSchema),
   stock: collection<StockInput>('paper-stocks', stockSchema, stockPatchSchema),
   paperPurchase: collection<PaperPurchaseInput>('paper-purchases', paperPurchaseSchema, paperPurchasePatchSchema),
+  /** A purchase with its new stock item (and new paper), created together or not at all. */
+  setupPaperPurchase: (input: PaperPurchaseSetup): Promise<PaperPurchaseSetupResult> =>
+    request('POST', '/paper-purchases/setup', { body: input, schema: paperPurchaseSetupSchema }),
   mediaTypes: (): Promise<MediaTypesResponse> => request('GET', '/media-types'),
 
   ink: (): Promise<InkResponse> => request('GET', '/ink'),
   cartridge: collection<CartridgeInput>('ink-cartridges', cartridgeSchema, cartridgePatchSchema),
   inkPurchase: collection<InkPurchaseInput>('ink-purchases', inkPurchaseSchema, inkPurchasePatchSchema),
+  /** A purchase with its new cartridge product, created together or not at all. */
+  setupInkPurchase: (input: InkPurchaseSetup): Promise<InkPurchaseSetupResult> =>
+    request('POST', '/ink-purchases/setup', { body: input, schema: inkPurchaseSetupSchema }),
   writeOff: collection<WriteOffInput>('write-offs', writeOffSchema, writeOffPatchSchema),
+  /** What writing off all that's left of a stock item or cartridge would take on a day. */
+  writeOffPreview: (target: { paper_stock_id: number } | { ink_product_id: number }, day: string): Promise<WriteOffPreview> =>
+    request('GET', '/write-offs/preview' + query({ ...target, written_off_on: day })),
 
   settings: (): Promise<Settings> => request('GET', '/settings'),
   updateSettings: (patch: Partial<Settings>): Promise<Settings> => request('PATCH', '/settings', { body: patch, schema: settingsSchema }),

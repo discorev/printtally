@@ -7,6 +7,7 @@ export { Chip, Dot, KV, Meta, Mono, NoteText, SectionLabel, Sub } from './Text.t
 export { Empty, ListHeader, ListRow, Pad, PadBody, PadHead } from './Pad.tsx';
 export { Docket, DocketHead, DocketSection, PausedNotice, RowActions, SavedNotice, StatusLine, type DocketClose } from './Docket.tsx';
 export { Banner, Notice } from './Banner.tsx';
+export { Loading, LoadingHead, loadingText, useLoadingText } from './Loading.tsx';
 export { InkSwatch, InkWedge, PAPER_TONE, PaperSwatch, type PaperSwatchProps, type SwatchSize } from './Swatches.tsx';
 export { RadioList, RadioOption } from './RadioList.tsx';
 export { PaperPicker, PaperSelect, type PaperChoice, type PickablePaper } from './PaperPicker.tsx';

@@ -1,21 +1,25 @@
-import type { Settings } from 'print-accounting-contracts';
-import { ButtonLink, Empty, InkSwatch, LevelBar, ListRow, Money, Pad, PadBody, PadHead } from '../../components/index.ts';
+import type { CostTotals, Settings } from 'print-accounting-contracts';
+import { ButtonLink, Empty, InkSwatch, LevelBar, ListRow, Loading, Money, Pad, PadBody, PadHead } from '../../components/index.ts';
 import { useCanEdit } from '../../connection/index.ts';
-import { ml, mlValue, plural } from '../../lib/format.ts';
+import { count, ml, mlValue, plural } from '../../lib/format.ts';
 import type { InkChannelView } from './channels.ts';
 
-// The cartridges (vInk): one row per channel with its level, spares and the cost of its ink in prints.
-export function InkPad({ channels, settings, selected }: { channels: InkChannelView[] | undefined; settings: Settings | undefined; selected?: string }) {
+// The cartridges (vInk): one row per channel with its level, spares and the cost of its ink in prints. The head's
+// figures are the ledger's ink totals (visible prints, as Jobs counts them), not sums of the rows.
+export function InkPad({ channels, settings, totals, selected, error }: {
+  channels: InkChannelView[] | undefined; settings: Settings | undefined; totals: CostTotals | undefined; selected?: string; error?: unknown;
+}) {
   const canEdit = useCanEdit();
-  const used = channels?.reduce((total, c) => total + c.usedMicros, 0) ?? 0, waste = channels?.reduce((total, c) => total + c.wasteMicros, 0) ?? 0;
   return (
     <Pad label="Ink">
       <PadHead title="Ink"
-        meta={channels && <><b>{plural(channels.length, 'cartridge')}</b> · <b><Money micros={used} /></b> of ink in prints at the {settings?.costing_method ?? 'oldest'} price
-          {' · '}levels are estimates, cleaning isn't logged{waste > 0 && <> · <span className="text-red"><Money micros={waste} /> written off</span></>}</>}
+        meta={channels && totals && <><b>{plural(channels.length, 'cartridge')}</b> · <b><Money micros={totals.ink_micros} /></b> of ink in prints at the {settings?.costing_method ?? 'oldest'} price
+          {totals.unknown_jobs > 0 && <> · <span className="text-amber">{count(totals.unknown_jobs)} without an ink cost</span></>}
+          {' · '}levels are estimates, cleaning isn't logged{totals.waste_micros > 0 && <> · <span className="text-red"><Money micros={totals.waste_micros} /> written off</span></>}</>}
         actions={<ButtonLink to="/ink/new" variant="primary" size="sm" disabled={!canEdit}>Add stock</ButtonLink>} />
       <PadBody role="listbox" aria-label="Cartridges">
         {channels?.map(channel => <InkRow key={channel.code} channel={channel} selected={channel.code === selected} />)}
+        {!channels && <Loading what="ink" error={error} />}
         {channels?.length === 0 && <Empty>No ink yet. Collect jobs from the printer, or add the cartridges you have bought.</Empty>}
       </PadBody>
     </Pad>

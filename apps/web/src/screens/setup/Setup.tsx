@@ -2,15 +2,15 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'rea
 import { useNavigate } from '@tanstack/react-router';
 import type { DiscoveredPrinter, KnownPrinter, PrinterTrustPreview } from 'print-accounting-contracts';
 import { api } from '../../api/endpoints.ts';
-import { describeError } from '../../api/client.ts';
 import { useEdit } from '../../api/queries.ts';
-import { connection, useHealth, useServerName } from '../../connection/index.ts';
+import { connection, useHealth } from '../../connection/index.ts';
 import { desktop } from '../../desktop.ts';
 import {
   Button, Docket, DocketHead, DocketSection, Field, Fingerprint, LinkButton, Mono, RowActions, Spinner, Sub, Sweep, TextInput, TextLink,
 } from '../../components/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { problem, problemCode } from './problem.ts';
+import { PasswordForm } from './PasswordForm.tsx';
 
 // Printer setup (plan decision 10): find the printer or type its address, compare its root certificate's
 // fingerprint with the one the printer shows, confirm, store the password, then the first collection lands on Jobs.
@@ -197,34 +197,10 @@ function ConfirmPrinter({ preview, onConfirmed, onBack }: { preview: PrinterTrus
   );
 }
 
-/** Step 3: the printer's administrator password, stored only in the server's credential store. */
+/** Step 3: the printer's administrator password. After a certificate or address change it can keep the saved one. */
 function PrinterPassword({ printer, keepsPassword, onSaved }: { printer: KnownPrinter; keepsPassword: boolean; onSaved: () => void }) {
-  const [password, setPassword] = useState(''), [shown, setShown] = useState(false), [message, setMessage] = useState<string>();
-  const save = useEdit((value: string) => api.savePrinterPassword(printer.id, value));
-  const server = useServerName();
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    setMessage(undefined);
-    if (!password) { setMessage("Enter the printer's administrator password."); return; }
-    try { await save.mutateAsync(password); onSaved(); }
-    catch (error) { setMessage(describeError(error)); }
-  };
-  return (
-    <form onSubmit={submit} noValidate className="max-w-[360px]">
-      <Field label="Administrator password" hint={`The password you use on the printer's Remote UI. It's kept in ${server}'s keychain.`} error={message}>
-        {id => (
-          <div className="flex items-center gap-2">
-            <input id={id} type={shown ? 'text' : 'password'} value={password} onChange={event => setPassword(event.target.value)} autoComplete="off" autoFocus />
-            <LinkButton onClick={() => setShown(!shown)}>{shown ? 'Hide' : 'Show'}</LinkButton>
-          </div>
-        )}
-      </Field>
-      <RowActions>
-        <Button type="submit" variant="primary" edit disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save password'}</Button>
-        {keepsPassword && <Button variant="text" disabled={save.isPending} onClick={onSaved}>Keep the saved password</Button>}
-      </RowActions>
-    </form>
-  );
+  return <PasswordForm printer={printer} onSaved={onSaved}
+    actions={saving => keepsPassword && <Button variant="text" disabled={saving} onClick={onSaved}>Keep the saved password</Button>} />;
 }
 
 /** The first collection, straight after setup: when it's done, Jobs has the printer's history. */

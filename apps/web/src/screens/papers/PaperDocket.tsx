@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import type { MediaTypeView, PaperView } from 'print-accounting-contracts';
 import {
-  Button, ButtonLink, Docket, DocketHead, DocketSection, ItemLine, LedgerList, Money, PaperPurchaseForm, PurchaseLine, RowActions,
+  Button, ButtonLink, Docket, DocketHead, DocketSection, ItemLine, LedgerList, LoadingHead, PaperPurchaseForm, PurchaseLine, RowActions,
   SavedNotice, Select, StatusLine, Sub, SummaryLine, WriteOffLine,
 } from '../../components/index.ts';
 import { api } from '../../api/endpoints.ts';
@@ -12,6 +12,7 @@ import { useCanEdit } from '../../connection/index.ts';
 import { dateShort, ml, plural } from '../../lib/format.ts';
 import { mediaName, methodName, stockAmount, stockAtSize, type PurchasePrefill } from './common.ts';
 import { WriteOffForm } from './WriteOffForm.tsx';
+import { PaperCost, unknownPaper } from './PaperCost.tsx';
 
 // A paper's docket (vPaperDocket): the media it prints as, its stock, prints, purchases and write-offs.
 // "Add stock" and "Write off" swap the sections for their form (?form=…), and ?saved=… shows the confirmation.
@@ -22,7 +23,7 @@ const CLOSE = { to: { to: '/papers' }, label: 'Papers' } as const;
 export function PaperDocket({ paperId, form, saved, ...prefill }: { paperId: number } & PaperSearch) {
   const { data } = usePapers(), media = useMediaTypes().data?.media_types ?? [];
   const paper = data?.papers.find(p => p.id === paperId);
-  if (!data) return <Docket label="Paper" close={CLOSE}><DocketHead when="Paper" title="Loading…" /></Docket>;
+  if (!data) return <Docket label="Paper" close={CLOSE}><LoadingHead when="Paper" what="this paper" /></Docket>;
   if (!paper) return (
     <Docket label="Paper" close={CLOSE}><DocketHead when="Paper" title="Paper not found" /><DocketSection><Sub>It may have been deleted on another device.</Sub></DocketSection></Docket>
   );
@@ -34,7 +35,8 @@ export function PaperDocket({ paperId, form, saved, ...prefill }: { paperId: num
         <InStock paper={paper} />
         <DocketSection label="Prints">
           <SummaryLine what={<>{plural(paper.totals.jobs, 'print')} · {ml(paper.totals.ink_nl)} of ink</>}
-            sub={`paper at the ${methodName(data.settings)} price`} amount={<Money micros={paper.totals.paper_micros} />} />
+            sub={<>paper at the {methodName(data.settings)} price{unknownPaper(paper.totals) && <> · <span className="text-amber">{unknownPaper(paper.totals)}</span></>}</>}
+            amount={<PaperCost totals={paper.totals} />} />
           <RowActions><ButtonLink to="/jobs" search={{ paper: paper.id }} variant="text" size="sm">Show in Jobs</ButtonLink></RowActions>
         </DocketSection>
         <Ledger paper={paper} />
@@ -92,10 +94,12 @@ function Ledger({ paper }: { paper: PaperView }) {
   const purchases = [...paper.purchases].sort((a, b) => b.purchased_on.localeCompare(a.purchased_on) || b.id - a.id);
   return <>
     <DocketSection label="Purchases">
-      <LedgerList empty="None yet.">{purchases.map(p => <PurchaseLine key={p.id} paper={p} stock={stock(p.paper_stock_id)} />)}</LedgerList>
+      <LedgerList empty="None yet.">{purchases.map(p =>
+        <PurchaseLine key={p.id} paper={p} stock={stock(p.paper_stock_id)} onRemove={() => api.paperPurchase.remove(p.id)} />)}</LedgerList>
     </DocketSection>
     <DocketSection label="Written off">
-      <LedgerList empty="Nothing written off.">{paper.write_offs.map(w => <WriteOffLine key={w.id} writeOff={w} stock={stock(w.paper_stock_id!)} />)}</LedgerList>
+      <LedgerList empty="Nothing written off.">{paper.write_offs.map(w =>
+        <WriteOffLine key={w.id} writeOff={w} stock={stock(w.paper_stock_id!)} onRemove={() => api.writeOff.remove(w.id)} />)}</LedgerList>
       {paper.totals.waste_micros > 0 && <Sub className="mt-1.5">Waste shows in totals, never inside a print's cost.</Sub>}
     </DocketSection>
   </>;

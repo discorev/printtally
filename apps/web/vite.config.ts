@@ -9,7 +9,8 @@ import { apiProxy } from './dev-proxy.ts';
 const apiTarget = process.env.PRINTTALLY_API ?? 'http://127.0.0.1:4318';
 
 export default defineConfig({
-  plugins: [tanstackRouter({ target: 'react', autoCodeSplitting: true }), react(), tailwindcss()],
+  // One bundle: a lazily loaded route chunk can't be fetched once the server that serves the UI is lost.
+  plugins: [tanstackRouter({ target: 'react', autoCodeSplitting: false }), react(), tailwindcss()],
   // A fixed IPv4 address and port: the desktop dev window loads exactly http://127.0.0.1:5173.
   server: { host: '127.0.0.1', port: 5173, strictPort: true, proxy: { '/api': apiProxy(apiTarget) } },
 });

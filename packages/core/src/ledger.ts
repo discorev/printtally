@@ -19,7 +19,7 @@ export interface JobCost { paper: PaperLine; ink: InkLine[] }
 export interface LedgerResult {
   jobs: Map<number, JobCost>;
   lots: Map<string, { quantity: number; remaining: number }>; // Keyed paper:<id> or ink:<id>.
-  writeOffs: Map<number, { written_off: number; cost_micros: number | null }>;
+  writeOffs: Map<number, { written_off: number; cost_micros: number | null; remaining: number }>; // remaining: all left of the item before it.
 }
 interface Lot { key: string; id: number; owner: number; date: string; quantity: number; unit: number; price: bigint; left: number }
 const TOLERANCE_UM = 1000; // Sizes within 1 mm match, so 17" (431.8 mm) or 329 x 483 mm entered either way still match.
@@ -106,8 +106,9 @@ export function computeLedger(input: LedgerInput): LedgerResult {
       // Ink is used oldest first across the channel, so the cartridge in use may be another product's.
       const open = pool.find(lot => lot.date <= writeOff.written_off_on && lot.left > 0);
       const quantity = writeOff.all_remaining ? (open ? open.left % open.unit || open.unit : 0) : writeOff.quantity!;
+      const remaining = own.reduce((sum, lot) => sum + lot.left, 0);
       const used = quantity ? take(pool, writeOff.written_off_on, quantity, writeOff.all_remaining && open ? [open] : own) : null;
-      result.writeOffs.set(writeOff.id, { written_off: quantity, cost_micros: quantity === 0 ? 0 : used?.cost ?? null });
+      result.writeOffs.set(writeOff.id, { written_off: quantity, cost_micros: quantity === 0 ? 0 : used?.cost ?? null, remaining });
     }
   }
   for (const lot of [...paperLots.values(), ...inkLots.values()].flat()) result.lots.set(lot.key, { quantity: lot.quantity, remaining: lot.left });

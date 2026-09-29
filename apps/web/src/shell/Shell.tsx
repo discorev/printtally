@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from 'react';
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
-import { Banner, Button } from '../components/index.ts';
+import { Banner, Button, ButtonLink } from '../components/index.ts';
 import { useConnection, useMissedJobs, useRetryCountdown, useServerName } from '../connection/index.ts';
 import { desktop, useDesktopConnection } from '../desktop.ts';
 import { count } from '../lib/format.ts';
@@ -92,12 +92,30 @@ function MissedBanner() {
   );
 }
 
+/** A printer that needs you before Print Tally can collect from it: its certificate changed (so the password is
+ *  withheld), or it has no password. On every main screen but Collect, which says the same in full. */
+function PrinterBanner() {
+  const { status, health } = useConnection(), path = usePath();
+  if (status !== 'connected' || path.startsWith('/collect')) return null;
+  return health?.printers.map(printer =>
+    printer.state === 'needs_confirming' ? (
+      <Banner key={printer.id} action={<ButtonLink variant="text" size="sm" to="/setup" search={{ host: printer.host }}>Check the fingerprint</ButtonLink>}>
+        {printer.name}'s certificate changed, so Print Tally won't send it the password or collect from it.
+      </Banner>
+    ) : printer.state === 'needs_password' ? (
+      <Banner key={printer.id} action={<ButtonLink variant="text" size="sm" to="/settings">Enter the password</ButtonLink>}>
+        Print Tally has no password for {printer.name}, so it can't collect from it.
+      </Banner>
+    ) : null);
+}
+
 /** The app: the mat, the top bar, the strips, the work area (pad and docket side by side), and the phone's bottom nav. */
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="mat relative flex h-full flex-col text-ink">
       <TopBar />
       <LostBanner />
+      <PrinterBanner />
       <MissedBanner />
       <main className="flex min-h-0 flex-1 gap-4 px-4 pb-4 phone:gap-2 phone:px-2 phone:pb-2">{children}</main>
       <BottomNav />

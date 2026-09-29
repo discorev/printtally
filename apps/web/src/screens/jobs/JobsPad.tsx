@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import type { LedgerJob } from 'print-accounting-contracts';
-import { Empty, ListHeader, Money, Pad, PadBody, PadHead, PaperSelect, SearchInput, TextLink, Toggle, type PaperChoice } from '../../components/index.ts';
+import { Empty, ListHeader, Loading, Money, Pad, PadBody, PadHead, PaperSelect, SearchInput, TextLink, Toggle, type PaperChoice } from '../../components/index.ts';
 import { useJobs, useMediaTypes, usePapers, useSettings, useTotals } from '../../api/queries.ts';
 import { count, ml, monthLong, monthShort, plural } from '../../lib/format.ts';
 import { byNewest, matchesFilter, type JobsSearch } from './search.ts';
@@ -98,7 +98,7 @@ export function JobsPad() {
         <Toggle label="Show hidden" checked={!!search.hidden} onChange={event => setSearch({ hidden: event.target.checked || undefined })} />
       </PadHead>
       <PadBody role="listbox" aria-label="Prints" tabIndex={0}>
-        {!loaded ? <Empty>{jobs.isError ? "Can't load prints until the server is back." : 'Loading prints…'}</Empty>
+        {!loaded ? <Loading what="prints" error={jobs.error} />
           : !groups.length ? <Empty>{filtered || loaded.total ? 'No prints match. Clear the search or choose another paper.' : 'No prints yet. Collect from the printer and they appear here.'}</Empty>
           : groups.map(group => (
             <div key={group.month} role="presentation">

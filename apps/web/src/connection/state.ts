@@ -29,3 +29,5 @@ export function reduce(state: ConnectionState, event: ConnectionEvent, now: numb
 }
 /** Edits are allowed only while the server is confirmed reachable; nothing is ever queued. */
 export const canEdit = (state: ConnectionState): boolean => state.status === 'connected';
+/** The server's name: from its last health answer, else the one it gave last time this address was used, else the address. */
+export const serverName = (health: HealthResponse | null, remembered: string | null, address: string): string => health?.hostName ?? remembered ?? address;

@@ -13,7 +13,8 @@ export type PaperMode = 'view' | 'picker' | 'stock' | 'new';
 export type SaveAnnotation = (annotation: Annotation, label: string) => Promise<boolean>;
 
 /** The docket's Paper section (vPaperSection): what the print was allocated to and where it came from, with
- *  "Change stock", "Correct paper" (the picker, and "New paper…" set up with its first stock) and a link to Papers. */
+ *  "Change stock", "Correct paper" (the picker, and "New paper…" set up with its first stock), "Use the default"
+ *  once corrected, and a link to Papers. */
 export function PaperSection({ job, papers, mediaTypes, method, mode, setMode, save }: {
   job: LedgerJob; papers: PaperView[]; mediaTypes: MediaTypeView[]; method: CostingMethod;
   mode: PaperMode; setMode: (mode: PaperMode) => void; save: SaveAnnotation;
@@ -33,7 +34,11 @@ export function PaperSection({ job, papers, mediaTypes, method, mode, setMode, s
         <Sub className="mb-1">A new paper for this print, set up with its first stock. The printer's name stays on the docket.</Sub>
         <PaperPurchaseForm embedded papers={papers} mediaTypes={mediaTypes} submitLabel="Assign to print"
           initial={{ paperId: 'new', stockId: 'new', date: job.date, size, media: job.source_media_id ?? undefined }}
-          onSaved={({ paperId }) => void save({ paper_id: paperId }, 'Paper assigned').then(ok => ok && setMode('view'))}
+          onSaved={async ({ paperId }) => {
+            // The paper is set up; if assigning it fails, the form keeps it and "Assign to print" tries this step again.
+            if (!await save({ paper_id: paperId }, 'Paper assigned')) throw new Error('The paper is set up, but not assigned to this print yet. Try again.');
+            setMode('view');
+          }}
           onCancel={() => setMode('view')} />
       </div>
     </DocketSection>
@@ -57,6 +62,10 @@ export function PaperSection({ job, papers, mediaTypes, method, mode, setMode, s
       <RowActions>
         {choices.length > 1 && !cancelled && job.paper.stock_id && <Button size="sm" edit onClick={() => setMode('stock')}>Change stock</Button>}
         <Button size="sm" edit onClick={() => setMode('picker')}>Correct paper</Button>
+        {job.paper.allocation !== 'default' && (
+          <Button size="sm" variant="text" edit title="Clear the correction: the print follows the printer's media again"
+            onClick={() => void save({ paper_id: null, paper_stock_id: null }, 'Using the default')}>Use the default</Button>
+        )}
         {paper ? <ButtonLink variant="text" size="sm" to="/papers/$paperId" params={{ paperId: String(paper.id) }}>Open in Papers</ButtonLink>
           : <ButtonLink variant="text" size="sm" to="/papers">Open Papers</ButtonLink>}
       </RowActions>

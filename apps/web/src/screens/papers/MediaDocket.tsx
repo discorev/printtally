@@ -1,4 +1,4 @@
-import { ButtonLink, Docket, DocketHead, DocketSection, ItemLine, KV, Money, PaperSwatch, RowActions, Sub, SummaryLine } from '../../components/index.ts';
+import { ButtonLink, Docket, DocketHead, LoadingHead, DocketSection, ItemLine, KV, Money, PaperLine, RowActions, Sub, SummaryLine } from '../../components/index.ts';
 import { useMediaTypes, usePapers } from '../../api/queries.ts';
 import { dateShort, dateTime, ml, plural } from '../../lib/format.ts';
 import { mediaName, methodName } from './common.ts';
@@ -12,7 +12,7 @@ const canonMedia = (id: string) => /-00000000-0000-0000-0000-\d{12}$/.test(id);
 export function MediaDocket({ id }: { id: string }) {
   const { data } = useMediaTypes(), settings = usePapers().data?.settings;
   const media = data?.media_types.find(m => m.source_media_id === id);
-  if (!data) return <Docket label="Printer media" close={CLOSE}><DocketHead when="Printer media" title="Loading…" /></Docket>;
+  if (!data) return <Docket label="Printer media" close={CLOSE}><LoadingHead when="Printer media" what="this media type" /></Docket>;
   if (!media) return (
     <Docket label="Printer media" close={CLOSE}><DocketHead when="Printer media" title="Media type not found" />
       <DocketSection><Sub>The printer hasn't reported this media type.</Sub></DocketSection></Docket>
@@ -31,7 +31,7 @@ export function MediaDocket({ id }: { id: string }) {
       </DocketSection>
       <DocketSection label="Prints as this media">
         {papers.map(p => (
-          <ItemLine key={p.id} name={<span className="inline-flex items-center gap-2"><PaperSwatch />{p.name}</span>}
+          <ItemLine key={p.id} name={<PaperLine name={p.name} />}
             value={<ButtonLink to="/papers/$paperId" params={{ paperId: String(p.id) }} variant="text" size="sm">Open</ButtonLink>} />
         ))}
         {!papers.length && <Sub tone={media.jobs ? 'amber' : undefined}>No paper yet{media.jobs ? ', so these prints have no paper cost' : ''}. Set it on the paper, under Stock.</Sub>}
@@ -42,7 +42,7 @@ export function MediaDocket({ id }: { id: string }) {
           sub={papers.length ? `paper at the ${settings ? methodName(settings) : 'chosen'} price` : 'ink only — paper cost unknown'} amount={<Money micros={totals.total_micros} />} />
         {media.jobs > 0 && (
           <RowActions>
-            <ButtonLink to="/jobs" search={papers.length ? { paper: papers[0].id } : { media: id }} variant="text" size="sm">Show in Jobs</ButtonLink>
+            <ButtonLink to="/jobs" search={{ media: id }} variant="text" size="sm">Show in Jobs</ButtonLink>
           </RowActions>
         )}
       </DocketSection>

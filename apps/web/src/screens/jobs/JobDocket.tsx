@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useBlocker } from '@tanstack/react-router';
 import type { Annotation, JobsResponse, LedgerJob } from 'print-accounting-contracts';
 import {
-  Button, ButtonLink, Chip, CostTable, Docket, DocketHead, DocketSection, KV, Mono, NoteText, PAPER_TONE, StatusLine, Sub, Textarea, type DocketClose,
+  Button, ButtonLink, Chip, CostTable, Docket, DocketHead, DocketSection, KV, LinkButton, LoadingHead, Mono, NoteText, PAPER_TONE, StatusLine, Sub, Textarea, type DocketClose,
 } from '../../components/index.ts';
 import { api } from '../../api/endpoints.ts';
 import { describeError } from '../../api/client.ts';
@@ -30,7 +31,7 @@ export function JobDocket({ jobId }: { jobId: number }) {
     .flatMap(([, data]) => data?.jobs ?? []).find(item => item.job_id === jobId);
   if (!job) return (
     <Docket label="Print docket" close={CLOSE}>
-      <DocketHead when="Jobs" title={query.isError ? 'This print isn’t available' : 'Loading…'} subtitle={query.isError ? describeError(query.error) : undefined} />
+      {query.isError ? <DocketHead when="Jobs" title="This print isn’t available" subtitle={describeError(query.error)} /> : <LoadingHead when="Jobs" what="this print" />}
     </Docket>
   );
   return <JobDocketBody job={job} />;
@@ -49,13 +50,15 @@ function JobDocketBody({ job }: { job: LedgerJob }) {
   const toggleHidden = () => void save({ hidden: hidden ? 0 : 1 }, hidden ? 'Shown' : 'Hidden');
 
   // Escape closes an open picker or form before the docket; h hides, p corrects the paper, Enter goes to the note.
+  // A list row keeps focus after it's clicked, so it doesn't count as a control here (Enter would reopen it).
   const keys = useRef({ mode, setMode, toggleHidden, canEdit });
   keys.current = { mode, setMode, toggleHidden, canEdit };
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const { mode, setMode, toggleHidden, canEdit } = keys.current, target = event.target as HTMLElement;
       if (event.key === 'Escape' && mode !== 'view') { event.preventDefault(); setMode('view'); return; }
-      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || /^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(target.tagName)) return;
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(target.tagName) && target.getAttribute('role') !== 'option') return;
       if (event.key === 'Enter') { event.preventDefault(); document.getElementById('job-note')?.focus(); }
       else if ((event.key === 'h' || event.key === 'H') && canEdit) { event.preventDefault(); toggleHidden(); }
       else if ((event.key === 'p' || event.key === 'P') && canEdit) { event.preventDefault(); setMode('picker'); }
@@ -104,18 +107,32 @@ function JobDocketBody({ job }: { job: LedgerJob }) {
   );
 }
 
-/** The note: saved when you leave the box, if it changed. */
+/** The note: saved when you leave the box, if it changed. Leaving the docket (another row, ×, Escape) waits for
+ *  that save and stays put if it fails, so an unsaved note is never lost silently; "Discard changes" lets it go. */
 function Note({ job, save, status }: { job: LedgerJob; save: SaveAnnotation; status: { text: string; error?: boolean } | null }) {
   const [text, setText] = useState(job.notes ?? ''), canEdit = useCanEdit();
-  const onBlur = () => {
-    const notes = text.trim() || null;
-    if (notes !== (job.notes ?? null)) void save({ notes }, '');
+  const draft = useRef(text), saved = useRef(job.notes ?? null), inflight = useRef<Promise<boolean> | null>(null);
+  draft.current = text;
+  const dirty = () => (draft.current.trim() || null) !== saved.current;
+  const persist = async (): Promise<boolean> => {
+    while (inflight.current) await inflight.current;
+    if (!dirty()) return true;
+    const notes = draft.current.trim() || null;
+    inflight.current = save({ notes }, '').then(ok => { if (ok) saved.current = notes; inflight.current = null; return ok; });
+    return inflight.current;
   };
+  useBlocker({ enableBeforeUnload: dirty, shouldBlockFn: async () => {
+    if (await persist()) return false;
+    const box = document.getElementById('job-note'); // Show the note and why it wasn't saved.
+    box?.scrollIntoView({ block: 'center' }); box?.focus();
+    return true;
+  } });
   return (
     <DocketSection label="Note" lockable>
-      <Textarea id="job-note" aria-label="Note" value={text} disabled={!canEdit} onChange={event => setText(event.target.value)} onBlur={onBlur}
+      <Textarea id="job-note" aria-label="Note" value={text} disabled={!canEdit} onChange={event => setText(event.target.value)} onBlur={() => void persist()}
         placeholder="An edition number, a client, what to change next time — notes are searchable" />
-      <StatusLine error={status?.error}>{status?.text}</StatusLine>
+      <StatusLine error={status?.error}>{status?.text}
+        {status?.error && dirty() && <> <LinkButton onClick={() => setText(draft.current = saved.current ?? '')}>Discard changes</LinkButton></>}</StatusLine>
     </DocketSection>
   );
 }

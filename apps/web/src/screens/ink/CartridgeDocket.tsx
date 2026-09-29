@@ -5,6 +5,7 @@ import {
   Button, Docket, DocketHead, DocketSection, ItemLine, LedgerList, Money, PurchaseLine, RowActions, SavedNotice, Sub, SummaryLine, WriteOffLine,
 } from '../../components/index.ts';
 import { useCurrency } from '../../api/queries.ts';
+import { api } from '../../api/endpoints.ts';
 import { dateShort, ml, mlValue, money, plural } from '../../lib/format.ts';
 import { fittedPurchase, productName, type InkChannelView } from './channels.ts';
 import { InkPurchaseForm } from './InkPurchaseForm.tsx';
@@ -61,10 +62,11 @@ export function CartridgeDocket({ channel, channels, settings, form }: {
           </DocketSection>
           <DocketSection label="Purchases">
             <LedgerList empty="No purchases yet.">{channel.purchases.map(({ purchase, capacityNl }) =>
-              <PurchaseLine key={purchase.id} ink={purchase} capacityNl={capacityNl} />)}</LedgerList>
+              <PurchaseLine key={purchase.id} ink={purchase} capacityNl={capacityNl} onRemove={() => api.inkPurchase.remove(purchase.id)} />)}</LedgerList>
           </DocketSection>
           <DocketSection label="Written off">
-            <LedgerList empty="Nothing written off.">{channel.writeOffs.map(writeOff => <WriteOffLine key={writeOff.id} writeOff={writeOff} ink />)}</LedgerList>
+            <LedgerList empty="Nothing written off.">{channel.writeOffs.map(writeOff =>
+              <WriteOffLine key={writeOff.id} writeOff={writeOff} ink onRemove={() => api.writeOff.remove(writeOff.id)} />)}</LedgerList>
           </DocketSection>
         </>}
     </Docket>

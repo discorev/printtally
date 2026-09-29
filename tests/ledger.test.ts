@@ -131,7 +131,8 @@ test('unknown paper cost stays null with a reason and is never guessed', t => {
   assert.deepEqual([job(1).paper.cost_micros, job(1).paper.unknown_reason, job(1).paper_micros, job(1).total_micros], [null, 'no_matching_stock', null, null]);
   assert.equal(job(1).ink_micros, 46875);
   const { overall } = ledger.totals();
-  assert.deepEqual([overall.jobs, overall.unknown_jobs, overall.paper_micros, overall.ink_micros], [1, 1, 0, 46875]);
+  assert.deepEqual([overall.jobs, overall.unknown_jobs, overall.unknown_paper_jobs, overall.paper_micros, overall.ink_micros], [1, 1, 1, 0, 46875]);
+  assert.equal(ledger.papers().papers[0].totals.unknown_paper_jobs, 1, 'a paper counts its prints with no paper cost');
   assert.equal(overall.ink_nl, 125_000, 'ink volume counts even when the paper cost is unknown');
 });
 

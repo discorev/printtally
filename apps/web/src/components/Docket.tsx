@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
 import { Link, useNavigate, type NavigateOptions } from '@tanstack/react-router';
 import { Lock, X } from 'lucide-react';
 import { cx } from '../lib/cx.ts';
@@ -20,6 +20,7 @@ export function Docket({ label, close, tone, centered, children, className }: {
   const navigate = useNavigate();
   // Only while the server is lost: not before the first answer, nor for a device that needs pairing (401).
   const lost = useConnection().status === 'lost';
+  useReturnFocus(!!close);
   useEffect(() => {
     if (!close) return;
     const onKey = (event: KeyboardEvent) => {
@@ -43,6 +44,26 @@ export function Docket({ label, close, tone, centered, children, className }: {
       </aside>
     </CloseContext>
   );
+}
+
+/** When a docket closes with focus in it, focus goes back to the list row it showed (the selected row, as the
+ *  list moves with j/k), else to whatever opened it, e.g. "Add stock". */
+function useReturnFocus(enabled: boolean) {
+  const target = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    const opener = document.activeElement;
+    if (opener instanceof HTMLElement && opener !== document.body) target.current = opener;
+    return () => {
+      const back = target.current;
+      // After the docket is gone: focus that was in it has fallen back to the body.
+      requestAnimationFrame(() => { if (back?.isConnected && (!document.activeElement || document.activeElement === document.body)) back.focus(); });
+    };
+  }, [enabled]);
+  useEffect(() => {
+    const row = enabled && document.querySelector<HTMLElement>('[role=option][aria-selected=true]');
+    if (row) target.current = row;
+  });
 }
 
 /** Shown at the top of every docket while the server is lost. */
