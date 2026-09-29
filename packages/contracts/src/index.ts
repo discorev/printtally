@@ -40,13 +40,13 @@ export const snapshotSchema = z.object({
   media_catalogue: catalogueSchema.optional(), protocol: z.string().optional(),
   retention: uint.optional(), notes: z.array(z.string()).optional(),
 });
+// paper_stock_id and paper_id each correct a job's default stock allocation; setting one clears the other.
 export const annotationSchema = z.object({
   custom_paper_name: z.string().trim().min(1).max(500).nullable().optional(),
-  paper_stock_id: uint.positive().nullable().optional(), hidden: z.union([z.literal(0), z.literal(1)]).optional(),
-  notes: z.string().max(10000).nullable().optional(), physical_sheet_count: uint.nullable().optional(),
-  paper_cost_override_micros: z.union([uint, z.string().regex(/^\d+$/)]).nullable().optional(),
-  paper_cost_currency: z.string().regex(/^[A-Z]{3}$/).nullable().optional(),
-}).strict().refine(value => Object.keys(value).length > 0, 'No annotation fields supplied');
+  paper_stock_id: uint.positive().nullable().optional(), paper_id: uint.positive().nullable().optional(),
+  hidden: z.union([z.literal(0), z.literal(1)]).optional(), notes: z.string().max(10000).nullable().optional(),
+}).strict().refine(value => Object.keys(value).length > 0, 'No annotation fields supplied')
+  .refine(value => value.paper_stock_id == null || value.paper_id == null, 'Choose a stock item or a paper, not both');
 export type Field = z.infer<typeof fieldSchema>;
 export type RawRecord = z.infer<typeof rawSchema>;
 export type JobRecord = z.infer<typeof recordSchema>;
@@ -56,7 +56,7 @@ export type MediaEntry = Catalogue['entries'][string];
 export type Snapshot = z.infer<typeof snapshotSchema>;
 export type Annotation = z.infer<typeof annotationSchema>;
 export interface CollectOptions {
-  host: string; mac?: string; cacheDirectory: string; trustedCertificatePem?: string;
+  host: string; mac?: string; cacheDirectory: string; trustedCertificatePem?: string; port?: number; // port: tests only (default 443)
   batchSize?: number; limit?: number; mediaLanguage?: string;
 }
 export interface ImportResult {
@@ -76,14 +76,30 @@ export const jobDetailsSchema = z.object({
   impressions: storedInteger.nullable(), color_pages: storedInteger.nullable(), monochrome_pages: storedInteger.nullable(), duplex: nullableText,
   source_media_id: nullableText, configured_paper_name: nullableText, paper_name_at_import: nullableText,
   display_paper_name: nullableText, hidden: z.union([z.literal(0), z.literal(1)]), custom_paper_name: nullableText,
-  stock_override_id: uint.nullable(), notes: nullableText, physical_sheet_count: storedInteger.nullable(),
-  paper_cost_override_micros: storedInteger.nullable(), paper_cost_currency: nullableText,
+  stock_override_id: uint.nullable(), paper_override_id: uint.nullable(), notes: nullableText,
   record_id_collision: z.union([z.literal(0), z.literal(1)]),
 });
 export type JobDetails = z.infer<typeof jobDetailsSchema>;
-export interface HealthResponse { apiVersion: number; collecting: boolean }
-export interface JobsResponse { jobs: JobDetails[]; limit: number; offset: number }
-export interface JobResponse { job: JobDetails; ink: { channel: string; volume_nl: number | string | null }[] }
+// Server status for every client. Collection runs on start, every 15 minutes and on request.
+export type ServerState = 'needs_printer' | 'ready' | 'collecting' | 'printer_needs_confirming';
+// needs_confirming: the printer's root certificate changed, so its password is withheld until the user confirms it again.
+export type PrinterState = 'unknown' | 'ready' | 'needs_password' | 'needs_confirming' | 'unreachable' | 'failed';
+export interface CollectionStatus { at: string; result: 'succeeded' | 'failed'; newJobs: number | null }
+export interface PrinterStatus { id: string; name: string; host: string; state: PrinterState; lastCollection: CollectionStatus | null }
+// The printer's oldest kept record was newer than the last one collected + 1: records from..to were never collected.
+// printerId and printerName are the known printer's (health.printers[].id); null id when it is no longer set up.
+export interface MissedJobs { printerId: string | null; printerName: string; fromRecord: number; toRecord: number; detectedAt: string }
+export interface HealthResponse {
+  service: 'printtally'; apiVersion: number; collecting: boolean; state: ServerState;
+  printers: PrinterStatus[]; missedJobs: MissedJobs[]; lastCollection: CollectionStatus | null; nextCollectionAt: string | null;
+}
+
+// Pairing another device: `printtally pair` asks the local server for a single-use code, redeemed for a session cookie.
+export const pairingCodeRequestSchema = z.object({ label: z.string().trim().min(1).max(100).optional() }).strict();
+export const pairingRedeemSchema = z.object({ code: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }).strict();
+export interface PairingCodeResponse { code: string; expiresAt: string; links: string[] }
+export interface PairedSession { id: string; label: string; userAgent: string | null; createdAt: string; lastSeenAt: string }
+export interface SessionsResponse { sessions: PairedSession[] }
 export interface ApiError { error: string }
 
 // Printer discovery advertises candidates; only an explicit confirmation grants trust.
@@ -110,3 +126,5 @@ export interface PrinterTrustPreview {
 }
 export type EnrolmentRequest = z.infer<typeof enrolmentRequestSchema>;
 export type ConfirmPrinterRequest = z.infer<typeof confirmPrinterSchema>;
+
+export * from './ledger.ts';

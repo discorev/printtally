@@ -1,14 +1,16 @@
 import { Database } from 'bun:sqlite';
 import { constants, mkdirSync, openSync, fstatSync, fchmodSync, closeSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, count, desc, eq, sql } from 'drizzle-orm';
 import { drizzle, type BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator';
+import type { SQLiteSyncDialect, SQLiteSession } from 'drizzle-orm/sqlite-core';
+import type { TablesRelationalConfig } from 'drizzle-orm/relations';
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core';
 import { snapshotSchema, annotationSchema, jobDetailsSchema, type JobDetails, type Snapshot, type Catalogue, type Names, type ImportResult } from 'print-accounting-contracts';
 import { digest, encoded, now, timestamp, scaled } from 'print-accounting-core';
-import { printers, import_runs, media_configs, media_revisions, print_jobs, job_observations, job_ink_usage, import_job_observations, job_annotations, paper_prices, ink_prices, job_details } from './schema.ts';
+import { printers, import_runs, media_configs, media_revisions, print_jobs, job_observations, job_ink_usage, import_job_observations, job_annotations, papers, paper_purchases, ink_purchases, stock_write_offs, job_details } from './schema.ts';
+import { Ledger } from './ledger.ts';
+import { migrations } from './migrations.ts';
 
 export const APPLICATION_ID = 1128353872; // 'CAPP'
 export type Row = Record<string, string | number | null>;
@@ -24,7 +26,8 @@ export function safeInteger(value: number | bigint | string): number {
 const whole = (value: number | bigint | string | null | undefined): number | null => value == null ? null : safeInteger(value);
 const text = (value: number | string | null | undefined): string | null => value == null ? null : String(value);
 const bind = (values: Value[]): Value[] => values.map(value => typeof value === 'number' ? safeInteger(value) : value);
-const migrationsFolder = fileURLToPath(new URL('../drizzle', import.meta.url));
+// What drizzle's bun-sqlite migrate() does, but with migrations embedded in the build.
+type Migrator = { dialect: SQLiteSyncDialect; session: SQLiteSession<'sync', unknown, Record<string, unknown>, TablesRelationalConfig> };
 export class AccountingDatabase {
   private sqlite: Database;
   readonly orm: BunSQLiteDatabase;
@@ -47,7 +50,8 @@ export class AccountingDatabase {
         throw new Error(appId === APPLICATION_ID ? 'Database was created by an unsupported earlier version' : 'Not a Print Tally database');
       }
       // The initial migration sets application_id inside its own transaction.
-      migrate(this.orm, { migrationsFolder });
+      const { dialect, session } = this.orm as unknown as Migrator;
+      dialect.migrate(migrations, session, { migrationsFolder: 'embedded' });
     } catch (error) { this.sqlite.close(); throw error; }
   }
   close(): void { this.sqlite.close(); }
@@ -183,27 +187,40 @@ export class AccountingDatabase {
     catch (error) { this.failImport(runId, 'invalid_snapshot'); throw error; }
   }
   annotateJob(jobId: number, input: unknown): void {
-    const { paper_cost_override_micros: micros, ...changes } = annotationSchema.parse(input);
-    const cost = micros === undefined ? {} : { paper_cost_override_micros: whole(micros) };
+    const changes = annotationSchema.parse(input);
+    // A job is allocated to a chosen stock item or a chosen paper, never both.
+    if (changes.paper_stock_id != null) changes.paper_id = null;
+    if (changes.paper_id != null) changes.paper_stock_id = null;
     this.transaction(() => {
       if (!this.orm.select({ id: print_jobs.id }).from(print_jobs).where(eq(print_jobs.id, jobId)).get()) throw new Error('Unknown internal job ID');
       this.orm.insert(job_annotations).values({ job_id: jobId, updated_at: now() }).onConflictDoNothing().run();
-      this.orm.update(job_annotations).set({ ...changes, ...cost, updated_at: now() }).where(eq(job_annotations.job_id, jobId)).run();
+      this.orm.update(job_annotations).set({ ...changes, updated_at: now() }).where(eq(job_annotations.job_id, jobId)).run();
     });
   }
   attachAnnotations(runId: number, snapshot: Snapshot): void {
-    const imported = this.orm.select({ id: import_job_observations.job_id }).from(import_job_observations).where(eq(import_job_observations.import_id, runId));
-    const rows = this.orm.select().from(job_details).where(inArray(job_details.job_id, imported)).all();
-    const byRecord = new Map(rows.map(row => [row.source_record_id, row]));
+    const imported = new Set(this.orm.select({ id: import_job_observations.job_id }).from(import_job_observations).where(eq(import_job_observations.import_id, runId)).all().map(row => row.id));
+    const byRecord = new Map(new Ledger(this).allJobs().filter(job => imported.has(job.job_id)).map(job => [job.source_record_id, job]));
     for (const record of snapshot.records) {
-      const row = byRecord.get(Number(record.raw.job_record_number))!;
-      record.accounting = Object.fromEntries((['job_id', 'display_paper_name', 'hidden', 'custom_paper_name', 'stock_override_id', 'notes', 'physical_sheet_count', 'paper_cost_override_micros', 'paper_cost_currency', 'record_id_collision'] as const).map(key => [key, row[key]]));
-      if (row.custom_paper_name === null && row.stock_override_id === null && record.media?.name != null) record.accounting.display_paper_name = record.media.name;
+      const job = byRecord.get(Number(record.raw.job_record_number))!;
+      record.accounting = Object.fromEntries((['job_id', 'display_paper_name', 'hidden', 'custom_paper_name', 'stock_override_id', 'paper_override_id', 'notes', 'record_id_collision'] as const).map(key => [key, job[key]]));
+      if (job.custom_paper_name === null && job.paper.paper_name === null && record.media?.name != null) record.accounting.display_paper_name = record.media.name;
     }
   }
   summary(): Record<string, number> {
-    const tables: Record<string, SQLiteTable> = { printers, print_jobs, job_observations, job_ink_usage, media_configs, media_revisions, import_runs, job_annotations, paper_prices, ink_prices };
+    const tables: Record<string, SQLiteTable> = { printers, print_jobs, job_observations, job_ink_usage, media_configs, media_revisions, import_runs, job_annotations, papers, paper_purchases, ink_purchases, stock_write_offs };
     return Object.fromEntries(Object.entries(tables).map(([name, table]) => [name, this.orm.select({ count: count() }).from(table).get()!.count]));
+  }
+  // A collection whose oldest record is newer than the last one collected + 1 means the printer
+  // dropped records before they were collected. Derived from the import history, so it is never lost.
+  // A gap a later collection filled is not reported.
+  missedJobs(): { mac: string; host: string; fromRecord: number; toRecord: number; detectedAt: string }[] {
+    return this.all(`SELECT p.mac, p.last_host, g.requested_first, g.finished_at, g.previous FROM (
+      SELECT id, printer_id, requested_first, finished_at, max(requested_last) OVER (PARTITION BY printer_id ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS previous
+      FROM import_runs WHERE status='succeeded' AND printer_id IS NOT NULL) g JOIN printers p ON p.id=g.printer_id
+      WHERE g.previous IS NOT NULL AND g.requested_first > g.previous + 1 AND NOT EXISTS (SELECT 1 FROM import_runs later WHERE later.printer_id=g.printer_id
+        AND later.status='succeeded' AND later.id > g.id AND later.requested_first <= g.previous + 1 AND later.requested_last >= g.requested_first - 1)
+      ORDER BY g.printer_id, g.id`)
+      .map(row => ({ mac: String(row.mac), host: String(row.last_host), fromRecord: Number(row.previous) + 1, toRecord: Number(row.requested_first) - 1, detectedAt: String(row.finished_at) }));
   }
   jobs(limit = 100, offset = 0, includeHidden = false): JobDetails[] {
     return this.orm.select().from(job_details).where(includeHidden ? undefined : eq(job_details.hidden, 0))
@@ -211,4 +228,5 @@ export class AccountingDatabase {
   }
 }
 
+export { Ledger, LedgerError } from './ledger.ts';
 export { KnownPrinters, TrustConflictError, type StoredPrinter } from './known-printers.ts';

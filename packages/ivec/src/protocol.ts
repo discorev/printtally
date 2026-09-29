@@ -1,15 +1,16 @@
 import { isIPv4, type Socket } from 'node:net';
 import { checkServerIdentity, connect as connectTls, type ConnectionOptions, type TLSSocket } from 'node:tls';
 import { createHash, createDecipheriv, randomUUID, timingSafeEqual, X509Certificate } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { DOMParser } from '@xmldom/xmldom';
 import { parse } from 'csv-parse/sync';
 import type { Field, RawRecord } from 'print-accounting-contracts';
+import authTables from './auth-tables.json' with { type: 'json' };
 
 export const COMMON = 'http://www.canon.com/ns/cmd/2008/07/common/';
 export const CANON = 'http://www.canon.com/ns/cmd/2008/07/canon/';
-const tables = JSON.parse(readFileSync(new URL('./auth-tables.json', import.meta.url), 'utf8')) as Record<string, string>;
+// A static import, so `bun build --compile` embeds the tables in the binary.
+const tables: Record<string, string> = authTables;
 const hash = (data: string | Buffer): Buffer => createHash('sha256').update(data).digest();
 export class ProtocolError extends Error {}
 export type Xml = Document | Element;

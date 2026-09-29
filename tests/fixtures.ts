@@ -24,3 +24,20 @@ export function sample(): Snapshot {
     } },
   };
 }
+export const OTHER = 'custom-media-type-canon-22222222-2222-2222-2222-222222222222';
+export interface JobSpec { day: string; time?: string; media?: string; w?: number; h?: number; imp?: number; ink?: number; name?: string }
+// One snapshot holding several jobs; sizes in mm, ink C in ml x 1000, CO always zero.
+export function batch(specs: JobSpec[]): Snapshot {
+  const input = sample(), [template] = input.records;
+  input.records = specs.map((spec, index) => {
+    const record = structuredClone(template), day = spec.day.replaceAll('-', ''), time = spec.time ?? '100000';
+    Object.assign(record.raw, {
+      job_record_number: index + 1, job_name: spec.name ?? `PPL_${day}${time}_001`, job_time_at_processing: day + time, job_time_at_completed: day + time,
+      job_media_type_name: spec.media ?? MEDIA, job_data_size_width: Math.round((spec.w ?? 210) * 100), job_data_size_height: Math.round((spec.h ?? 297) * 100),
+      job_impressions_completed: spec.imp ?? 1, job_used_ink_C: spec.ink ?? 125, job_used_ink_CO: 0,
+    });
+    return record;
+  });
+  input.requested_range = [1, Math.max(1, specs.length)];
+  return input;
+}

@@ -6,10 +6,9 @@ export class AccountingService {
   db: AccountingDatabase;
   private collecting = false;
   private collector: typeof collectSnapshot;
-  private getPassword: () => Promise<string>;
-  constructor(db: AccountingDatabase, getPassword: () => Promise<string>, collector = collectSnapshot) { this.db = db; this.getPassword = getPassword; this.collector = collector; }
+  constructor(db: AccountingDatabase, collector = collectSnapshot) { this.db = db; this.collector = collector; }
   get busy(): boolean { return this.collecting; }
-  async collect(options: CollectOptions, progress?: (message: string) => void, getPassword = this.getPassword): Promise<{ snapshot: Snapshot; result: ImportResult }> {
+  async collect(options: CollectOptions, getPassword: () => Promise<string>, progress?: (message: string) => void): Promise<{ snapshot: Snapshot; result: ImportResult }> {
     if (this.collecting) throw new CollectionBusyError('A collection is already running');
     this.collecting = true;
     let runId: number | undefined;

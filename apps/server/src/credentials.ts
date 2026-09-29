@@ -1,12 +1,9 @@
-import { realpathSync } from 'node:fs';
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { resolve } from 'node:path';
+import { timingSafeEqual } from 'node:crypto';
 import { secrets } from 'bun';
-import { canonicalMac } from 'print-accounting-ivec/protocol';
-import type { CollectOptions } from 'print-accounting-contracts';
 
 const SERVICE = 'print-accounting';
 export class CredentialError extends Error {}
+export class MissingCredentialError extends CredentialError {}
 export interface SecretStore {
   get(account: string): Promise<string | undefined>;
   set(account: string, secret: string): Promise<void>;
@@ -27,12 +24,15 @@ export class KeychainStore implements SecretStore {
     catch { throw new CredentialError('OS credential store could not save the credential.'); }
   }
 }
+// Development only (PRINTTALLY_MEMORY_SECRETS=1): passwords are forgotten when the server stops.
+export class MemoryStore implements SecretStore {
+  private values = new Map<string, string>();
+  async get(account: string): Promise<string | undefined> { return this.values.get(account); }
+  async set(account: string, secret: string): Promise<void> { this.values.set(account, secret); }
+}
 function equalSecret(a: string, b: string): boolean {
   const first = Buffer.from(a), second = Buffer.from(b);
   return first.length === second.length && timingSafeEqual(first, second);
-}
-export function printerAccount(options: Pick<CollectOptions, 'host' | 'mac'>): string {
-  return 'printer:' + (options.mac ? 'mac:' + canonicalMac(options.mac) : 'host:' + options.host);
 }
 export async function saveVerified(store: SecretStore, account: string, secret: string): Promise<void> {
   if (!secret || [...secret].length > 4096) throw new CredentialError('Credential is empty or too large.');
@@ -42,19 +42,6 @@ export async function saveVerified(store: SecretStore, account: string, secret: 
 }
 export async function printerPassword(store: SecretStore, account: string): Promise<string> {
   const password = await store.get(account);
-  if (!password) throw new CredentialError('No printer password is stored. Run the password command first.');
+  if (!password) throw new MissingCredentialError('No printer password is stored.');
   return password;
-}
-export async function apiToken(store: SecretStore, dataDirectory: string): Promise<string> {
-  const account = apiAccount(dataDirectory);
-  let token = await store.get(account);
-  if (token === undefined) {
-    token = randomBytes(32).toString('hex');
-    await saveVerified(store, account, token);
-  }
-  if (token.length < 32) throw new CredentialError('Stored API credential is invalid.');
-  return token;
-}
-export function apiAccount(dataDirectory: string): string {
-  return 'api:' + createHash('sha256').update(realpathSync(resolve(dataDirectory))).digest('hex');
 }

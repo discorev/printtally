@@ -100,9 +100,9 @@ export class PrinterEnrolment {
     // admin password to a newly trusted device just because it reused an address.
     await saveVerified(this.secrets, account(printer), parsed.data.password);
   }
-  collection(id: string): { options: CollectOptions; getPassword: () => Promise<string> } {
+  collection(id: string): { printer: KnownPrinter; options: CollectOptions; getPassword: () => Promise<string> } {
     const printer = this.get(id);
-    return {
+    return { printer: publicPrinter(printer),
       options: { host: printer.host, mac: printer.mac ?? undefined, trustedCertificatePem: printer.rootCertificatePem, cacheDirectory: this.cacheDirectory },
       getPassword: () => printerPassword(this.secrets, account(printer)),
     };
