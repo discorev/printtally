@@ -1,4 +1,5 @@
 import { X509Certificate } from 'node:crypto';
+import { hostname } from 'node:os';
 import type { CollectionStatus, HealthResponse, ImportResult, KnownPrinter, PrinterState } from 'print-accounting-contracts';
 import { API_VERSION } from 'print-accounting-contracts';
 import type { AccountingService } from './service.ts';
@@ -105,7 +106,7 @@ export class Collections {
     const last = printers.map(printer => printer.lastCollection).filter(item => item !== null).sort((a, b) => b.at.localeCompare(a.at))[0] ?? null;
     const state = this.service.busy ? 'collecting' : printers.every(printer => printer.state === 'needs_password') ? 'needs_printer'
       : printers.some(printer => printer.state === 'needs_confirming') ? 'printer_needs_confirming' : 'ready';
-    return { service: 'printtally', apiVersion: API_VERSION, collecting: this.service.busy, state, printers, missedJobs, lastCollection: last,
+    return { service: 'printtally', apiVersion: API_VERSION, hostName: hostname().replace(/\.local$/i, ''), collecting: this.service.busy, state, printers, missedJobs, lastCollection: last,
       nextCollectionAt: this.nextAt === undefined ? null : new Date(this.nextAt).toISOString() };
   }
 }

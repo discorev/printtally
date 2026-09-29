@@ -34,7 +34,7 @@ function problemPage({ host, port, remote, status }: Connection): string {
     : "Print Tally's server didn't start. Quit and reopen Print Tally to try again.";
   const button = remote ? '<p><button onclick="window.printtally.switchComputer()">Use this Mac instead</button></p>' : '';
   return 'data:text/html;charset=utf-8,' + encodeURIComponent(`<!doctype html><html lang="en"><title>Print Tally</title>
-<body style="font:16px/1.5 system-ui,sans-serif;max-width:30rem;margin:4rem auto;padding:0 1rem"><h1 style="font-size:1.25rem">Print Tally</h1><p>${escapeHtml(message)}</p>${button}</body></html>`);
+<body style="font:16px/1.5 system-ui,sans-serif;max-width:30rem;margin:4rem auto;padding:0 1rem"><div style="position:fixed;inset:0 0 auto;height:40px;-webkit-app-region:drag"></div><h1 style="font-size:1.25rem">Print Tally</h1><p>${escapeHtml(message)}</p>${button}</body></html>`);
 }
 
 function broadcastConnection(): void { window?.webContents.send('connection', manager.connection); }
@@ -66,6 +66,9 @@ async function useComputer(target: string | undefined): Promise<void> {
 async function createWindow(): Promise<void> {
   window = new BrowserWindow({
     width: 1100, height: 760,
+    // No title bar: the UI's top bar holds the traffic lights and drags the window (it knows it's in the app
+    // from the preload bridge), as in the docket design.
+    titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 20, y: 19 },
     webPreferences: { preload: join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   // The window only shows the connected server's pages; nothing opens new windows.

@@ -70,7 +70,10 @@ export interface LedgerJob extends JobDetails {
   date: string; paper: PaperLine; ink: InkLine[];
   paper_micros: number | null; ink_micros: number; total_micros: number | null; // total is null while any part is unknown.
 }
-export interface CostTotals { jobs: number; unknown_jobs: number; paper_micros: number; ink_micros: number; total_micros: number; waste_micros: number }
+export interface CostTotals {
+  jobs: number; unknown_jobs: number; paper_micros: number; ink_micros: number; total_micros: number; waste_micros: number;
+  ink_nl: number; // Ink the jobs used, whether or not its cost is known.
+}
 export interface JobsResponse { jobs: LedgerJob[]; total: number; limit: number; offset: number; settings: Settings }
 export interface JobResponse { job: LedgerJob; settings: Settings }
 export interface TotalsResponse {
@@ -100,8 +103,15 @@ export interface InkPurchaseView { id: number; ink_product_id: number; purchased
 export interface CartridgeView extends Usage {
   id: number; name: string; channel: string; capacity_nl: number; product_code: string | null;
   open_remaining_nl: number | null; // What the ledger thinks is left in the cartridge in use.
+  open_purchase_id: number | null; // The purchase that cartridge came from.
+  spares: number; // Whole cartridges left on the shelf, besides the one in use.
+  jobs: number; // Prints that drew ink from this cartridge (hidden ones too: they use ink like any other).
   purchases: InkPurchaseView[]; write_offs: WriteOffView[];
 }
 export interface InkResponse { cartridges: CartridgeView[]; channels: string[]; settings: Settings }
-export interface MediaTypeView { source_media_id: string; name: string | null; present_on_printer: boolean; jobs: number; papers: { id: number; name: string }[] }
+export interface MediaTypeView {
+  source_media_id: string; name: string | null; present_on_printer: boolean; jobs: number; papers: { id: number; name: string }[];
+  last_seen_at: string | null; // When a collection last read it from the printer (ISO UTC); null if only a paper names it.
+  first_job_on: string | null; last_job_on: string | null; totals: CostTotals; // Its visible jobs, as costed.
+}
 export interface MediaTypesResponse { media_types: MediaTypeView[] }

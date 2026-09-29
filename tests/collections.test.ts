@@ -4,7 +4,7 @@ import { createServer } from 'node:tls';
 import type { Socket } from 'node:net';
 import { X509Certificate } from 'node:crypto';
 import { collectSnapshot } from 'print-accounting-ivec';
-import type { Snapshot } from 'print-accounting-contracts';
+import type { ImportsResponse, Snapshot } from 'print-accounting-contracts';
 import { Collections, CollectionError } from '../apps/server/src/collections.ts';
 import { AccountingService } from '../apps/server/src/service.ts';
 import { apiFixture } from './api-fixtures.ts';
@@ -49,6 +49,7 @@ test('health reports each state, and a gap in the printer log as missed jobs', a
   const f = await apiFixture(t, { collector: async () => { if (release) await new Promise<void>(resolve => { release = resolve; }); return snapshots.shift()!; } });
   const health = () => f.collections.health();
   assert.equal(health().state, 'needs_printer');
+  assert.ok(health().hostName.length > 0 && !health().hostName.endsWith('.local'), 'names the server machine');
   const printer = await f.addPrinter();
   assert.deepEqual([health().state, health().printers[0].state], ['needs_printer', 'needs_password']);
   await f.enrolment.setPassword(printer.id, { password: 'synthetic password' }); f.collections.passwordSaved(printer.id);
@@ -123,4 +124,14 @@ test('a stored password is never sent to a printer whose certificate is not the 
   assert.equal(applicationBytes, 0, 'nothing is sent after the TLS handshake');
   assert.ok(handshakes <= 2);
   assert.ok(!(await f.request('/api/v1/known-printers')).text.includes('synthetic admin password'));
+});
+
+test('the import history names the printer log range each collection read', async t => {
+  const snapshots = [range(1, 3), range(4, 5)];
+  const f = await apiFixture(t, { collector: async () => snapshots.shift()! });
+  const printer = await f.addPrinter('10.23.45.67', 'synthetic password');
+  await f.collections.collect(printer.id);
+  await f.collections.collect(printer.id);
+  const { imports } = (await f.request('/api/v1/imports')).json<ImportsResponse>();
+  assert.deepEqual(imports.map(run => [run.status, run.requested_first, run.requested_last, run.new_jobs]), [['succeeded', 4, 5, 2], ['succeeded', 1, 3, 3]]);
 });

@@ -1,0 +1,145 @@
+import { useEffect, useRef, useState } from 'react';
+import type { Annotation, CostingMethod, LedgerJob, MediaTypeView, PaperView } from 'print-accounting-contracts';
+import {
+  Button, ButtonLink, DocketSection, PaperLine, PaperPicker, PaperPurchaseForm, PaperSwatch, RadioList, RadioOption, RowActions, Sub,
+} from '../../components/index.ts';
+import { useCurrency } from '../../api/queries.ts';
+import { dateShort, metres, money, stockQuantity } from '../../lib/format.ts';
+import { jobCancelled, jobPaperName, jobSize, jobSwatch } from '../../lib/jobs.ts';
+import { rollWidth } from '../../lib/sizes.ts';
+import { paperState, papersForMedia, stockChoices } from './paper.ts';
+
+export type PaperMode = 'view' | 'picker' | 'stock' | 'new';
+export type SaveAnnotation = (annotation: Annotation, label: string) => Promise<boolean>;
+
+/** The docket's Paper section (vPaperSection): what the print was allocated to and where it came from, with
+ *  "Change stock", "Correct paper" (the picker, and "New paper…" set up with its first stock) and a link to Papers. */
+export function PaperSection({ job, papers, mediaTypes, method, mode, setMode, save }: {
+  job: LedgerJob; papers: PaperView[]; mediaTypes: MediaTypeView[]; method: CostingMethod;
+  mode: PaperMode; setMode: (mode: PaperMode) => void; save: SaveAnnotation;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const paper = papers.find(p => p.id === job.paper.paper_id), own = papersForMedia(job, papers), state = paperState(job, papers);
+  const cancelled = jobCancelled(job), unknown = job.paper_micros === null, size = jobSize(job);
+  const choices = stockChoices(job, paper);
+  useEffect(() => { // Put focus where the keyboard wants it when a picker or the form opens.
+    const find = (selector: string) => ref.current?.querySelector<HTMLElement>(selector);
+    (mode === 'new' ? find('input[type=text]') : find('[role=radio][aria-checked=true]') ?? find('[role=radio]'))?.focus();
+  }, [mode]);
+
+  if (mode === 'new') return (
+    <DocketSection label="Paper" lockable>
+      <div ref={ref}>
+        <Sub className="mb-1">A new paper for this print, set up with its first stock. The printer's name stays on the docket.</Sub>
+        <PaperPurchaseForm embedded papers={papers} mediaTypes={mediaTypes} submitLabel="Assign to print"
+          initial={{ paperId: 'new', stockId: 'new', date: job.date, size, media: job.source_media_id ?? undefined }}
+          onSaved={({ paperId }) => void save({ paper_id: paperId }, 'Paper assigned').then(ok => ok && setMode('view'))}
+          onCancel={() => setMode('view')} />
+      </div>
+    </DocketSection>
+  );
+
+  const title = cancelled ? `${jobPaperName(job)} · no sheet used`
+    : unknown && !job.paper.stock_id ? (paper ? `${paper.name} · nothing in stock at ${size}` : jobPaperName(job))
+    : `${job.paper.stock_name} · ${job.paper.paper_name}`;
+  const reported = job.configured_paper_name ?? job.paper_name_at_import ?? job.source_media_id;
+  const detail = <>
+    {state === 'corrected' && <Sub>Printer reported: <span className="text-muted line-through">{reported}</span></Sub>}
+    {state === 'assumed' && <Sub>{own.length} papers print as “{reported}”. Assumed this one; correct it if it was another.</Sub>}
+    {cancelled ? <Sub>Cancelled before printing, so nothing came off stock.</Sub>
+      : unknown ? <Sub tone="amber">{job.paper.unknown_reason === 'no_paper'
+          ? 'No paper prints as this media, so the print has no paper cost. Add the media to a paper under Papers, or correct this print\'s paper.'
+          : job.paper.unknown_reason === 'unknown_usage' ? 'The printer didn\'t report how much paper the print used.'
+          : `No ${size} sheets or matching roll of ${paper?.name ?? jobPaperName(job)} had been bought by ${dateShort(job.date)}.`} The cost is never guessed.</Sub>
+      : mode === 'stock' ? null : <Source job={job} paper={paper} method={method} />}
+    {mode === 'stock' && <StockChoice job={job} paper={paper!} choices={choices} save={save} onDone={() => setMode('view')} />}
+    {mode === 'view' && (
+      <RowActions>
+        {choices.length > 1 && !cancelled && job.paper.stock_id && <Button size="sm" edit onClick={() => setMode('stock')}>Change stock</Button>}
+        <Button size="sm" edit onClick={() => setMode('picker')}>Correct paper</Button>
+        {paper ? <ButtonLink variant="text" size="sm" to="/papers/$paperId" params={{ paperId: String(paper.id) }}>Open in Papers</ButtonLink>
+          : <ButtonLink variant="text" size="sm" to="/papers">Open Papers</ButtonLink>}
+      </RowActions>
+    )}
+  </>;
+  return (
+    <DocketSection label="Paper" lockable>
+      <div ref={ref}>
+        <PaperLine swatch="big" name={title} detail={detail} {...jobSwatch(job)} none={!paper} />
+        {mode === 'picker' && <Picker job={job} papers={papers} own={own} save={save} onNew={() => setMode('new')} onDone={() => setMode('view')} />}
+      </div>
+    </DocketSection>
+  );
+}
+
+/** "From the pack bought 10 Jan 2026 (£34.99 for 25) · 6 of 25 left in it.", worded for the costing method. */
+function Source({ job, paper, method }: { job: LedgerJob; paper: PaperView | undefined; method: CostingMethod }) {
+  const currency = useCurrency();
+  const purchase = paper?.purchases.find(p => p.id === job.paper.from[0]?.purchase_id);
+  if (!purchase) return null;
+  const roll = job.paper.format === 'roll', bought = dateShort(purchase.purchased_on), price = money(purchase.price_micros, currency);
+  const from = roll ? `the roll bought ${bought} (${price} for ${metres(purchase.quantity, purchase.quantity % 1e6 ? 1 : 0)})` : `the pack bought ${bought} (${price} for ${purchase.quantity})`;
+  const left = roll ? `${metres(purchase.remaining)} left on it` : `${purchase.remaining} of ${purchase.quantity} left in it`;
+  return (
+    <Sub className="mt-1">{method === 'oldest' ? `From ${from} · ${left}.`
+      : `Taken from ${from} · ${left}. ${method === 'average' ? 'Costed at the average price of everything bought' : 'Costed at the most paid for it'} by ${dateShort(job.date)}.`}</Sub>
+  );
+}
+
+/** Correcting the paper: the picker of every paper, then "New paper…". Choosing the only paper that prints as
+ *  the job's media clears the correction instead, so the print follows the printer again. */
+function Picker({ job, papers, own, save, onNew, onDone }: {
+  job: LedgerJob; papers: PaperView[]; own: PaperView[]; save: SaveAnnotation; onNew: () => void; onDone: () => void;
+}) {
+  const [pick, setPick] = useState<number | null>(job.paper.paper_id);
+  const [saving, setSaving] = useState(false);
+  const submit = async () => {
+    setSaving(true);
+    const annotation: Annotation = own.length === 1 && own[0].id === pick ? { paper_id: null, paper_stock_id: null } : { paper_id: pick };
+    if (await save(annotation, 'Paper corrected')) onDone(); else setSaving(false);
+  };
+  return (
+    <div className="mt-3">
+      <PaperPicker papers={papers} value={pick} onChange={setPick} onNew={onNew} />
+      <RowActions>
+        <Button variant="primary" size="sm" edit disabled={!pick || pick === job.paper.paper_id || saving} onClick={() => void submit()}>Save</Button>
+        <Button variant="text" size="sm" onClick={onDone}>Cancel</Button>
+        <Sub>The printer's name stays on the docket.</Sub>
+      </RowActions>
+    </div>
+  );
+}
+
+/** Choosing the stock item a print came from: sheets of its size, or a roll of its width. */
+function StockChoice({ job, paper, choices, save, onDone }: {
+  job: LedgerJob; paper: PaperView; choices: PaperView['stock']; save: SaveAnnotation; onDone: () => void;
+}) {
+  const [pick, setPick] = useState(job.paper.stock_id);
+  const [saving, setSaving] = useState(false);
+  const roll = choices.find(item => item.format === 'roll'), size = jobSize(job);
+  const submit = async () => {
+    setSaving(true);
+    if (await save({ paper_stock_id: pick }, 'Stock changed')) onDone(); else setSaving(false);
+  };
+  return (
+    <div className="mt-2.5">
+      <Sub className="mb-1.5">Stock that could have printed {size} by {dateShort(job.date)}{roll && `: ${size} sheets or a ${rollWidth(roll.width_um)} roll`}.</Sub>
+      <RadioList label="Stock">
+        {choices.map(item => {
+          const last = paper.purchases.filter(p => p.paper_stock_id === item.id && p.purchased_on <= job.date).at(-1);
+          return (
+            <RadioOption key={item.id} checked={item.id === pick} onSelect={() => setPick(item.id)}
+              swatch={<PaperSwatch shape={item.format === 'roll' ? 'roll' : 'sheet'} deckle={item.deckle} />}
+              detail={`${stockQuantity(item.remaining, item.format)} left${last ? ` · last bought ${dateShort(last.purchased_on)}` : ''}`}>
+              {item.name}
+            </RadioOption>
+          );
+        })}
+      </RadioList>
+      <RowActions>
+        <Button variant="primary" size="sm" edit disabled={pick === job.paper.stock_id || saving} onClick={() => void submit()}>Save</Button>
+        <Button variant="text" size="sm" onClick={onDone}>Cancel</Button>
+      </RowActions>
+    </div>
+  );
+}

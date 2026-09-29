@@ -25,10 +25,11 @@ function constraint(error: unknown, deleting: boolean): never {
   throw error;
 }
 const flag = (value: boolean | undefined) => value === undefined ? undefined : Number(value);
-const blank = (): CostTotals => ({ jobs: 0, unknown_jobs: 0, paper_micros: 0, ink_micros: 0, total_micros: 0, waste_micros: 0 });
+const blank = (): CostTotals => ({ jobs: 0, unknown_jobs: 0, paper_micros: 0, ink_micros: 0, total_micros: 0, waste_micros: 0, ink_nl: 0 });
 const addJob = (totals: CostTotals, job: LedgerJob) => {
   totals.jobs++; if (job.total_micros === null) totals.unknown_jobs++;
   totals.paper_micros += job.paper_micros ?? 0; totals.ink_micros += job.ink_micros; totals.total_micros = totals.paper_micros + totals.ink_micros;
+  totals.ink_nl += job.ink.reduce((sum, line) => sum + (line.volume_nl ?? 0), 0);
 };
 // Printer times are local YYYYMMDDHHMMSS text; observations are ISO UTC.
 const moment = (job: JobDetails): string => {
@@ -248,12 +249,16 @@ export class Ledger {
     for (const p of inkPurchases) if (result.lots.get('ink:' + p.id)!.remaining > 0 && !inUse.has(channelOf.get(p.ink_product_id)!)) inUse.set(channelOf.get(p.ink_product_id)!, p.id);
     return { settings, channels, cartridges: cartridges.map((cartridge): CartridgeView => {
       const bought = inkPurchases.filter(p => p.ink_product_id === cartridge.id).map(p => ({ ...p, remaining_nl: result.lots.get('ink:' + p.id)!.remaining }));
-      const lines = jobs.flatMap(job => job.ink.flatMap(line => line.from)).filter(use => use.ink_product_id === cartridge.id);
+      const printed = jobs.filter(job => job.ink.some(line => line.from.some(use => use.ink_product_id === cartridge.id)));
+      const lines = printed.flatMap(job => job.ink.flatMap(line => line.from)).filter(use => use.ink_product_id === cartridge.id);
       const wasted = views.filter(w => w.ink_product_id === cartridge.id), out = wasted.filter(w => w.cost_micros !== null);
       const open = bought.find(p => p.id === inUse.get(cartridge.channel));
+      const openRemaining = open ? open.remaining_nl % cartridge.capacity_nl || cartridge.capacity_nl : null;
+      const remaining = bought.reduce((sum, p) => sum + p.remaining_nl, 0);
       return { ...cartridge, purchases: bought, write_offs: wasted,
-        open_remaining_nl: open ? open.remaining_nl % cartridge.capacity_nl || cartridge.capacity_nl : null,
-        bought: bought.reduce((sum, p) => sum + p.cartridges * cartridge.capacity_nl, 0), remaining: bought.reduce((sum, p) => sum + p.remaining_nl, 0),
+        open_purchase_id: open?.id ?? null, open_remaining_nl: openRemaining,
+        spares: Math.max(0, Math.round((remaining - (openRemaining ?? 0)) / cartridge.capacity_nl)), jobs: printed.length,
+        bought: bought.reduce((sum, p) => sum + p.cartridges * cartridge.capacity_nl, 0), remaining,
         used: lines.reduce((sum, use) => sum + use.quantity, 0), used_micros: lines.reduce((sum, use) => sum + use.cost_micros, 0),
         wasted: out.reduce((sum, w) => sum + w.written_off, 0), waste_micros: out.reduce((sum, w) => sum + w.cost_micros!, 0) };
     }) };
@@ -266,17 +271,21 @@ export class Ledger {
     for (const row of rows) if (!names.get(String(row.source_media_id))) names.set(String(row.source_media_id), row.name === null ? null : String(row.name));
     return names;
   }
-  // Every media type the printer reports or a paper names, with the papers printed as it.
+  // Every media type the printer reports or a paper names, with the papers printed as it and its visible jobs' totals.
   mediaTypes(): MediaTypesResponse {
-    const names = this.mediaNames();
-    const present = new Set(this.db.all('SELECT source_media_id FROM media_configs WHERE present_on_printer=1').map(row => String(row.source_media_id)));
-    const counts = new Map(this.db.all('SELECT source_media_id, count(*) AS jobs FROM job_details WHERE hidden=0 AND source_media_id IS NOT NULL GROUP BY source_media_id')
-      .map(row => [String(row.source_media_id), Number(row.jobs)]));
+    const names = this.mediaNames(), { jobs } = this.load();
+    const configs = this.db.all('SELECT source_media_id, max(present_on_printer) AS present, max(last_seen_at) AS seen FROM media_configs GROUP BY source_media_id');
+    const present = new Set(configs.filter(row => Number(row.present) === 1).map(row => String(row.source_media_id)));
+    const seen = new Map(configs.map(row => [String(row.source_media_id), String(row.seen)]));
     const links = this.db.orm.select({ source_media_id: paper_media_types.source_media_id, id: papers.id, name: papers.name }).from(paper_media_types)
       .innerJoin(papers, eq(papers.id, paper_media_types.paper_id)).orderBy(papers.name, sql`${papers.id}`).all();
     const ids = [...new Set([...names.keys(), ...links.map(link => link.source_media_id)])];
-    return { media_types: ids.map(id => ({ source_media_id: id, name: names.get(id) ?? null, present_on_printer: present.has(id), jobs: counts.get(id) ?? 0,
-      papers: links.filter(link => link.source_media_id === id).map(({ id: paperId, name }) => ({ id: paperId, name })) }))
-      .sort((a, b) => (a.name ?? a.source_media_id).localeCompare(b.name ?? b.source_media_id)) };
+    return { media_types: ids.map(id => {
+      const own = jobs.filter(job => !job.hidden && job.source_media_id === id), days = own.map(job => job.date).sort(), totals = blank();
+      for (const job of own) addJob(totals, job);
+      return { source_media_id: id, name: names.get(id) ?? null, present_on_printer: present.has(id), jobs: own.length,
+        papers: links.filter(link => link.source_media_id === id).map(({ id: paperId, name }) => ({ id: paperId, name })),
+        last_seen_at: seen.get(id) ?? null, first_job_on: days[0] ?? null, last_job_on: days.at(-1) ?? null, totals };
+    }).sort((a, b) => (a.name ?? a.source_media_id).localeCompare(b.name ?? b.source_media_id)) };
   }
 }

@@ -132,6 +132,7 @@ test('unknown paper cost stays null with a reason and is never guessed', t => {
   assert.equal(job(1).ink_micros, 46875);
   const { overall } = ledger.totals();
   assert.deepEqual([overall.jobs, overall.unknown_jobs, overall.paper_micros, overall.ink_micros], [1, 1, 0, 46875]);
+  assert.equal(overall.ink_nl, 125_000, 'ink volume counts even when the paper cost is unknown');
 });
 
 test('totals per day and per paper leave hidden jobs out; remaining stock per item and cartridge', t => {
@@ -142,7 +143,10 @@ test('totals per day and per paper leave hidden jobs out; remaining stock per it
   assert.deepEqual(totals.days.map(day => [day.date, day.jobs, day.paper_micros]), [['2026-02-02', 2, 3 * GBP], ['2026-02-01', 1, GBP]]);
   assert.deepEqual(totals.papers.map(row => [row.paper_id, row.jobs, row.unknown_jobs, row.paper_micros]), [[paper, 2, 0, 4 * GBP], [null, 1, 1, 0]]);
   assert.equal(ledger.papers().papers[0].stock[0].remaining, 25 - 5, 'hidden prints still use stock');
-  assert.equal(ledger.ink().cartridges[0].remaining, 160_000_000 - 4 * 125_000);
+  const [cyan] = ledger.ink().cartridges;
+  assert.equal(cyan.remaining, 160_000_000 - 4 * 125_000);
+  assert.deepEqual([cyan.open_purchase_id, cyan.open_remaining_nl, cyan.spares, cyan.jobs], [cyan.purchases[0].id, 80_000_000 - 4 * 125_000, 1, 4],
+    'the second cartridge of the pack is a spare; hidden prints still used ink');
   assert.deepEqual(ledger.ink().channels, ['C', 'CO']);
 });
 
@@ -178,6 +182,8 @@ test('stock records validate shape, references and use', t => {
   ledger.updatePaper(paper, { media_types: [OTHER] });
   const media = ledger.mediaTypes().media_types;
   assert.deepEqual(media.map(m => [m.source_media_id, m.name, m.jobs, m.papers.map(p => p.name)]), [[MEDIA, 'Configured stock', 1, []], [OTHER, null, 0, ['Museum Etching']]]);
+  assert.deepEqual(media.map(m => [m.first_job_on, m.last_job_on, m.totals.jobs, m.totals.unknown_jobs, m.totals.ink_nl, m.last_seen_at !== null]),
+    [['2026-02-01', '2026-02-01', 1, 1, 125_000, true], [null, null, 0, 0, 0, false]], 'a media type carries its jobs\' dates and totals, and when it was last read');
 });
 
 test('using more than was bought draws the newest purchase below zero at its own price', t => {

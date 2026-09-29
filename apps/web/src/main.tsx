@@ -1,16 +1,21 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createRouter } from '@tanstack/react-router';
 import { routeTree } from './routeTree.gen.ts';
+import { queryClient } from './api/queries.ts';
+import { connection } from './connection/index.ts';
+import { desktop } from './desktop.ts';
 import './styles.css';
 
-const router = createRouter({ routeTree });
+const router = createRouter({ routeTree, defaultPreload: 'intent', scrollRestoration: false });
 declare module '@tanstack/react-router' {
   interface Register { router: typeof router }
 }
 
-const queryClient = new QueryClient();
+// Inside Electron the window has no title bar: the top bar makes room for the traffic lights and drags the window.
+if (desktop) document.documentElement.dataset.desktop = '';
+void connection.check();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

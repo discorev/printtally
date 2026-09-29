@@ -32,14 +32,31 @@ export function staticFile(root: string | undefined, pathname: string): StaticFi
 // Opened from `printtally pair`. The code travels in the fragment, so it never reaches logs or
 // link previews; the page exchanges it once for the session cookie, then opens the app.
 export const pairPage = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pair with Print Tally</title></head>
-<body style="font:16px/1.5 system-ui,sans-serif;max-width:30rem;margin:4rem auto;padding:0 1rem"><h1 style="font-size:1.25rem">Print Tally</h1><p id="message">Pairing this device…</p>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pair with Print Tally</title>
+<style>
+:root{--mat:#37665A;--grid:rgba(255,255,255,.075);--grid5:rgba(255,255,255,.14);--paper:#FAF9F6;--ink:#1B1D1C;--muted:#5E6561;--rule:#B8B5AC;--amber:#9E6A12;--shadow:0 1px 0 rgba(0,0,0,.28),0 10px 28px rgba(0,0,0,.24);color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--mat:#182320;--grid:rgba(255,255,255,.045);--grid5:rgba(255,255,255,.085);--paper:#232624;--ink:#ECEAE3;--muted:#A5AAA3;--rule:#535852;--amber:#E2AB4B;--shadow:0 1px 0 rgba(0,0,0,.6),0 12px 30px rgba(0,0,0,.5)}}
+html,body{height:100%;margin:0}
+body{display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;color:var(--ink);font:400 14px/20px "Public Sans",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased;
+  background-color:var(--mat);background-position:-1px -1px;background-size:100px 100px,100px 100px,20px 20px,20px 20px;
+  background-image:linear-gradient(var(--grid5) 1px,transparent 1px),linear-gradient(90deg,var(--grid5) 1px,transparent 1px),linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px)}
+main{width:600px;max-width:100%;background:var(--paper);border-radius:3px;box-shadow:var(--shadow)}
+header{padding:16px 20px 12px;border-bottom:1px solid var(--rule)}
+.lab{font:600 11px/16px "Zilla Slab","Iowan Old Style",Georgia,serif;text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
+h1{margin:4px 0 0;font:500 20px/26px "Zilla Slab","Iowan Old Style",Georgia,serif}
+p{margin:0;padding:14px 20px 16px;font-size:13px;line-height:18px;color:var(--muted)}
+p.problem{color:var(--amber)}
+code{font:12.5px ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+</style></head>
+<body><main><header><div class="lab">Print Tally</div><h1>Pair this device</h1></header><p id="message" role="status">Pairing this device…</p></main>
 <script>
 const code = new URLSearchParams(location.hash.slice(1)).get('code'), message = document.getElementById('message');
 history.replaceState(null, '', '/pair');
-if (!code) message.textContent = 'This pairing link is incomplete. Run printtally pair on the host for a new one.';
+const problem = text => { message.className = 'problem'; message.innerHTML = text; };
+const again = ' Run <code>printtally pair</code> on the host for a new one.';
+if (!code) problem('This pairing link is incomplete.' + again);
 else fetch('/api/v1/pairing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) })
-  .then(response => { if (response.ok) location.replace('/'); else message.textContent = 'This pairing link has expired or was already used. Run printtally pair on the host for a new one.'; })
-  .catch(() => { message.textContent = "Can't reach Print Tally. Check this device is on the same network as the host."; });
+  .then(response => { if (response.ok) location.replace('/'); else problem('This pairing link has expired or was already used.' + again); })
+  .catch(() => { problem("Can't reach Print Tally. Check this device is on the same network as the host."); });
 </script></body></html>
 `;

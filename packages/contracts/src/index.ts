@@ -89,8 +89,9 @@ export interface PrinterStatus { id: string; name: string; host: string; state: 
 // The printer's oldest kept record was newer than the last one collected + 1: records from..to were never collected.
 // printerId and printerName are the known printer's (health.printers[].id); null id when it is no longer set up.
 export interface MissedJobs { printerId: string | null; printerName: string; fromRecord: number; toRecord: number; detectedAt: string }
+// hostName: the server machine's name (without .local), which clients show as the computer they're using.
 export interface HealthResponse {
-  service: 'printtally'; apiVersion: number; collecting: boolean; state: ServerState;
+  service: 'printtally'; apiVersion: number; hostName: string; collecting: boolean; state: ServerState;
   printers: PrinterStatus[]; missedJobs: MissedJobs[]; lastCollection: CollectionStatus | null; nextCollectionAt: string | null;
 }
 
@@ -101,6 +102,14 @@ export interface PairingCodeResponse { code: string; expiresAt: string; links: s
 export interface PairedSession { id: string; label: string; userAgent: string | null; createdAt: string; lastSeenAt: string }
 export interface SessionsResponse { sessions: PairedSession[] }
 export interface ApiError { error: string }
+
+// GET /imports, newest first. requested_first..requested_last is the printer's job log range when it was read.
+export interface ImportRun {
+  id: number; printer_id: number | null; source: 'live' | 'snapshot'; started_at: string; finished_at: string | null;
+  status: 'running' | 'succeeded' | 'failed'; requested_first: number | null; requested_last: number | null;
+  received_count: number | null; new_jobs: number | null; new_observations: number | null; error_code: string | null;
+}
+export interface ImportsResponse { imports: ImportRun[]; limit: number; offset: number }
 
 // Printer discovery advertises candidates; only an explicit confirmation grants trust.
 export const enrolmentRequestSchema = z.object({

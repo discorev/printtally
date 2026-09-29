@@ -102,7 +102,7 @@ export function createApi(service: AccountingService, options: ApiOptions): Serv
       }
       if (method === 'GET' && path === '/api/v1/imports') {
         const [limit, offset] = page();
-        return send(200, { imports: service.db.all('SELECT id,printer_id,source,started_at,finished_at,status,received_count,new_jobs,new_observations,error_code FROM import_runs ORDER BY id DESC LIMIT ? OFFSET ?', limit, offset), limit, offset });
+        return send(200, { imports: service.db.all('SELECT id,printer_id,source,started_at,finished_at,status,requested_first,requested_last,received_count,new_jobs,new_observations,error_code FROM import_runs ORDER BY id DESC LIMIT ? OFFSET ?', limit, offset), limit, offset });
       }
       const annotation = /^\/api\/v1\/jobs\/(\d+)\/annotation$/.exec(path);
       if (method === 'PATCH' && annotation) {
