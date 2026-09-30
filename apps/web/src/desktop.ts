@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react';
 // `desktop` being undefined means a browser. It exposes the app's version, connection info and "switch computer",
 // nothing else.
 // Mirrors apps/desktop/src/server-manager.ts's Connection; the UI never imports the desktop app.
+export type ServerOwnership = 'owned' | 'borrowed' | 'remote';
 export interface DesktopConnection {
-  host: string; port: number; owns: boolean; remote: boolean;
+  host: string; port: number; owns: boolean; remote: boolean; ownership: ServerOwnership;
   status: 'ready' | 'unreachable' | 'port_in_use' | 'failed';
 }
 export interface PrintTallyBridge {
