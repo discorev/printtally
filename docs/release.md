@@ -32,7 +32,7 @@ Before 1.0.0, a breaking change bumps the minor version. The first release of ea
 | --- | --- | --- |
 | `release-please` | every push to main | the release PR, or, when it's merged, the tags and GitHub releases |
 | `npm-prepare` | the backend was released | nothing; it tests, skips a version already on npm, and packs the package with `bun pm pack` |
-| `npm-publish` | `npm-prepare` packed a package | `printtally` on npm, through trusted publishing (OIDC). It's the only job with `id-token: write`, and it runs no install scripts |
+| `npm-publish` | `npm-prepare` packed a package | a staged `printtally` version on npm, through trusted publishing (OIDC). It goes live when you approve it (see below). It's the only job with `id-token: write`, and it runs no install scripts |
 | `backend-assets` | the backend was released and tested | `printtally-server-X.Y.Z-darwin-arm64.tar.gz` and its `.sha256`, on the backend's GitHub release: the compiled server and its UI, checked to report version X.Y.Z |
 | `app` | the app was released | `PrintTally-X.Y.Z.dmg` and `PrintTally-X.Y.Z.zip`, signed, notarized and stapled, on the app's GitHub release |
 
@@ -51,7 +51,18 @@ Every job uses Bun 1.3.9.
    - requires the status checks **Typecheck and test** and **Package**.
    - blocks direct pushes and force pushes.
    - lets only you bypass it, by pull request only. The release PR ships when it's merged, so only the owner should merge it.
-4. **npm trusted publishing.** On npmjs.com, open the `printtally` package settings and add a trusted publisher: GitHub Actions, repository `discorev/printtally`, workflow `release.yml`, no environment. The package's `repository` field (`apps/server/package.json`) must name the same repository, as it already does. If the package doesn't exist on npm yet, publish 0.1.0 once by hand, then add the trusted publisher.
+4. **npm trusted publishing.** On npmjs.com, open the `printtally` package settings and add a trusted publisher: GitHub Actions, repository `discorev/printtally`, workflow `release.yml`, no environment, with the default **npm stage publish** permission. The package's `repository` field (`apps/server/package.json`) must name the same repository, as it already does.
+
+## Approving a backend release on npm
+
+The trusted publisher only allows staging, so CI can't put a version live by itself. After a backend release, approve its staged version on npmjs.com (the package's staged versions) or from a trusted machine:
+
+```sh
+npm stage list printtally
+npm stage approve <stage-id>   # asks for your 2FA code
+```
+
+If staging failed, fix the cause, then stage the released tag again from Actions → Release → Run workflow, with `backend_tag` set to the tag (for example `backend-v0.1.0`). A manual run only stages that tag; it doesn't run release-please or build the app.
 
 ## How release-please is configured
 
