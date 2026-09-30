@@ -12,6 +12,9 @@ import { discoveredPrinters, isPrinterAddress } from '../apps/server/src/printer
 import { downloadPrinterRoot } from '../apps/server/src/printer-certificate.ts';
 import { AccountingService } from '../apps/server/src/service.ts';
 import { createApi } from '../apps/server/src/http.ts';
+import { Collections } from '../apps/server/src/collections.ts';
+import { Sessions } from '../apps/server/src/sessions.ts';
+import type { HealthResponse } from 'print-accounting-contracts';
 import { sample } from './fixtures.ts';
 import { tlsFixtures } from './tls-fixtures.ts';
 const fixtures = await tlsFixtures();
@@ -125,26 +128,29 @@ test('bootstrap uses only fixed certificate GET, rejects redirects and oversized
   assert.equal(observed.length, 3);
   for (const request of observed) assert.deepEqual(request, { url: '/cert_root.der', method: 'GET', authorization: undefined, cookie: undefined });
 });
-test('authenticated API supports setup without a configured printer and collects only confirmed IDs', async t => {
+test('API supports setup without a configured printer and collects only confirmed IDs', async t => {
   const f = setup(t); let collected = 0;
-  const service = new AccountingService(f.db, async () => { throw new Error('Legacy credentials must not be used'); }, async (options, getPassword) => {
+  const service = new AccountingService(f.db, async (options, getPassword) => {
     assert.equal(options.trustedCertificatePem, root); assert.equal(await getPassword(), 'synthetic password'); collected++; return sample();
   });
-  const token = 'synthetic-enrolment-api-token-32-characters';
-  const server = createApi(service, token, undefined, f.enrolment);
+  const collections = new Collections(service, f.enrolment);
+  const server = createApi(service, { enrolment: f.enrolment, collections, sessions: new Sessions() });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const address = server.address(); assert.ok(address && typeof address === 'object');
   const base = 'http://127.0.0.1:' + address.port + '/api/v1';
   t.after(async () => { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); });
-  const request = (path: string, method = 'GET', body?: unknown) => fetch(base + path, { method, headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
-  assert.equal((await fetch(base + '/printer-enrolments', { method: 'POST' })).status, 401);
-  assert.equal((await request('/collect', 'POST', {})).status, 409);
+  const request = (path: string, method = 'GET', body?: unknown) => fetch(base + path, { method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const health = async () => (await (await request('/health')).json() as HealthResponse).state;
+  assert.equal(await health(), 'needs_printer');
+  assert.equal((await request('/collect', 'POST', {})).status, 404);
   assert.equal((await request('/printer-discovery', 'POST', {})).status, 200);
   const preview = await (await request('/printer-enrolments', 'POST', { host })).json() as { id: string; fingerprintSha256: string };
   assert.equal((await request('/known-printers/' + preview.id + '/password', 'PUT', { password: 'no trust yet' })).status, 404);
   assert.equal((await request('/known-printers/' + preview.id + '/collect', 'POST', {})).status, 404);
   const printer = await (await request('/printer-enrolments/' + preview.id + '/confirm', 'POST', confirmed(preview.fingerprintSha256))).json() as { id: string };
+  assert.equal(await health(), 'ready', 'a known printer without its password is not set up again');
   assert.equal((await request('/known-printers/' + printer.id + '/password', 'PUT', { password: 'synthetic password' })).status, 200);
+  assert.equal(await health(), 'ready');
   assert.equal((await request('/known-printers/' + printer.id + '/collect', 'POST', { host: secondHost })).status, 400);
   assert.equal((await request('/known-printers/' + printer.id + '/collect', 'POST', {})).status, 200);
   assert.equal(collected, 1);

@@ -73,34 +73,24 @@ test('partial import failure rolls back facts but records a safe failure categor
   assert.throws(() => db.importSnapshot(input)); assert.equal(db.summary().print_jobs, 0); assert.equal(db.summary().media_configs, 0);
   assert.deepEqual(db.get('SELECT status,error_code FROM import_runs'), { status: 'failed', error_code: 'invalid_snapshot' });
 });
-test('effective-dated prices preserve exact integers and reject fractional money', t => {
-  const { db } = fixture(t);
-  const stock = db.run("INSERT INTO paper_stocks(name,format) VALUES('Stock','sheet')");
-  for (const [date, amount] of [['2026-01-01', 25000000], ['2026-09-01', 30000000]] as const) db.run("INSERT INTO paper_prices(paper_stock_id,effective_from,currency,amount_micros,quantity,quantity_unit) VALUES(?,?,'GBP',?,25,'sheet')", stock, date, amount);
-  assert.equal(db.get("SELECT amount_micros FROM paper_prices WHERE effective_from<='2026-08-31' ORDER BY effective_from DESC LIMIT 1")!.amount_micros, 25000000);
-  assert.throws(() => db.run('UPDATE paper_prices SET amount_micros=1.25')); assert.throws(() => db.run('UPDATE paper_prices SET quantity=0'));
-});
-test('unknown cost stays null, zero is explicit, and unsafe integers are refused', t => {
-  const { db } = fixture(t); db.importSnapshot(sample()); db.annotateJob(1, { notes: 'No cost known' });
-  assert.equal(db.jobs()[0].paper_cost_override_micros, null);
-  assert.throws(() => db.annotateJob(1, { paper_cost_override_micros: 1000000 }));
-  db.annotateJob(1, { paper_cost_override_micros: 0, paper_cost_currency: 'GBP' }); assert.equal(db.jobs()[0].paper_cost_override_micros, 0);
-  db.annotateJob(1, { paper_cost_override_micros: '9007199254740991', paper_cost_currency: 'GBP' });
-  assert.equal(db.jobs()[0].paper_cost_override_micros, Number.MAX_SAFE_INTEGER);
-  assert.throws(() => db.annotateJob(1, { paper_cost_override_micros: '9007199254740993', paper_cost_currency: 'GBP' }), /safe range/);
-  assert.throws(() => db.run('UPDATE job_annotations SET physical_sheet_count=?', 2 ** 53), /safe range/);
-  assert.equal(db.jobs()[0].paper_cost_override_micros, Number.MAX_SAFE_INTEGER);
+test('purchases keep exact integer money and refuse fractional or unsafe values', t => {
+  const { db } = fixture(t); db.importSnapshot(sample());
+  const paper = db.run("INSERT INTO papers(name) VALUES('Paper')"), stock = db.run("INSERT INTO paper_stocks(paper_id,name,format,width_um,height_um) VALUES(?,'A4','sheet',210000,297000)", paper);
+  db.run("INSERT INTO paper_purchases(paper_stock_id,purchased_on,packs,sheets_per_pack,price_micros) VALUES(?,'2026-01-01',1,25,?)", stock, Number.MAX_SAFE_INTEGER);
+  assert.equal(db.get('SELECT price_micros FROM paper_purchases')!.price_micros, Number.MAX_SAFE_INTEGER);
+  assert.throws(() => db.run('UPDATE paper_purchases SET price_micros=1.25')); assert.throws(() => db.run('UPDATE paper_purchases SET packs=0'));
+  assert.throws(() => db.run('UPDATE paper_purchases SET price_micros=?', 2 ** 53), /safe range/);
   const input = sample(); input.records[0].raw.job_used_ink_C = Number.MAX_SAFE_INTEGER;
   assert.throws(() => db.importSnapshot(input), /safe range/); assert.equal(db.summary().job_observations, 1);
 });
 test('fresh database is migrated and marked; reopening is idempotent', t => {
-  const { db, path } = fixture(t); db.run("INSERT INTO paper_stocks(name,format) VALUES('Keep this stock','sheet')");
+  const { db, path } = fixture(t); db.run("INSERT INTO papers(name) VALUES('Keep this paper')");
   for (let i = 0; i < 2; i++) {
     const reopened = new AccountingDatabase(path);
     try {
       assert.equal(reopened.get('PRAGMA application_id')!.application_id, APPLICATION_ID);
-      assert.equal(reopened.all('SELECT * FROM __drizzle_migrations').length, 1);
-      assert.equal(reopened.get('SELECT name FROM paper_stocks')!.name, 'Keep this stock');
+      assert.equal(reopened.all('SELECT * FROM __drizzle_migrations').length, 2);
+      assert.equal(reopened.get('SELECT name FROM papers')!.name, 'Keep this paper');
       assert.deepEqual(reopened.all("SELECT name FROM sqlite_master WHERE type='view'"), [{ name: 'job_details' }]);
     } finally { reopened.close(); }
   }

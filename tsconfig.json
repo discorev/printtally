@@ -2,8 +2,8 @@
   "compilerOptions": {
     "target": "ES2023", "module": "Preserve", "moduleResolution": "bundler",
     "strict": true, "noEmit": true, "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true, "skipLibCheck": true,
+    "verbatimModuleSyntax": true, "skipLibCheck": true, "jsx": "react-jsx",
     "types": ["bun"]
   },
-  "include": ["packages/**/*.ts", "apps/**/*.ts", "tests/**/*.ts"]
+  "include": ["packages/**/*.ts", "apps/**/*.ts", "apps/**/*.cts", "apps/**/*.tsx", "tests/**/*.ts", "scripts/**/*.ts"]
 }

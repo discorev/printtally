@@ -2,7 +2,7 @@
 
 Print Tally keeps a permanent record of every print from a Canon imagePROGRAF
 printer: the ink used on each channel, the paper, the size and when it was printed.
-That record is the basis for working out what each print actually cost.
+Record what you paid for paper and ink, and it works out what each print cost.
 
 ## Why it exists
 
@@ -19,81 +19,120 @@ systems, and how to report a new one.
 
 ## Getting started
 
-You need [Bun](https://bun.sh) 1.3.9 or newer, the printer on your network
-with a fixed IP address, and the printer's administrator password.
+You need the printer on your network with a fixed IP address, and the printer's
+administrator password. Then either:
 
-### 1. Install
+- run `bunx printtally` (needs [Bun](https://bun.sh) 1.3.9 or newer), which starts
+  Print Tally and opens it in your browser, or
+- install the Print Tally desktop app for Macs with Apple silicon: open the `.dmg`,
+  drag Print Tally to Applications and open it. It includes everything it needs,
+  so you don't need Bun.
 
-```sh
-git clone <repository-url> printtally
-cd printtally
-bun install
-```
+Both show the same setup screen:
 
-Print Tally keeps its settings and archive in a data folder:
+1. Find your printer, or type its IP address.
+2. Compare the certificate fingerprint Print Tally shows with the one on the
+   printer's control panel (**Printer information > System information > Root cert.
+   thumbprint (SHA-256)**), and confirm only if they match.
+3. Enter the administrator password. It's kept in your system's credential store
+   (Keychain on macOS), never in a file.
+
+Your jobs appear straight away. From then on, Print Tally collects new jobs when it
+starts and every 15 minutes while it's running. If more jobs were printed than the
+printer keeps while Print Tally wasn't running, the Jobs screen says which ones may
+have been missed.
+
+Running `printtally` again, or opening the desktop app while it's running, uses the
+Print Tally that's already running on this computer, so there's only ever one ledger.
+It uses port 4318; if another program has that port, Print Tally stops with an error
+rather than picking a different one. Use `--port` to choose another.
+
+Print Tally keeps its ledger in a data folder:
 `~/Library/Application Support/printtally` on macOS, `~/.printtally` on Linux and
-`%APPDATA%\printtally` on Windows. The commands below use the macOS folder.
+`%APPDATA%\printtally` on Windows (`--data-dir` to use another).
 
-### 2. Trust the printer's certificate
+### Commands
 
-Print Tally only talks to the printer over verified HTTPS. The printer signs its
-connection with its own root certificate, which you download and check once.
+| Command | What it does |
+|---|---|
+| `printtally` | Opens Print Tally in your browser, starting it if it isn't running |
+| `printtally serve [--host]` | Runs Print Tally without opening a browser; `--host` lets other devices pair with it |
+| `printtally pair [--label NAME]` | Makes a single-use pairing link and QR code for another device |
+| `printtally sessions` | Lists paired devices; `printtally sessions revoke <id>` unpairs one |
+| `printtally collect` | Collects new jobs from your printers now |
 
-1. Open the printer's Remote UI in a browser (`https://<printer-ip>`), go to
-   **For secure communication** and download the root certificate.
-2. On the printer's control panel, open **Printer information > System information
-   > Root cert. thumbprint (SHA-256)**.
-3. Convert the download and compare its fingerprint with the one on the printer:
+### Moving from an earlier version
 
-   ```sh
-   DATA="$HOME/Library/Application Support/printtally"
-   mkdir -p "$DATA"
-   openssl x509 -inform DER -in ~/Downloads/cert_root.der -out "$DATA/printer-root.pem"
-   openssl x509 -in "$DATA/printer-root.pem" -noout -fingerprint -sha256
-   ```
+`printer.json`, the certificate file and the `probe`, `password`, `import`,
+`annotate` and `summary` commands are gone. Your ledger is kept; set the printer up
+again in the setup screen and enter its password there. Back up the data folder
+first: the upgrade rebuilds some of the ledger's tables the first time it runs. The old Keychain items
+(service `print-accounting`, accounts starting `printer:mac:` and `api:`) are no
+longer used, and you can delete them in Keychain Access.
 
-Only continue if the two fingerprints match. Canon's
-[root certificate instructions](https://ij.manual.canon/ij/webmanual/Manual/All/PRO-1100%20series/EN/UG/ug_d106.html)
-cover the printer side in more detail.
+## Using Print Tally from other devices
 
-### 3. Describe your printer
-
-Create `printer.json` in the data folder with your printer's address, its MAC address (shown in
-the printer's network settings) and the certificate from step 2:
-
-```json
-{"host": "192.0.2.10", "mac": "02:00:00:00:00:01", "certificateFile": "printer-root.pem"}
-```
-
-On macOS the MAC can be left out when the printer is on the same network; Print Tally
-looks it up. Including it keeps the stored password attached to the printer if its
-IP address changes.
-
-### 4. Check the connection and save the password
+Keep Print Tally running on a computer that stays near the printer, and use it from
+your other devices:
 
 ```sh
-bun run cli probe
-bun run cli password
+printtally serve --host
 ```
 
-`probe` confirms Print Tally can reach the printer and lists the job fields it
-reports; it needs no password. `password` asks for the administrator password
-without echoing it and stores it in your system's credential store (Keychain on
-macOS). It is never written to a file.
-
-### 5. Collect your print history
+This prints the addresses other devices can use, and a warning that Print Tally is
+now reachable from your network. On the host, make a pairing link for each device:
 
 ```sh
-bun run cli collect --csv jobs.csv
-bun run cli summary
+printtally pair --label "iPad"
 ```
 
-Each collection adds any new jobs to the archive in the data folder, writes a JSON
-export of what was collected alongside it and, with `--csv`, a CSV where you ask. Run it often enough that jobs are
-collected before they drop out of the printer's limited log.
+Open the link, or scan the QR code, on the device. It works once and expires after
+5 minutes; the device then stays signed in until you revoke it with
+`printtally sessions revoke <id>`. On a Mac with the desktop app, open the
+`printtally://` link it prints instead, or choose "Connect to it" on the setup screen.
 
-`bun run cli --help` lists the other commands, including `annotate` to correct a
-job's paper name, hide a job or add notes, and `serve` to run the local API.
+Other devices can use any name for the host that resolves to one of its own
+addresses, as well as the addresses it prints. With [Tailscale](https://tailscale.com),
+both its 100.x address and its MagicDNS name (such as
+`http://studio-mac.your-tailnet.ts.net:4318`) work.
+
+Print Tally doesn't encrypt traffic between devices. Use remote access only on a
+network you trust, such as your home network, or across
+[Tailscale](https://tailscale.com), which encrypts it for you. Never forward the port
+to the internet. Remote access is off unless you start the host with `--host`, and
+the desktop app never offers it.
+
+## Development
+
+```sh
+bun install
+bun run typecheck && bun test
+```
+
+`bun run dev` runs the server and the web UI with hot reload, and
+`bun run dev:desktop` the desktop app; both use your real data folder and port 4318.
+For UI work, use a throwaway ledger instead:
+
+```sh
+bun run seed:dev                    # or: bun run seed:dev path/to/a-copy-of/jobs.json
+PRINTTALLY_MEMORY_SECRETS=1 bun apps/server/src/cli.ts serve --port 4400 --data-dir <folder it printed>
+PRINTTALLY_API=http://127.0.0.1:4400 bun run dev:web
+```
+
+The seed imports a snapshot (the synthetic `tests/fixtures/reference.json` by
+default) and adds papers, stock items (including a deckle sheet and a roll),
+purchases, ink cartridges and write-offs. Its printer is at a TEST-NET address
+(192.0.2.10), so collection fails without reaching a real printer.
+`PRINTTALLY_MEMORY_SECRETS=1` keeps printer passwords in memory instead of Keychain;
+use it only for development.
+
+`bun run build:web` builds the UI into `apps/web/dist`, which the server serves
+when run from source.
+
+[docs/build.md](docs/build.md) covers building the npm package and the desktop
+app, signing, and local builds, which keep to their own data folder and port.
+[docs/release.md](docs/release.md) covers how the backend and the app are
+versioned and released.
 
 ## Licence and disclaimer
 

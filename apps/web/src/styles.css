@@ -1,0 +1,150 @@
+@import "tailwindcss";
+@import "@fontsource/zilla-slab/latin-400.css";
+@import "@fontsource/zilla-slab/latin-500.css";
+@import "@fontsource/zilla-slab/latin-600.css";
+@import "@fontsource/zilla-slab/latin-400-italic.css";
+@import "@fontsource/zilla-slab/latin-500-italic.css";
+@import "@fontsource/public-sans/latin-400.css";
+@import "@fontsource/public-sans/latin-500.css";
+@import "@fontsource/public-sans/latin-600.css";
+@import "@fontsource/public-sans/latin-400-italic.css";
+
+/* The Docket direction: the cutting mat is the bench and every screen is a
+   paper docket lying on it. Chroma comes from the inks and paper tones; the only accent is the mat's green.
+   Colours follow the system appearance. Use them as Tailwind colours: bg-paper, text-muted, border-rule… */
+@theme {
+  --color-mat: #37665A; --color-mat-deep: #2C5449;
+  --color-grid: rgba(255,255,255,.075); --color-grid5: rgba(255,255,255,.14);
+  --color-paper: #FAF9F6; --color-paper-2: #F3F1EB;
+  --color-ink: #1B1D1C; --color-muted: #5E6561; --color-faint: #8E948F;
+  --color-rule: #DCD9D1; --color-rule-2: #B8B5AC;
+  --color-sel: rgba(55,102,90,.10); --color-hover: rgba(27,29,28,.035);
+  --color-green: #2E6654; --color-green-2: #24523F; --color-on-green: #F4F7F5; --color-on-mat: #F4F7F5;
+  --color-amber: #9E6A12; --color-amber-bg: #FBF1DC; --color-amber-line: #E3C78B;
+  --color-red: #A6382A; --color-red-bg: #F8E8E4;
+  --color-swatch-edge: rgba(0,0,0,.14);
+  --shadow-sheet: 0 1px 0 rgba(0,0,0,.28), 0 10px 28px rgba(0,0,0,.24);
+  --font-slab: "Zilla Slab", "Iowan Old Style", Georgia, serif;
+  --font-sans: "Public Sans", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --animate-slide: slide 180ms ease-out;
+  --animate-push: push 180ms ease-out;
+  --animate-pulse-dot: pulse-dot 1.5s ease-in-out infinite;
+  --animate-sweep: sweep 1.4s ease-in-out infinite;
+  @keyframes slide { from { transform: translateX(14px) } to { transform: none } }
+  @keyframes push { from { transform: translateX(40px) } to { transform: none } }
+  @keyframes pulse-dot { 50% { opacity: .3 } }
+  @keyframes sweep { from { left: -30% } to { left: 100% } }
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-mat: #182320; --color-mat-deep: #111A17;
+    --color-grid: rgba(255,255,255,.045); --color-grid5: rgba(255,255,255,.085);
+    --color-paper: #232624; --color-paper-2: #1D201E;
+    --color-ink: #ECEAE3; --color-muted: #A5AAA3; --color-faint: #73786F;
+    --color-rule: #393D3A; --color-rule-2: #535852;
+    --color-sel: rgba(127,191,165,.14); --color-hover: rgba(255,255,255,.04);
+    --color-green: #7FBFA5; --color-green-2: #9AD2BB; --color-on-green: #0F1A16; --color-on-mat: #E4E8E5;
+    --color-amber: #E2AB4B; --color-amber-bg: #372C15; --color-amber-line: #6A5323;
+    --color-red: #E27E6E; --color-red-bg: #3A221D;
+    --color-swatch-edge: rgba(255,255,255,.16);
+    --shadow-sheet: 0 1px 0 rgba(0,0,0,.6), 0 12px 30px rgba(0,0,0,.5);
+    color-scheme: dark;
+  }
+}
+
+/* phone: the single-column layout with a bottom nav, where a docket is its own page (a 390px-wide frame).
+   narrow: windows from 900 to 1100px, where the docket slims to 380px. desktop: inside Electron. */
+@custom-variant phone (@media (width < 900px));
+@custom-variant narrow (@media (900px <= width < 1100px));
+@custom-variant desktop (&:where([data-desktop], [data-desktop] *));
+
+@layer base {
+  html, body, #root { height: 100%; margin: 0; }
+  body {
+    background: var(--color-mat); color: var(--color-ink);
+    font: 400 14px/20px var(--font-sans); -webkit-font-smoothing: antialiased;
+    font-variant-numeric: tabular-nums; overflow: hidden;
+  }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  button:disabled { cursor: default; }
+  :focus-visible { outline: 2px solid var(--color-green); outline-offset: 2px; }
+  h1, h2, h3 { margin: 0; font-family: var(--font-slab); font-weight: 600; letter-spacing: .002em; }
+  h1 { font-size: 22px; line-height: 28px; }
+  h2 { font-size: 19px; line-height: 24px; font-weight: 500; }
+  h3 { font-size: 15px; line-height: 20px; }
+  b { font-weight: 500; }
+
+  input[type=text], input[type=search], input[type=password], input[type=number], input[type=date], select, textarea {
+    width: 100%; background: var(--color-paper); border: 1px solid var(--color-rule-2); border-radius: 3px;
+    padding: 6px 9px; font: 400 14px/20px var(--font-sans); color: var(--color-ink);
+  }
+  @media (prefers-color-scheme: dark) {
+    input[type=text], input[type=search], input[type=password], input[type=number], input[type=date], select, textarea { background: var(--color-paper-2); }
+  }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--color-green); outline-offset: 0; border-color: var(--color-green); }
+  input:disabled, select:disabled, textarea:disabled { color: var(--color-faint); background: var(--color-paper-2); border-color: var(--color-rule); }
+  textarea { resize: vertical; min-height: 72px; }
+  select {
+    appearance: none; -webkit-appearance: none; padding-right: 28px;
+    background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+    background-position: calc(100% - 14px) 14px, calc(100% - 9px) 14px; background-size: 5px 5px; background-repeat: no-repeat;
+  }
+  input[type=checkbox], input[type=radio] { accent-color: var(--color-green); margin: 0; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+}
+
+@layer components {
+  /* the cutting mat: 20px minor and 100px major grid lines */
+  .mat {
+    background-color: var(--color-mat);
+    background-image: linear-gradient(var(--color-grid5) 1px, transparent 1px), linear-gradient(90deg, var(--color-grid5) 1px, transparent 1px),
+      linear-gradient(var(--color-grid) 1px, transparent 1px), linear-gradient(90deg, var(--color-grid) 1px, transparent 1px);
+    background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px; background-position: -1px -1px;
+  }
+  /* Electron's hidden title bar: the top of the window drags it, controls in it don't */
+  [data-desktop] .drag { -webkit-app-region: drag; app-region: drag; }
+  [data-desktop] .drag :is(a, button, input, select) { -webkit-app-region: no-drag; app-region: no-drag; }
+
+  /* selected list rows and picker options: a tint and a green bar on the left edge */
+  .is-selected { background: var(--color-sel); }
+  .row-bar[aria-selected="true"]::before, .row-bar[aria-current="page"]::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: -1px; width: 3px; background: var(--color-green);
+  }
+
+  /* the paper swatch: a tiny sheet in the paper's tone */
+  .sheet {
+    display: inline-block; width: 16px; height: 21px; background: var(--tone, #F4F3EE); flex: none; vertical-align: -5px;
+    border: 1px solid rgba(0,0,0,.18); box-shadow: inset 0 0 0 1px rgba(255,255,255,.4);
+  }
+  .sheet.sq { width: 18px; height: 18px; }
+  .sheet.roll { width: 26px; height: 12px; border-radius: 2px 1px 1px 2px; background-image: linear-gradient(90deg, rgba(0,0,0,.14), transparent 30%); }
+  .sheet.deckle {
+    clip-path: polygon(0 4%,6% 0,14% 5%,24% 0,33% 4%,44% 1%,55% 5%,66% 0,76% 4%,87% 1%,96% 5%,100% 0,100% 100%,94% 97%,84% 100%,72% 96%,60% 100%,48% 97%,36% 100%,24% 96%,12% 100%,0 97%);
+    border: 0; box-shadow: inset 0 0 0 1px rgba(0,0,0,.2);
+  }
+  .sheet.none { background: repeating-linear-gradient(45deg, transparent 0 3px, rgba(0,0,0,.14) 3px 4px); border-style: dashed; }
+  .sheet.tiny { width: 12px; height: 14px; vertical-align: 0; }
+  .sheet.tiny.roll { width: 16px; height: 9px; }
+  .sheet.big { width: 44px; height: 58px; vertical-align: middle; }
+  .sheet.big.sq { width: 50px; height: 50px; }
+  .sheet.big.roll { width: 68px; height: 32px; }
+  @media (prefers-color-scheme: dark) {
+    .sheet.none { background: repeating-linear-gradient(45deg, transparent 0 3px, rgba(255,255,255,.18) 3px 4px); border-color: rgba(255,255,255,.3); }
+  }
+
+  /* an ink patch: the channel's colour, tinted by how much was used; Chroma Optimiser is clear, so hatched */
+  .patch { display: block; flex: none; border-radius: 1px; background: var(--fill, transparent); box-shadow: inset 0 0 0 1px var(--color-swatch-edge); }
+  .patch.co { background-image: repeating-linear-gradient(135deg, transparent 0 2px, currentColor 2px 3px); color: var(--color-muted); opacity: var(--o, 1); }
+  .patch.co.lg { background-image: repeating-linear-gradient(135deg, transparent 0 3px, currentColor 3px 4px); }
+
+  /* the costing sheet's total: a rule above and a double rule below */
+  .total-rule { border-top: 1px solid var(--color-ink); position: relative; }
+  .total-rule::after { content: ""; position: absolute; left: 0; right: 0; bottom: -3px; border-bottom: 1px solid var(--color-ink); border-top: 1px solid var(--color-ink); padding-top: 2px; }
+
+  /* radio dots in pickers */
+  .dot { width: 14px; height: 14px; border: 1px solid var(--color-rule-2); border-radius: 50%; flex: none; position: relative; }
+  [aria-checked="true"] > .dot, .dot.on { border-color: var(--color-green); }
+  [aria-checked="true"] > .dot::after, .dot.on::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--color-green); }
+}

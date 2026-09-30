@@ -17,10 +17,14 @@
 # Dependencies and build output
 node_modules/
 dist/
+.tanstack/
 coverage/
 *.tsbuildinfo
 *.log
 release/
+# Copied in by apps/server's prepack for the published package
+/apps/server/README.md
+/apps/server/LICENSE
 
 # macOS and editor files
 .DS_Store

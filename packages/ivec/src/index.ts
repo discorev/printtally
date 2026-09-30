@@ -35,7 +35,7 @@ export async function probe(host: string, trustedCertificatePem?: string): Promi
 }
 export async function collectSnapshot(options: CollectOptions, getPassword: () => Promise<string>, progress: (message: string) => void = () => {}): Promise<Snapshot> {
   validateOptions(options);
-  const client = new Ivec(options.host, { trustedCertificatePem: options.trustedCertificatePem });
+  const client = new Ivec(options.host, { port: options.port, trustedCertificatePem: options.trustedCertificatePem });
   try {
     const { schema, retention, authType } = await capabilities(client);
     if (authType !== 'type1') throw new ProtocolError('Unsupported printer authentication type');

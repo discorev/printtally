@@ -2,9 +2,9 @@ import { sql } from 'drizzle-orm';
 import { check, foreignKey, index, integer, primaryKey, sqliteTable, sqliteView, text, unique, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
 // All UTC observation times are ISO 8601 text. Printer job times remain raw text.
-// Money: integer millionths of the named currency. No floating-point monetary values.
+// Money: integer millionths of the ledger's single currency (settings.currency). No floating-point money.
 // Length: micrometres; area: square millimetres; ink: nanolitres (1 ml = 1,000,000 nl).
-// Price effective_from dates are local calendar dates; costs are not calculated yet.
+// Purchase and write-off dates are local calendar dates. Costs are calculated when read and never stored.
 // Drizzle cannot declare DEFERRABLE foreign keys: drizzle/*_initial.sql adds
 // DEFERRABLE INITIALLY DEFERRED to the two current-revision/observation keys by hand.
 const mac = (column: string) => sql.raw(`length(${column})=12 AND ${column} NOT GLOB '*[^0-9a-f]*'`);
@@ -150,57 +150,54 @@ export const import_job_observations = sqliteTable('import_job_observations', {
   foreignKey({ columns: [t.job_id, t.observation_id], foreignColumns: [job_observations.job_id, job_observations.id] }),
 ]);
 
+export const papers = sqliteTable('papers', {
+  id: integer().primaryKey(),
+  name: text().notNull().unique(),
+  notes: text(),
+}, () => [check('papers_name_check', nonEmpty('name'))]);
+
+// The printer media types (source_media_id, shared across printers) a paper is printed as.
+export const paper_media_types = sqliteTable('paper_media_types', {
+  paper_id: integer().notNull().references(() => papers.id, { onDelete: 'cascade' }),
+  source_media_id: text().notNull(),
+}, t => [primaryKey({ columns: [t.paper_id, t.source_media_id] }), index('paper_media_types_media').on(t.source_media_id)]);
+
+// A stock item: a sheet size (optionally deckle-edged) or a roll width. name is the size label, e.g. "A3+".
 export const paper_stocks = sqliteTable('paper_stocks', {
   id: integer().primaryKey(),
+  paper_id: integer().notNull().references(() => papers.id),
   name: text().notNull(),
-  brand: text(),
-  product_code: text(),
   format: text({ enum: ['sheet', 'roll'] }).notNull(),
-  width_um: integer(),
-  height_um: integer(),
+  width_um: integer().notNull(),
+  height_um: integer(), // Sheets only.
+  deckle: integer().notNull().default(0),
+  product_code: text(),
   notes: text(),
 }, () => [
   check('paper_stocks_name_check', nonEmpty('name')),
   check('paper_stocks_format_check', sql`format IN ('sheet','roll')`),
   check('paper_stocks_width_um_check', atLeast('width_um', 1)),
-  check('paper_stocks_height_um_check', atLeast('height_um', 1)),
+  check('paper_stocks_height_um_check', sql`CASE format WHEN 'sheet' THEN typeof(height_um)='integer' AND height_um > 0 ELSE height_um IS NULL AND deckle=0 END`),
+  check('paper_stocks_deckle_check', flag('deckle')),
 ]);
 
-// Explicit defaults by media AND paper size. No defaults are inferred during import.
-export const media_stock_mappings = sqliteTable('media_stock_mappings', {
-  id: integer().primaryKey(),
-  media_config_id: integer().notNull().references(() => media_configs.id),
-  width_um: integer().notNull(),
-  height_um: integer().notNull(),
-  effective_from: text().notNull(),
-  paper_stock_id: integer().notNull().references(() => paper_stocks.id),
-}, t => [
-  unique().on(t.media_config_id, t.width_um, t.height_um, t.effective_from),
-  check('media_stock_mappings_width_um_check', atLeast('width_um', 1)),
-  check('media_stock_mappings_height_um_check', atLeast('height_um', 1)),
-  check('media_stock_mappings_effective_from_check', date('effective_from')),
-]);
-
-// Each row is a whole pack/length price, not a rounded per-sheet unit price.
-// The next effective_from date ends a prior price in the same stock/currency/unit.
-export const paper_prices = sqliteTable('paper_prices', {
+// A purchase is the stock: packs x sheets per pack for sheets, a length for a roll.
+export const paper_purchases = sqliteTable('paper_purchases', {
   id: integer().primaryKey(),
   paper_stock_id: integer().notNull().references(() => paper_stocks.id),
-  effective_from: text().notNull(),
-  currency: text().notNull(),
-  amount_micros: integer().notNull(),
-  quantity: integer().notNull(),
-  quantity_unit: text({ enum: ['sheet', 'mm'] }).notNull(),
-  notes: text(),
-}, t => [
-  unique().on(t.paper_stock_id, t.currency, t.quantity_unit, t.effective_from),
-  check('paper_prices_effective_from_check', date('effective_from')),
-  check('paper_prices_currency_check', currency('currency')),
-  check('paper_prices_amount_micros_check', money('amount_micros')),
-  check('paper_prices_quantity_check', sql`typeof(quantity)='integer' AND quantity > 0`),
-  check('paper_prices_quantity_unit_check', sql`quantity_unit IN ('sheet','mm')`),
+  purchased_on: text().notNull(),
+  packs: integer(),
+  sheets_per_pack: integer(),
+  length_um: integer(),
+  price_micros: integer().notNull(),
+}, () => [
+  check('paper_purchases_purchased_on_check', date('purchased_on')),
+  check('paper_purchases_quantity_check', sql`CASE WHEN length_um IS NULL THEN typeof(packs)='integer' AND packs > 0 AND typeof(sheets_per_pack)='integer' AND sheets_per_pack > 0
+    ELSE packs IS NULL AND sheets_per_pack IS NULL AND typeof(length_um)='integer' AND length_um > 0 END`),
+  check('paper_purchases_price_micros_check', money('price_micros')),
 ]);
 
+// An ink cartridge product for one printer ink channel.
 export const ink_products = sqliteTable('ink_products', {
   id: integer().primaryKey(),
   name: text().notNull(),
@@ -222,40 +219,60 @@ export const printer_ink_mappings = sqliteTable('printer_ink_mappings', {
   check('printer_ink_mappings_effective_from_check', date('effective_from')),
 ]);
 
-export const ink_prices = sqliteTable('ink_prices', {
+export const ink_purchases = sqliteTable('ink_purchases', {
   id: integer().primaryKey(),
   ink_product_id: integer().notNull().references(() => ink_products.id),
-  effective_from: text().notNull(),
-  currency: text().notNull(),
-  amount_micros: integer().notNull(),
-  cartridge_count: integer().notNull().default(1),
-  notes: text(),
-}, t => [
-  unique().on(t.ink_product_id, t.currency, t.effective_from),
-  check('ink_prices_effective_from_check', date('effective_from')),
-  check('ink_prices_currency_check', currency('currency')),
-  check('ink_prices_amount_micros_check', money('amount_micros')),
-  check('ink_prices_cartridge_count_check', sql`typeof(cartridge_count)='integer' AND cartridge_count > 0`),
+  purchased_on: text().notNull(),
+  cartridges: integer().notNull(),
+  price_micros: integer().notNull(),
+}, () => [
+  check('ink_purchases_purchased_on_check', date('purchased_on')),
+  check('ink_purchases_cartridges_check', sql`typeof(cartridges)='integer' AND cartridges > 0`),
+  check('ink_purchases_price_micros_check', money('price_micros')),
 ]);
 
-// This table belongs to the user. The importer NEVER writes it.
+// Stock gone without being printed. quantity is sheets, micrometres of roll or nanolitres of ink;
+// all_remaining writes off whatever the ledger says is left in the open pack, roll or cartridge.
+export const stock_write_offs = sqliteTable('stock_write_offs', {
+  id: integer().primaryKey(),
+  paper_stock_id: integer().references(() => paper_stocks.id),
+  ink_product_id: integer().references(() => ink_products.id),
+  written_off_on: text().notNull(),
+  quantity: integer(),
+  all_remaining: integer().notNull().default(0),
+  reason: text(),
+}, () => [
+  check('stock_write_offs_target_check', sql`(paper_stock_id IS NULL) <> (ink_product_id IS NULL)`),
+  check('stock_write_offs_written_off_on_check', date('written_off_on')),
+  check('stock_write_offs_all_remaining_check', flag('all_remaining')),
+  check('stock_write_offs_quantity_check', sql`CASE all_remaining WHEN 1 THEN quantity IS NULL ELSE typeof(quantity)='integer' AND quantity > 0 END`),
+  check('stock_write_offs_reason_check', sql`reason IS NULL OR length(trim(reason)) > 0`),
+]);
+
+// One row. Every amount in the ledger is in this single currency.
+export const settings = sqliteTable('settings', {
+  id: integer().primaryKey(),
+  costing_method: text({ enum: ['oldest', 'average', 'max'] }).notNull().default('oldest'),
+  currency: text().notNull().default('GBP'),
+}, () => [
+  check('settings_id_check', sql`id = 1`),
+  check('settings_costing_method_check', sql`costing_method IN ('oldest','average','max')`),
+  check('settings_currency_check', currency('currency')),
+]);
+
+// This table belongs to the user. The importer NEVER writes it. paper_stock_id or paper_id
+// correct the default allocation, which is worked out when read and never stored.
 export const job_annotations = sqliteTable('job_annotations', {
   job_id: integer().primaryKey().references(() => print_jobs.id),
   custom_paper_name: text(),
   paper_stock_id: integer().references(() => paper_stocks.id),
+  paper_id: integer().references(() => papers.id),
   hidden: integer().notNull().default(0),
   notes: text(),
-  physical_sheet_count: integer(),
-  paper_cost_override_micros: integer(),
-  paper_cost_currency: text(),
   updated_at: text().notNull(),
 }, () => [
   check('job_annotations_custom_paper_name_check', sql`custom_paper_name IS NULL OR length(trim(custom_paper_name)) > 0`),
   check('job_annotations_hidden_check', flag('hidden')),
-  check('job_annotations_physical_sheet_count_check', atLeast('physical_sheet_count', 0)),
-  check('job_annotations_paper_cost_override_micros_check', sql`paper_cost_override_micros IS NULL OR (${money('paper_cost_override_micros')})`),
-  check('job_annotations_paper_cost_currency_check', currency('paper_cost_currency')),
-  check('job_annotations_paper_cost_check', sql`(paper_cost_override_micros IS NULL) = (paper_cost_currency IS NULL)`),
 ]);
 
 export const job_cost_adjustments = sqliteTable('job_cost_adjustments', {
@@ -287,7 +304,8 @@ export const known_printers = sqliteTable('known_printers', {
 }, () => [check('known_printers_mac_check', sql`mac IS NULL OR (${mac('mac')})`)]);
 
 // Includes hidden jobs deliberately. UI/report callers explicitly filter hidden=0.
-// Unknown names remain NULL; source_media_id is always separately available.
+// Unknown names remain NULL; source_media_id is always separately available. The ledger
+// read model resolves papers and stock on top of display_paper_name.
 export const job_details = sqliteView('job_details', {
   job_id: integer().notNull(), printer_id: integer().notNull(), source_record_id: integer().notNull(),
   first_seen_at: text().notNull(), last_seen_at: text().notNull(),
@@ -295,8 +313,7 @@ export const job_details = sqliteView('job_details', {
   completion_state: text(), job_type: text(), width_um: integer(), height_um: integer(), used_area_mm2: integer(),
   impressions: integer(), color_pages: integer(), monochrome_pages: integer(), duplex: text(),
   source_media_id: text(), configured_paper_name: text(), paper_name_at_import: text(), display_paper_name: text(),
-  hidden: integer().notNull(), custom_paper_name: text(), stock_override_id: integer(), notes: text(),
-  physical_sheet_count: integer(), paper_cost_override_micros: integer(), paper_cost_currency: text(),
+  hidden: integer().notNull(), custom_paper_name: text(), stock_override_id: integer(), paper_override_id: integer(), notes: text(),
   record_id_collision: integer().notNull(),
 }).as(sql`SELECT j.id AS job_id, j.printer_id, j.source_record_id,
        j.first_seen_at, j.last_seen_at,
@@ -305,11 +322,10 @@ export const job_details = sqliteView('job_details', {
        o.impressions, o.color_pages, o.monochrome_pages, o.duplex,
        m.source_media_id, r.english_name AS configured_paper_name,
        o.resolved_media_name AS paper_name_at_import,
-       COALESCE(a.custom_paper_name, s.name, r.english_name, r.short_name,
+       COALESCE(a.custom_paper_name, r.english_name, r.short_name,
                 o.resolved_media_name) AS display_paper_name,
        COALESCE(a.hidden, 0) AS hidden, a.custom_paper_name,
-       a.paper_stock_id AS stock_override_id, a.notes,
-       a.physical_sheet_count, a.paper_cost_override_micros, a.paper_cost_currency,
+       a.paper_stock_id AS stock_override_id, a.paper_id AS paper_override_id, a.notes,
        CASE WHEN EXISTS(SELECT 1 FROM print_jobs other
                         WHERE other.printer_id=j.printer_id
                           AND other.source_record_id=j.source_record_id
@@ -318,5 +334,4 @@ FROM print_jobs j
 JOIN job_observations o ON o.id=j.current_observation_id
 LEFT JOIN media_configs m ON m.id=o.media_config_id
 LEFT JOIN media_revisions r ON r.id=m.current_revision_id
-LEFT JOIN job_annotations a ON a.job_id=j.id
-LEFT JOIN paper_stocks s ON s.id=a.paper_stock_id`);
+LEFT JOIN job_annotations a ON a.job_id=j.id`);

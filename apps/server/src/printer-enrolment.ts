@@ -1,5 +1,5 @@
 import { randomUUID, X509Certificate } from 'node:crypto';
-import { enrolmentRequestSchema, confirmPrinterSchema, printerPasswordSchema, type KnownPrinter, type PrinterTrustPreview, type DiscoveredPrinter, type CollectOptions } from 'print-accounting-contracts';
+import { enrolmentRequestSchema, confirmPrinterSchema, printerPasswordSchema, type KnownPrinter, type KnownPrinterListing, type PrinterTrustPreview, type DiscoveredPrinter, type CollectOptions } from 'print-accounting-contracts';
 import { KnownPrinters, TrustConflictError, type StoredPrinter } from 'print-accounting-database';
 import { discoverPrinters, isPrinterAddress } from './printer-discovery.ts';
 import { inspectPrinter, verifyPrinter } from './printer-certificate.ts';
@@ -30,6 +30,11 @@ export class PrinterEnrolment {
     this.dependencies = { inspect: inspectPrinter, verify: verifyPrinter, discover: discoverPrinters, clock: Date.now, ...dependencies };
   }
   list(): KnownPrinter[] { return this.known.list().map(publicPrinter); }
+  // Checks the credential store for each password; only whether one is there leaves this method.
+  listing(): Promise<KnownPrinterListing[]> {
+    return Promise.all(this.known.list().map(async printer =>
+      ({ ...publicPrinter(printer), hasPassword: await this.secrets.get(account(printer)).then(secret => !!secret, () => null) })));
+  }
   async discover(): Promise<DiscoveredPrinter[]> {
     if (!this.discovery) this.discovery = this.dependencies.discover().finally(() => { this.discovery = undefined; });
     try { return await this.discovery; } catch { throw new EnrolmentError('discovery_failed', 502); }
@@ -100,9 +105,9 @@ export class PrinterEnrolment {
     // admin password to a newly trusted device just because it reused an address.
     await saveVerified(this.secrets, account(printer), parsed.data.password);
   }
-  collection(id: string): { options: CollectOptions; getPassword: () => Promise<string> } {
+  collection(id: string): { printer: KnownPrinter; options: CollectOptions; getPassword: () => Promise<string> } {
     const printer = this.get(id);
-    return {
+    return { printer: publicPrinter(printer),
       options: { host: printer.host, mac: printer.mac ?? undefined, trustedCertificatePem: printer.rootCertificatePem, cacheDirectory: this.cacheDirectory },
       getPassword: () => printerPassword(this.secrets, account(printer)),
     };

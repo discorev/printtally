@@ -1,0 +1,47 @@
+# macOS arm64 .app and .dmg. Build from the repo root with `bun run dist:desktop` (docs/build.md):
+# apps/desktop/scripts/bundle.sh compiles the server (apps/server/dist/printtally-server, with the UI in client/
+# beside it), writes dist/build-info.json and builds the signed .app; apps/desktop/scripts/make-dmg.sh then makes the .dmg.
+appId: com.olliespage.PrintTally
+productName: Print Tally
+directories:
+  output: release
+  buildResources: build
+files: [dist/**/*]
+# The packaged app runs <Resources>/server/printtally-server (src/server-manager.ts), which serves the
+# UI from client/ beside itself.
+extraResources:
+  - { from: ../server/dist/printtally-server, to: server/printtally-server }
+  - { from: ../server/dist/client, to: server/client }
+# Electron fuses: the signed binary can't be reused as a Node runtime or debugged through
+# environment variables or flags, and only loads its own, integrity-checked app.asar.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+protocols:
+  - { name: Print Tally pairing link, schemes: [printtally] }
+mac:
+  target: [{ target: dmg, arch: arm64 }]
+  category: public.app-category.productivity
+  # apps/desktop/scripts/bundle.sh picks the identity, and turns on the hardened runtime and a secure timestamp for
+  # release builds (PRINTTALLY_RELEASE=1). The entitlements cover every executable, the server included.
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
+  # The release workflow notarizes with notarytool (.github/workflows/release.yml); local builds never are.
+  notarize: false
+# Built by apps/desktop/scripts/make-dmg.sh from the signed app, which signs the .dmg itself. It passes the background,
+# apps/desktop/assets/dmg/background.svg rendered to background.png with background@2x.png beside it; the 660x400 window
+# takes its size from the image.
+dmg:
+  title: ${productName}
+  artifactName: PrintTally-${version}.${ext}
+  iconSize: 128
+  iconTextSize: 13
+  contents:
+    - { x: 165, y: 190 }
+    - { x: 495, y: 190, type: link, path: /Applications }
+  sign: false
+  writeUpdateInfo: false

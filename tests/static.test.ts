@@ -1,0 +1,52 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { uiDirectory } from '../apps/server/src/static.ts';
+import { apiFixture } from './api-fixtures.ts';
+
+test('serves the built UI with SPA fallback, content types and caching; the API stays under /api', async t => {
+  const ui = mkdtempSync(join(tmpdir(), 'printtally-ui-'));
+  t.after(() => rmSync(ui, { recursive: true }));
+  mkdirSync(join(ui, 'assets'));
+  writeFileSync(join(ui, 'index.html'), '<!doctype html><title>Print Tally</title>');
+  writeFileSync(join(ui, 'assets', 'index-abc123.js'), 'console.log(1)');
+  writeFileSync(join(ui, 'assets', 'index-abc123.css'), 'body{}');
+  writeFileSync(join(ui, 'favicon.svg'), '<svg/>');
+  writeFileSync(join(ui, '.env'), 'SECRET=1');
+  writeFileSync(join(ui, '..', 'outside-ui.txt'), 'outside');
+  t.after(() => rmSync(join(ui, '..', 'outside-ui.txt')));
+  const f = await apiFixture(t, { ui });
+  const index = await f.request('/');
+  assert.deepEqual([index.status, index.headers['content-type'], index.headers['cache-control'], index.text], [200, 'text/html; charset=utf-8', 'no-cache', '<!doctype html><title>Print Tally</title>']);
+  assert.equal(index.headers['x-content-type-options'], 'nosniff'); assert.equal(index.headers['x-frame-options'], 'DENY');
+  for (const route of ['/jobs', '/jobs/12', '/papers/3?tab=stock']) assert.equal((await f.request(route)).text, index.text, route);
+  const script = await f.request('/assets/index-abc123.js');
+  assert.deepEqual([script.headers['content-type'], script.headers['cache-control']], ['text/javascript; charset=utf-8', 'public, max-age=31536000, immutable']);
+  assert.equal((await f.request('/assets/index-abc123.css')).headers['content-type'], 'text/css; charset=utf-8');
+  assert.deepEqual([(await f.request('/favicon.svg')).headers['content-type'], (await f.request('/favicon.svg')).headers['cache-control']], ['image/svg+xml', 'no-cache']);
+  for (const path of ['/missing.js', '/.env', '/%2e%2e/outside-ui.txt', '/assets/..%2f..%2foutside-ui.txt', '/%00']) assert.equal((await f.request(path)).status, 404, path);
+  const head = await f.request('/', { method: 'HEAD' });
+  assert.deepEqual([head.status, head.text], [200, '']);
+  assert.equal((await f.request('/', { method: 'POST' })).status, 405);
+  const api = await f.request('/api/v1/nothing-here');
+  assert.deepEqual([api.status, api.headers['content-type'], api.json()], [404, 'application/json; charset=utf-8', { error: 'not_found' }]);
+  assert.equal((await f.request('/api/v1/health')).headers['cache-control'], 'no-store');
+  const pair = await f.request('/pair');
+  assert.deepEqual([pair.status, pair.headers['cache-control']], [200, 'no-store']); assert.match(pair.text, /\/api\/v1\/pairing/);
+});
+
+test('finds the UI beside the package, then in apps/web from source, and explains when it is missing', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'printtally-ui-find-'));
+  t.after(() => rmSync(root, { recursive: true }));
+  const packaged = join(root, 'dist', 'client'), source = join(root, 'web', 'dist');
+  assert.equal(uiDirectory([packaged, source]), undefined);
+  mkdirSync(source, { recursive: true }); writeFileSync(join(source, 'index.html'), '');
+  assert.equal(uiDirectory([packaged, source]), source);
+  mkdirSync(packaged, { recursive: true }); writeFileSync(join(packaged, 'index.html'), '');
+  assert.equal(uiDirectory([packaged, source]), packaged);
+  const f = await apiFixture(t);
+  const missing = await f.request('/');
+  assert.equal(missing.status, 404); assert.match(missing.text, /has not been built/);
+});
