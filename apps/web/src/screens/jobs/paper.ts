@@ -1,4 +1,6 @@
-import type { LedgerJob, PaperView, StockView } from 'print-accounting-contracts';
+import type { AllocationPreview, LedgerJob, PaperView, StockView } from 'print-accounting-contracts';
+import { dateShort, metres, stockQuantity } from '../../lib/format.ts';
+import { jobSize } from '../../lib/jobs.ts';
 
 // How a job's paper reads beside the printer's report. Presentation only: the allocation comes from the API.
 
@@ -22,4 +24,17 @@ export function stockChoices(job: LedgerJob, paper: PaperView | undefined): Stoc
   return (paper?.stock ?? []).filter(item => (item.format === 'roll' ? near(item.width_um, w) || near(item.width_um, h)
     : (near(item.width_um, w) && near(item.height_um, h)) || (near(item.width_um, h) && near(item.height_um, w)))
     && paper!.purchases.some(p => p.paper_stock_id === item.id && p.purchased_on <= job.date));
+}
+
+export interface StockWarning { title: string; text: string }
+/** Why the stock won't cover the print: none at its size, none bought by its day, or too little left then. */
+export function stockWarning(job: LedgerJob, { paper, remaining, short }: AllocationPreview): StockWarning | null {
+  const size = jobSize(job), day = dateShort(job.date), name = paper.paper_name ?? 'This paper', unknown = 'so the print’s paper cost would be unknown.';
+  if (paper.unknown_reason === 'no_matching_stock') return { title: `No ${size} stock`, text: `${name} has no ${size} sheets or matching roll, ${unknown}` };
+  if (paper.unknown_reason === 'no_stock_by_date') return { title: `No ${size} bought by then`, text: `${name} has no ${size} bought by ${day}, ${unknown}` };
+  if (!short || remaining === null || paper.quantity === null) return null;
+  const roll = paper.format === 'roll', stock = paper.stock_name ?? size, used = stockQuantity(paper.quantity, roll ? 'roll' : 'sheet');
+  const left = remaining <= 0 ? (roll ? `Nothing left on the ${stock} of ${name}` : `No ${stock} sheets of ${name} left`)
+    : roll ? `Only ${metres(remaining)} left on the ${stock} of ${name}` : `Only ${remaining} ${stock} ${remaining === 1 ? 'sheet' : 'sheets'} of ${name} left`;
+  return { title: 'Not enough stock', text: `${left} by ${day}, so this print (${used}) takes it below zero.` };
 }

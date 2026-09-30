@@ -24,6 +24,9 @@ export async function ledgerRoute(ledger: Ledger, method: string | undefined, ur
   }
   const job = /^\/api\/v1\/jobs\/(\d{1,15})$/.exec(path);
   if (method === 'GET' && job) { const found = ledger.job(Number(job[1])); return found ? [200, found] : [404, { error: 'job_not_found' }]; }
+  // How a job's paper would be costed with a correction (?paper_id= or ?paper_stock_id=), without saving it.
+  const preview = /^\/api\/v1\/jobs\/(\d{1,15})\/allocation-preview$/.exec(path);
+  if (method === 'GET' && preview) return [200, ledger.allocationPreview(Number(preview[1]), Object.fromEntries(url.searchParams))];
   if (method === 'GET' && path === '/api/v1/totals') return [200, ledger.totals()];
   if (method === 'GET' && path === '/api/v1/papers') return [200, ledger.papers()];
   if (method === 'GET' && path === '/api/v1/ink') return [200, ledger.ink()];

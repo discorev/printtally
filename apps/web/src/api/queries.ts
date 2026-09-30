@@ -1,5 +1,6 @@
 import { QueryClient, keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type JobsQuery } from './endpoints.ts';
+import type { AllocationPreviewQuery } from 'print-accounting-contracts';
 import { ApiError } from './client.ts';
 
 // One client for the app. Data refetches when the window regains focus; failed reads aren't retried here,
@@ -16,6 +17,7 @@ export const queryClient = new QueryClient({
 export const keys = {
   jobs: (params: JobsQuery) => ['jobs', params] as const,
   job: (id: number) => ['job', id] as const,
+  allocationPreview: (id: number, target: object) => ['allocation-preview', id, target] as const,
   totals: ['totals'] as const, papers: ['papers'] as const, mediaTypes: ['media-types'] as const,
   ink: ['ink'] as const, writeOffPreview: (target: object, day: string) => ['write-off-preview', target, day] as const, settings: ['settings'] as const, knownPrinters: ['known-printers'] as const, imports: ['imports'] as const,
 };
@@ -34,6 +36,10 @@ export const useImports = () => useQuery({ queryKey: keys.imports, queryFn: () =
 export const useWriteOffPreview = (target: { paper_stock_id: number } | { ink_product_id: number } | undefined, day: string) => useQuery({
   queryKey: keys.writeOffPreview(target ?? {}, day), queryFn: () => api.writeOffPreview(target!, day),
   enabled: !!target && /^\d{4}-\d\d-\d\d$/.test(day),
+});
+/** How job `id`'s paper would be costed with a correction, from the ledger; idle until there's one to try. */
+export const useAllocationPreview = (id: number, target: AllocationPreviewQuery | undefined) => useQuery({
+  queryKey: keys.allocationPreview(id, target ?? {}), queryFn: () => api.allocationPreview(id, target!), enabled: !!target,
 });
 /** The ledger's currency code (settings), GBP until settings load. */
 export const useCurrency = (): string => useSettings().data?.currency ?? 'GBP';

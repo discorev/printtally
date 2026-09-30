@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Annotation, CostingMethod, LedgerJob, MediaTypeView, PaperView } from 'print-accounting-contracts';
+import type { AllocationPreview, AllocationPreviewQuery, Annotation, CostingMethod, LedgerJob, MediaTypeView, PaperView } from 'print-accounting-contracts';
 import {
-  Button, ButtonLink, DocketSection, PaperLine, PaperPicker, PaperPurchaseForm, PaperSwatch, RadioList, RadioOption, RowActions, Sub,
+  Button, ButtonLink, DocketSection, Notice, PaperLine, PaperPicker, PaperPurchaseForm, PaperSwatch, RadioList, RadioOption, RowActions, Sub,
 } from '../../components/index.ts';
-import { useCurrency } from '../../api/queries.ts';
+import { useAllocationPreview, useCurrency } from '../../api/queries.ts';
 import { dateShort, metres, money, stockQuantity } from '../../lib/format.ts';
 import { jobCancelled, jobPaperName, jobSize, jobSwatch } from '../../lib/jobs.ts';
 import { rollWidth } from '../../lib/sizes.ts';
-import { paperState, papersForMedia, stockChoices } from './paper.ts';
+import { paperState, papersForMedia, stockChoices, stockWarning, type StockWarning } from './paper.ts';
 
 export type PaperMode = 'view' | 'picker' | 'stock' | 'new';
 export type SaveAnnotation = (annotation: Annotation, label: string) => Promise<boolean>;
@@ -57,7 +57,7 @@ export function PaperSection({ job, papers, mediaTypes, method, mode, setMode, s
           : job.paper.unknown_reason === 'unknown_usage' ? 'The printer didn\'t report how much paper the print used.'
           : `No ${size} sheets or matching roll of ${paper?.name ?? jobPaperName(job)} had been bought by ${dateShort(job.date)}.`} The cost is never guessed.</Sub>
       : mode === 'stock' ? null : <Source job={job} paper={paper} method={method} />}
-    {mode === 'stock' && <StockChoice job={job} paper={paper!} choices={choices} save={save} onDone={() => setMode('view')} />}
+    {mode === 'stock' && <StockChoice job={job} paper={paper!} papers={papers} choices={choices} save={save} onDone={() => setMode('view')} />}
     {mode === 'view' && (
       <RowActions>
         {choices.length > 1 && !cancelled && job.paper.stock_id && <Button size="sm" edit onClick={() => setMode('stock')}>Change stock</Button>}
@@ -102,6 +102,7 @@ function Picker({ job, papers, own, save, onNew, onDone }: {
 }) {
   const [pick, setPick] = useState<number | null>(job.paper.paper_id);
   const [saving, setSaving] = useState(false);
+  const check = useStockCheck(job, pick && pick !== job.paper.paper_id ? { paper_id: pick } : undefined);
   const submit = async () => {
     setSaving(true);
     const annotation: Annotation = own.length === 1 && own[0].id === pick ? { paper_id: null, paper_stock_id: null } : { paper_id: pick };
@@ -110,21 +111,24 @@ function Picker({ job, papers, own, save, onNew, onDone }: {
   return (
     <div className="mt-3">
       <PaperPicker papers={papers} value={pick} onChange={setPick} onNew={onNew} />
-      <RowActions>
-        <Button variant="primary" size="sm" edit disabled={!pick || pick === job.paper.paper_id || saving} onClick={() => void submit()}>Save</Button>
+      {check.preview && <StockCheck key={pick} job={job} papers={papers} preview={check.preview} warning={check.warning} adding={check.adding} setAdding={check.setAdding} />}
+      {!check.adding && <RowActions>
+        <Button variant="primary" size="sm" edit disabled={!pick || pick === job.paper.paper_id || saving || check.checking} onClick={() => void submit()}>
+          {check.warning ? 'Save anyway' : 'Save'}</Button>
         <Button variant="text" size="sm" onClick={onDone}>Cancel</Button>
         <Sub>The printer's name stays on the docket.</Sub>
-      </RowActions>
+      </RowActions>}
     </div>
   );
 }
 
 /** Choosing the stock item a print came from: sheets of its size, or a roll of its width. */
-function StockChoice({ job, paper, choices, save, onDone }: {
-  job: LedgerJob; paper: PaperView; choices: PaperView['stock']; save: SaveAnnotation; onDone: () => void;
+function StockChoice({ job, paper, papers, choices, save, onDone }: {
+  job: LedgerJob; paper: PaperView; papers: PaperView[]; choices: PaperView['stock']; save: SaveAnnotation; onDone: () => void;
 }) {
   const [pick, setPick] = useState(job.paper.stock_id);
   const [saving, setSaving] = useState(false);
+  const check = useStockCheck(job, pick && pick !== job.paper.stock_id ? { paper_stock_id: pick } : undefined);
   const roll = choices.find(item => item.format === 'roll'), size = jobSize(job);
   const submit = async () => {
     setSaving(true);
@@ -145,10 +149,52 @@ function StockChoice({ job, paper, choices, save, onDone }: {
           );
         })}
       </RadioList>
-      <RowActions>
-        <Button variant="primary" size="sm" edit disabled={pick === job.paper.stock_id || saving} onClick={() => void submit()}>Save</Button>
+      {check.preview && <StockCheck key={pick} job={job} papers={papers} preview={check.preview} warning={check.warning} adding={check.adding} setAdding={check.setAdding} />}
+      {!check.adding && <RowActions>
+        <Button variant="primary" size="sm" edit disabled={pick === job.paper.stock_id || saving || check.checking} onClick={() => void submit()}>
+          {check.warning ? 'Save anyway' : 'Save'}</Button>
         <Button variant="text" size="sm" onClick={onDone}>Cancel</Button>
-      </RowActions>
+      </RowActions>}
+    </div>
+  );
+}
+
+/** What the ledger says a correction would take, fetched when one is picked and before it's saved. */
+/** While stock is being added, the correction's own Save and Cancel step aside for the purchase form's. */
+function useStockCheck(job: LedgerJob, target: AllocationPreviewQuery | undefined) {
+  const query = useAllocationPreview(job.job_id, target), preview = target ? query.data : undefined;
+  const key = JSON.stringify(target ?? null), [addingFor, setAddingFor] = useState<string | null>(null);
+  return { preview, warning: preview ? stockWarning(job, preview) : null, checking: !!target && query.isFetching,
+    adding: addingFor === key, setAdding: (on: boolean) => setAddingFor(on ? key : null) };
+}
+
+/** The warning under a correction that the stock won't cover, with "Add stock": the shared purchase form, filled in
+ *  with the paper, the item at the print's size (or a new one of that size) and the print's day. The purchase is
+ *  its own save; the preview then refetches, so the warning clears once there's enough. The correction still
+ *  waits for Save (or "Save anyway", leaving the cost unknown or the stock below zero to fix later). */
+function StockCheck({ job, papers, preview, warning, adding, setAdding }: {
+  job: LedgerJob; papers: PaperView[]; preview: AllocationPreview; warning: StockWarning | null; adding: boolean; setAdding: (on: boolean) => void;
+}) {
+  const [added, setAdded] = useState(false);
+  if (!warning) return added ? <Sub tone="green" className="mt-2.5">Stock added. Save to correct the print.</Sub> : null;
+  return (
+    <div className="mt-2.5">
+      <Notice title={warning.title}>
+        {warning.text}
+        {!adding && (
+          <RowActions className="mt-2">
+            <Button size="sm" edit onClick={() => setAdding(true)}>Add stock</Button>
+            <Sub>or save anyway and fix it later</Sub>
+          </RowActions>
+        )}
+      </Notice>
+      {adding && (
+        <div className="mt-3">
+          <PaperPurchaseForm embedded papers={papers}
+            initial={{ paperId: preview.paper.paper_id ?? undefined, stockId: preview.sized_stock_id ?? 'new', date: job.date, size: jobSize(job) }}
+            onSaved={() => { setAdding(false); setAdded(true); }} onCancel={() => setAdding(false)} />
+        </div>
+      )}
     </div>
   );
 }

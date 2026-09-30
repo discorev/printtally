@@ -2,7 +2,7 @@ import {
   annotationSchema, cartridgePatchSchema, cartridgeSchema, confirmPrinterSchema, enrolmentRequestSchema, inkPurchasePatchSchema,
   inkPurchaseSchema, inkPurchaseSetupSchema, paperPatchSchema, paperPurchaseSetupSchema, paperPurchasePatchSchema, paperPurchaseSchema, paperSchema, printerPasswordSchema,
   settingsSchema, stockPatchSchema, stockSchema, writeOffPatchSchema, writeOffSchema,
-  type Annotation, type CartridgeInput, type DiscoveredPrinter, type EnrolmentRequest, type HealthResponse, type ImportResult, type ImportsResponse,
+  type AllocationPreview, type AllocationPreviewQuery, type Annotation, type CartridgeInput, type DiscoveredPrinter, type EnrolmentRequest, type HealthResponse, type ImportResult, type ImportsResponse,
   type InkPurchaseInput, type InkPurchaseSetup, type InkPurchaseSetupResult, type InkResponse, type JobResponse, type JobsResponse, type KnownPrinter, type KnownPrinterListing,
   type MediaTypesResponse, type PaperInput, type PaperPurchaseInput, type PaperPurchaseSetup, type PaperPurchaseSetupResult, type PapersResponse, type PrinterTrustPreview, type Settings,
   type StockInput, type TotalsResponse, type WriteOffInput, type WriteOffPreview,
@@ -34,6 +34,9 @@ export const api = {
   job: (id: number): Promise<JobResponse> => request('GET', `/jobs/${id}`),
   /** Notes, hide/show, and correcting a job's paper or stock; returns the job as now costed. */
   annotateJob: (id: number, annotation: Annotation): Promise<JobResponse> => request('PATCH', `/jobs/${id}/annotation`, { body: annotation, schema: annotationSchema }),
+  /** How a job's paper would be costed corrected to a paper or stock item, without saving it. */
+  allocationPreview: (id: number, target: AllocationPreviewQuery): Promise<AllocationPreview> =>
+    request('GET', `/jobs/${id}/allocation-preview` + query(target)),
   totals: (): Promise<TotalsResponse> => request('GET', '/totals'),
 
   papers: (): Promise<PapersResponse> => request('GET', '/papers'),

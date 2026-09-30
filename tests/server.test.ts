@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { AccountingDatabase } from 'print-accounting-database';
 import { AccountingService, CollectionBusyError } from '../apps/server/src/service.ts';
 import { apiFixture } from './api-fixtures.ts';
-import type { InkResponse, JobsResponse, LedgerJob, MediaTypesResponse, PapersResponse, TotalsResponse } from 'print-accounting-contracts';
+import type { AllocationPreview, InkResponse, JobsResponse, LedgerJob, MediaTypesResponse, PapersResponse, TotalsResponse } from 'print-accounting-contracts';
 import { batch, MEDIA, sample } from './fixtures.ts';
 const options = { host: '127.0.0.1', cacheDirectory: '/unused' };
 function fixture(t: TestContext) {
@@ -131,4 +131,39 @@ test('a purchase is set up with its new stock, paper or cartridge in one go or n
   assert.deepEqual([totals.jobs, totals.ink_micros, totals.waste_micros], [1, overall.ink_micros, 0]);
   const papers = ((await call('GET', '/papers')).body as unknown as PapersResponse).papers;
   assert.deepEqual([papers[0].totals.jobs, papers[0].totals.unknown_paper_jobs], [1, 0]);
+});
+test('an allocation preview costs a job as corrected to a paper or stock item without saving it, and says when stock runs short', async t => {
+  const f = await apiFixture(t);
+  f.db.importSnapshot(batch([{ day: '2026-02-01' }, { day: '2026-02-02', imp: 2 }]));
+  const call = async (method: string, path: string, body?: unknown) => {
+    const reply = await f.request('/api/v1' + path, { method, body });
+    return { status: reply.status, body: reply.json<Record<string, number>>() };
+  };
+  const created = async (path: string, body: unknown) => { const reply = await call('POST', path, body); assert.equal(reply.status, 201, JSON.stringify(reply.body)); return reply.body.id; };
+  const preview = async (query: string) => (await f.request('/api/v1/jobs/2/allocation-preview?' + query)).json<AllocationPreview>();
+  const paper = await created('/papers', { name: 'Photo Rag' });
+  await created('/paper-stocks', { paper_id: paper, name: 'A3', format: 'sheet', width_um: 297000, height_um: 420000 });
+  const none = await preview(`paper_id=${paper}`);
+  assert.deepEqual([none.paper.unknown_reason, none.paper.stock_id, none.sized_stock_id, none.short], ['no_matching_stock', null, null, false]);
+
+  const a4 = await created('/paper-stocks', { paper_id: paper, name: 'A4', format: 'sheet', width_um: 210000, height_um: 297000 });
+  const buy = (purchased_on: string, sheets: number) => created('/paper-purchases', { paper_stock_id: a4, purchased_on, packs: 1, sheets_per_pack: sheets, price_micros: sheets * 1_000_000 });
+  await buy('2026-03-01', 25);
+  const late = await preview(`paper_id=${paper}`);
+  assert.deepEqual([late.paper.unknown_reason, late.paper.cost_micros, late.sized_stock_id, late.short], ['no_stock_by_date', null, a4, false]);
+
+  await buy('2026-01-01', 1); // One sheet by then, and the print used two.
+  const short = await preview(`paper_id=${paper}`);
+  assert.deepEqual([short.paper.stock_id, short.paper.cost_micros, short.remaining, short.short, short.sized_stock_id], [a4, 2_000_000, 1, true, a4]);
+
+  await buy('2026-01-15', 25);
+  const fine = await preview(`paper_stock_id=${a4}`);
+  assert.deepEqual([fine.paper.allocation, fine.paper.unknown_reason, fine.remaining, fine.short], ['stock', null, 26, false]);
+
+  const job = (await call('GET', '/jobs/2')).body.job as unknown as LedgerJob; // Nothing was saved.
+  assert.deepEqual([job.paper.allocation, job.paper_override_id, job.stock_override_id], ['default', null, null]);
+  for (const query of ['', `paper_id=${paper}&paper_stock_id=${a4}`, 'paper_id=abc', 'paper_id=0', `paper_id=${paper}&extra=1`])
+    assert.equal((await f.request('/api/v1/jobs/2/allocation-preview?' + query)).status, 400, query);
+  assert.equal((await f.request('/api/v1/jobs/2/allocation-preview?paper_id=999')).status, 404);
+  assert.deepEqual((await f.request(`/api/v1/jobs/999/allocation-preview?paper_id=${paper}`)).json(), { error: 'job_not_found' });
 });

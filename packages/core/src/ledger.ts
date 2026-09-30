@@ -15,7 +15,11 @@ export interface LedgerInput {
   inkPurchases: { id: number; ink_product_id: number; purchased_on: string; cartridges: number; price_micros: number }[];
   writeOffs: { id: number; paper_stock_id: number | null; ink_product_id: number | null; written_off_on: string; quantity: number | null; all_remaining: boolean }[];
 }
-export interface JobCost { paper: PaperLine; ink: InkLine[] }
+export interface JobCost {
+  paper: PaperLine; ink: InkLine[];
+  sized: number[]; // Stock items of the candidate papers at the job's size, in allocation order (bought by then or not).
+  left: number | null; // What the allocated item had left by the job's time, before it; null without one.
+}
 export interface LedgerResult {
   jobs: Map<number, JobCost>;
   lots: Map<string, { quantity: number; remaining: number }>; // Keyed paper:<id> or ink:<id>.
@@ -73,9 +77,9 @@ export function computeLedger(input: LedgerInput): LedgerResult {
       const chosen = job.stock_id === null ? undefined : stock.get(job.stock_id);
       const candidatePapers = chosen ? [papers.get(chosen.paper_id)!] : job.paper_id !== null ? [papers.get(job.paper_id)!]
         : input.papers.filter(paper => job.source_media_id !== null && paper.media_types.includes(job.source_media_id));
-      const sized = chosen ? [chosen] : input.stock.filter(item => candidatePapers.some(paper => paper.id === item.paper_id) && fits(item, job.width_um, job.height_um));
-      const stocked = sized.filter(item => paperLots.get(item.id)?.some(lot => lot.date <= job.date))
+      const sized = (chosen ? [chosen] : input.stock.filter(item => candidatePapers.some(paper => paper.id === item.paper_id) && fits(item, job.width_um, job.height_um)))
         .sort((a, b) => rank(a) - rank(b) || a.paper_id - b.paper_id || a.id - b.id);
+      const stocked = sized.filter(item => paperLots.get(item.id)?.some(lot => lot.date <= job.date));
       // The first, unless it's a used-up sheet and the same paper has a deckle sheet of this size with stock left by then.
       // Otherwise the first goes below zero; the user can correct the job.
       const left = (id: number) => paperLots.get(id)!.some(lot => lot.date <= job.date && lot.left > 0);
@@ -86,6 +90,7 @@ export function computeLedger(input: LedgerInput): LedgerResult {
       const length = item?.format === 'roll' ? (near(item.width_um, job.width_um) || !near(item.width_um, job.height_um) ? job.height_um : job.width_um) : null;
       const quantity = job.impressions === null ? null : item?.format === 'roll' ? (length === null ? null : length * job.impressions) : job.impressions;
       let reason: UnknownReason | null = !candidatePapers.length ? 'no_paper' : !sized.length ? 'no_matching_stock' : !item ? 'no_stock_by_date' : quantity === null ? 'unknown_usage' : null;
+      const remaining = item ? paperLots.get(item.id)!.filter(lot => lot.date <= job.date).reduce((sum, lot) => sum + lot.left, 0) : null;
       let cost: number | null = null, from: LotUse[] = [];
       if (job.impressions === 0) { cost = 0; reason = null; }
       else if (item && quantity !== null) {
@@ -97,7 +102,7 @@ export function computeLedger(input: LedgerInput): LedgerResult {
         const used = volume_nl === null ? null : take(inkLots.get(channel) ?? [], job.date, volume_nl);
         return { channel, volume_nl, cost_micros: used?.cost ?? null, from: used?.uses.map(({ owner, ...use }) => ({ ...use, ink_product_id: owner })) ?? [] };
       });
-      result.jobs.set(job.id, { ink, paper: {
+      result.jobs.set(job.id, { ink, sized: sized.map(item => item.id), left: remaining, paper: {
         paper_id: paper?.id ?? null, paper_name: paper?.name ?? null, stock_id: item?.id ?? null, stock_name: item?.name ?? null,
         format: item?.format ?? null, deckle: item?.deckle ?? false, allocation: chosen ? 'stock' : job.paper_id !== null ? 'paper' : 'default',
         quantity, cost_micros: cost, unknown_reason: reason, from,

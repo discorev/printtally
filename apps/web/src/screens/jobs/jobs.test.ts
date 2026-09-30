@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
-import type { LedgerJob, PaperView } from 'print-accounting-contracts';
+import type { AllocationPreview, LedgerJob, PaperView } from 'print-accounting-contracts';
 import { matchesFilter, validateJobsSearch } from './search.ts';
-import { paperState, stockChoices } from './paper.ts';
+import { paperState, stockChoices, stockWarning } from './paper.ts';
 
 const job = (patch: Omit<Partial<LedgerJob>, 'paper'> & { paper?: Partial<LedgerJob['paper']> } = {}): LedgerJob => ({
   job_id: 1, date: '2026-09-12', width_um: 210000, height_um: 297000, source_media_id: 'etching', hidden: 0, ...patch,
@@ -36,4 +36,17 @@ test('stock choices are sheets of the size either way round or a roll of its wid
   const p = paper(1, ['etching'], items, [[1, '2026-01-10'], [2, '2026-02-01'], [3, '2026-09-12'], [4, '2026-01-01'], [5, '2026-10-01']]);
   expect(stockChoices(job(), p).map(item => item.id)).toEqual([1, 2, 3]);
   expect(stockChoices(job(), undefined)).toEqual([]);
+});
+
+test('a correction warns when the stock won’t cover the print, and says why', () => {
+  const preview = (paper: Partial<AllocationPreview['paper']>, remaining: number | null = null, short = false): AllocationPreview => ({
+    paper: { paper_id: 1, paper_name: 'Photo Rag', stock_id: null, stock_name: null, format: null, deckle: false, allocation: 'paper',
+      quantity: 1, cost_micros: null, unknown_reason: null, from: [], ...paper }, remaining, short, sized_stock_id: null });
+  expect(stockWarning(job(), preview({ unknown_reason: 'no_matching_stock' }))?.text).toBe('Photo Rag has no A4 sheets or matching roll, so the print’s paper cost would be unknown.');
+  expect(stockWarning(job(), preview({ unknown_reason: 'no_stock_by_date' }))?.text).toBe('Photo Rag has no A4 bought by 12 Sep 2026, so the print’s paper cost would be unknown.');
+  const a4 = { stock_id: 1, stock_name: 'A4', format: 'sheet' as const, cost_micros: 1 };
+  expect(stockWarning(job(), preview({ ...a4, quantity: 2 }, 1, true))?.text).toBe('Only 1 A4 sheet of Photo Rag left by 12 Sep 2026, so this print (2 sheets) takes it below zero.');
+  expect(stockWarning(job(), preview(a4, 0, true))?.text).toBe('No A4 sheets of Photo Rag left by 12 Sep 2026, so this print (1 sheet) takes it below zero.');
+  expect(stockWarning(job(), preview(a4, 20))).toBeNull();
+  expect(stockWarning(job(), preview({ unknown_reason: 'unknown_usage', quantity: null }))).toBeNull();
 });

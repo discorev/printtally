@@ -71,6 +71,11 @@ export interface InkPurchaseSetupResult { ink_product_id: number; id: number }
 /** What writing off all that's left would take on a day, as the ledger counts it: the rest of the open pack, roll
  *  or cartridge (written_off), its cost, and all that's left of the stock item or cartridge then (remaining). */
 export interface WriteOffPreview { written_off: number; cost_micros: number | null; remaining: number }
+// A job's paper correction to try out, from a query string: a paper or one of its stock items.
+const queryId = z.string().regex(/^\d{1,15}$/).transform(Number).pipe(id);
+export const allocationPreviewQuerySchema = z.object({ paper_id: queryId, paper_stock_id: queryId }).partial().strict()
+  .refine(value => (value.paper_id === undefined) !== (value.paper_stock_id === undefined), 'Give a paper or a stock item');
+export type AllocationPreviewQuery = z.infer<typeof allocationPreviewQuerySchema>;
 
 // Read models. A null cost is unknown and is never guessed.
 export type UnknownReason = 'no_paper' | 'no_matching_stock' | 'no_stock_by_date' | 'unknown_usage';
@@ -95,6 +100,13 @@ export interface CostTotals {
 }
 export interface JobsResponse { jobs: LedgerJob[]; total: number; limit: number; offset: number; settings: Settings }
 export interface JobResponse { job: LedgerJob; settings: Settings }
+/** How a job's paper would be costed with a correction, as if saved now (nothing is saved). */
+export interface AllocationPreview {
+  paper: PaperLine; // The stock item it would use (or none), and its cost or why that's unknown.
+  remaining: number | null; // What that item had left by the print's time, before it; null without an item.
+  short: boolean; // Less was left than the print used, so it takes the item below zero.
+  sized_stock_id: number | null; // The item to buy more of: the one it would use, else the paper's first at the print's size; null if none.
+}
 export interface TotalsResponse {
   settings: Settings; overall: CostTotals;
   days: (CostTotals & { date: string })[]; papers: (CostTotals & { paper_id: number | null; name: string | null })[];

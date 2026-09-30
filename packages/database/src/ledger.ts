@@ -1,10 +1,10 @@
 import { eq, sql } from 'drizzle-orm';
 import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core';
 import {
-  cartridgePatchSchema, cartridgeSchema, inkPurchasePatchSchema, inkPurchaseSchema, inkPurchaseSetupSchema, jobDetailsSchema, paperPatchSchema,
+  allocationPreviewQuerySchema, cartridgePatchSchema, cartridgeSchema, inkPurchasePatchSchema, inkPurchaseSchema, inkPurchaseSetupSchema, jobDetailsSchema, paperPatchSchema,
   paperPurchasePatchSchema, paperPurchaseSchema, paperPurchaseSetupSchema, paperSchema, settingsSchema, stockPatchSchema, stockSchema,
   writeOffPatchSchema, writeOffSchema,
-  type CartridgeView, type CostTotals, type InkPurchaseSetupResult, type InkResponse, type JobDetails, type JobsResponse, type LedgerJob,
+  type AllocationPreview, type CartridgeView, type CostTotals, type InkPurchaseSetupResult, type InkResponse, type JobDetails, type JobsResponse, type LedgerJob,
   type MediaTypesResponse, type PaperPurchaseSetupResult, type PapersResponse, type Settings, type StockFormat, type TotalsResponse,
   type WriteOffPreview, type WriteOffView,
 } from 'print-accounting-contracts';
@@ -170,6 +170,18 @@ export class Ledger {
     const { input } = this.load(), preview = Number.MAX_SAFE_INTEGER; // After every saved write-off that day, as a new one would be.
     const result = computeLedger({ ...input, writeOffs: [...input.writeOffs, { paper_stock_id: null, ink_product_id: null, quantity: null, ...writeOff, id: preview, all_remaining: true }] });
     return result.writeOffs.get(preview)!;
+  }
+
+  /** How job `jobId`'s paper would be costed corrected to `query`'s paper or stock item, as if saved now. */
+  allocationPreview(jobId: number, query: unknown): AllocationPreview {
+    const { paper_id = null, paper_stock_id = null } = allocationPreviewQuerySchema.parse(query);
+    const [table, id] = paper_stock_id !== null ? [paper_stocks, paper_stock_id] : [papers, paper_id!];
+    if (!this.db.orm.select({ id: table.id }).from(table).where(eq(table.id, id)).get()) throw new LedgerError(404, 'not_found');
+    const { input } = this.load();
+    if (!input.jobs.some(job => job.id === jobId)) throw new LedgerError(404, 'job_not_found');
+    const jobs = input.jobs.map(job => job.id === jobId ? { ...job, paper_id, stock_id: paper_stock_id } : job);
+    const { paper, left, sized } = computeLedger({ ...input, jobs }).jobs.get(jobId)!;
+    return { paper, remaining: left, short: left !== null && paper.quantity !== null && left < paper.quantity, sized_stock_id: paper.stock_id ?? sized[0] ?? null };
   }
 
   private load() {
