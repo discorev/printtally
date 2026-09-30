@@ -154,7 +154,7 @@ test('a backend release is tested and packed unprivileged, then staged on npm wi
   assert.ok(script(prepare!).includes('VERSION=${TAG#backend-v}'));
   for (const command of ['bun install --frozen-lockfile', 'bun run typecheck && bun test', 'npm view "printtally@$VERSION" version', 'bun pm pack'])
     assert.ok(script(prepare!).includes(command), command);
-  assert.deepEqual([publish!.if, publish!.permissions], ["needs.npm-prepare.outputs.publish == 'true'", { contents: 'read', 'id-token': 'write' }]);
+  assert.deepEqual([publish!.if, publish!.permissions], ["${{ !cancelled() && needs.npm-prepare.outputs.publish == 'true' }}", { contents: 'read', 'id-token': 'write' }]);
   // The trusted publisher is stage-only, so a direct `npm publish` is refused.
   assert.deepEqual(publish!.steps.flatMap(step => step.run ?? []), ['npm install -g npm@11.21.0 --ignore-scripts', 'tar -xzf printtally-*.tgz\ncd package\nnpm stage publish --provenance\n']);
   assert.deepEqual(publish!.steps.find(step => step.name === 'Stage on npm')!.env, { npm_config_ignore_scripts: 'true' });
