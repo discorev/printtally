@@ -4,6 +4,7 @@ import type { LedgerJob } from 'print-accounting-contracts';
 import { Empty, ListHeader, Loading, Money, Pad, PadBody, PadHead, PaperSelect, SearchInput, TextLink, Toggle, type PaperChoice } from '../../components/index.ts';
 import { useJobs, useMediaTypes, usePapers, useSettings, useTotals } from '../../api/queries.ts';
 import { count, ml, monthLong, monthShort, plural } from '../../lib/format.ts';
+import { jobKnownMicros } from '../../lib/jobs.ts';
 import { byNewest, matchesFilter, type JobsSearch } from './search.ts';
 import { JobRow } from './JobRow.tsx';
 import { paperState } from './paper.ts';
@@ -19,20 +20,26 @@ function useSettled<T>(value: T, ms = 200): T {
 }
 
 // A month's prints, and its totals: sums of the API's per-job figures over the group's shown (not hidden) prints.
-interface Group { month: string; jobs: LedgerJob[]; prints: number; nl: number; micros: number; unknown: number }
+interface Group { month: string; jobs: LedgerJob[]; prints: number; nl: number; micros: number; unknownPaper: number; unknownInk: number }
 function groupByMonth(jobs: LedgerJob[]): Group[] {
   const groups: Group[] = [];
   for (const job of jobs) {
     let group = groups.at(-1);
-    if (group?.month !== job.date.slice(0, 7)) groups.push(group = { month: job.date.slice(0, 7), jobs: [], prints: 0, nl: 0, micros: 0, unknown: 0 });
+    if (group?.month !== job.date.slice(0, 7)) groups.push(group = { month: job.date.slice(0, 7), jobs: [], prints: 0, nl: 0, micros: 0, unknownPaper: 0, unknownInk: 0 });
     group.jobs.push(job);
     if (job.hidden) continue;
     group.prints++;
     group.nl += job.ink.reduce((sum, line) => sum + (line.volume_nl ?? 0), 0);
-    group.micros += job.total_micros ?? job.ink_micros;
-    if (job.total_micros === null) group.unknown++;
+    group.micros += job.total_micros ?? jobKnownMicros(job);
+    if (job.paper_micros === null) group.unknownPaper++;
+    if (job.ink.some(line => line.cost_micros === null)) group.unknownInk++;
   }
   return groups;
+}
+/** "2 without a paper cost · 74 without an ink cost", leaving out whichever part has none. */
+function unknownParts(group: Group): string | null {
+  const parts = [group.unknownPaper > 0 && `${count(group.unknownPaper)} without a paper cost`, group.unknownInk > 0 && `${count(group.unknownInk)} without an ink cost`].filter(Boolean);
+  return parts.length ? parts.join(' · ') : null;
 }
 
 /** The Jobs pad (vJobs): the header's totals, search and filters, and the prints by month. */
@@ -84,7 +91,8 @@ export function JobsPad() {
     <>
       <b>{plural(overall.jobs, 'print')}</b>{range && <> · {range}</>} · <b><Money micros={overall.total_micros} /></b> at the{' '}
       <TextLink to="/settings">{METHOD[method]}</TextLink>
-      {overall.unknown_jobs > 0 && <> · <span className="text-amber">{count(overall.unknown_jobs)} without a paper cost</span></>}
+      {overall.unknown_paper_jobs > 0 && <> · <span className="text-amber">{count(overall.unknown_paper_jobs)} without a paper cost</span></>}
+      {overall.unknown_ink_jobs > 0 && <> · <span className="text-amber">{count(overall.unknown_ink_jobs)} without an ink cost</span></>}
     </>
   );
 
@@ -104,7 +112,7 @@ export function JobsPad() {
             <div key={group.month} role="presentation">
               <ListHeader label={monthLong(group.month + '-01')} meta={<>
                 {plural(group.prints, 'print')} · {ml(group.nl)} · <b><Money micros={group.micros} /></b>
-                {group.unknown > 0 && <span className="text-amber"> ({group.unknown} without a paper cost)</span>}
+                {unknownParts(group) && <span className="text-amber"> ({unknownParts(group)})</span>}
               </>} />
               {group.jobs.map(job => (
                 <JobRow key={job.job_id} job={job} selected={job.job_id === selected} paper={paperState(job, papers)} />

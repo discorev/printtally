@@ -109,6 +109,7 @@ export interface LedgerJob extends JobDetails {
 export interface CostTotals {
   jobs: number; unknown_jobs: number; paper_micros: number; ink_micros: number; total_micros: number; waste_micros: number;
   unknown_paper_jobs: number; // Jobs whose paper cost is unknown (unknown_jobs also counts unknown ink).
+  unknown_ink_jobs: number; // Jobs with any ink channel's cost unknown (unknown_jobs also counts unknown paper).
   ink_nl: number; // Ink the jobs used, whether or not its cost is known.
 }
 export interface JobsResponse { jobs: LedgerJob[]; total: number; limit: number; offset: number; settings: Settings }

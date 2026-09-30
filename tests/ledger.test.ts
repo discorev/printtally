@@ -140,6 +140,16 @@ test('unknown paper cost stays null with a reason and is never guessed', t => {
   assert.equal(overall.ink_nl, 125_000, 'ink volume counts even when the paper cost is unknown');
 });
 
+test('unknown ink cost counts separately from unknown paper cost, even once the paper is known', t => {
+  const { ledger, sheet, buy, job } = fixture(t, [{ day: '2026-02-01' }, { day: '2026-02-02' }]);
+  buy(sheet('A4', 210, 297), '2026-01-01', 25, 25);
+  const [cartridge] = ledger.ink().cartridges;
+  ledger.deleteInkPurchase(cartridge.purchases[0].id);
+  assert.deepEqual([job(1).paper_micros, job(1).ink_micros, job(1).total_micros], [GBP, 0, null], 'paper is known but ink is not, so the total stays unknown');
+  const { overall } = ledger.totals();
+  assert.deepEqual([overall.jobs, overall.unknown_jobs, overall.unknown_paper_jobs, overall.unknown_ink_jobs], [2, 2, 0, 2]);
+});
+
 test('totals per day and per paper leave hidden jobs out; remaining stock per item and cartridge', t => {
   const { db, ledger, paper, sheet, buy } = fixture(t, [{ day: '2026-02-01' }, { day: '2026-02-01', time: '110000' }, { day: '2026-02-02', imp: 3 }, { day: '2026-02-02', media: OTHER }]);
   buy(sheet('A4', 210, 297), '2026-01-01', 25, 25);

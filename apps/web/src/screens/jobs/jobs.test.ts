@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
-import type { AllocationPreview, LedgerJob, PaperView } from 'print-accounting-contracts';
+import type { AllocationPreview, InkLine, LedgerJob, PaperView } from 'print-accounting-contracts';
+import { jobKnownMicros, unknownCostReason } from '../../lib/jobs.ts';
 import { matchesFilter, validateJobsSearch } from './search.ts';
 import { paperState, stockChoices, stockWarning } from './paper.ts';
 
@@ -13,6 +14,22 @@ const paper = (id: number, media: string[], items: PaperView['stock'] = [], boug
   id, name: `Paper ${id}`, media_types: media.map(source_media_id => ({ source_media_id, name: null })), stock: items,
   purchases: bought.map(([paper_stock_id, purchased_on], index) => ({ id: index + 1, paper_stock_id, purchased_on })),
 } as PaperView);
+
+const ink = (cost_micros: number | null): InkLine => ({ channel: 'C', volume_nl: 100, cost_micros, from: [] });
+
+test('a row’s known cost sums paper and known ink, and its tag blames the paper first', () => {
+  const both = job({ paper_micros: 1_000_000, ink_micros: 46_875, ink: [ink(46_875)] });
+  expect(jobKnownMicros(both)).toBe(1_046_875); expect(unknownCostReason(both)).toBeNull();
+
+  const noPaper = job({ paper_micros: null, ink_micros: 46_875, ink: [ink(46_875)], paper: { unknown_reason: 'no_paper' } });
+  expect(jobKnownMicros(noPaper)).toBe(46_875); expect(unknownCostReason(noPaper)).toBe('no paper set up');
+
+  const noInk = job({ paper_micros: 1_000_000, ink_micros: 0, ink: [ink(null)] });
+  expect(jobKnownMicros(noInk)).toBe(1_000_000); expect(unknownCostReason(noInk)).toBe('no ink cost');
+
+  const neither = job({ paper_micros: null, ink_micros: 0, ink: [ink(null)], paper: { unknown_reason: 'no_matching_stock' } });
+  expect(jobKnownMicros(neither)).toBe(0); expect(unknownCostReason(neither)).toBe('no stock for this size');
+});
 
 test('the jobs filter lives in the URL and ignores junk', () => {
   expect(validateJobsSearch({ q: 'gallery', paper: 3, hidden: true })).toEqual({ q: 'gallery', paper: 3, media: undefined, hidden: true });
