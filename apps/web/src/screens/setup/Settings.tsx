@@ -1,10 +1,10 @@
 import { useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { costingMethods, type CostingMethod, type KnownPrinter } from 'print-accounting-contracts';
+import { costingMethods, type CostingMethod, type KnownPrinter, type KnownPrinterListing } from 'print-accounting-contracts';
 import { api } from '../../api/endpoints.ts';
 import { describeError } from '../../api/client.ts';
 import { keys, useEdit, useKnownPrinters, useSettings, useTotals } from '../../api/queries.ts';
-import { useCanEdit, useHealth, useServerName } from '../../connection/index.ts';
+import { onServerMachine, useCanEdit, useHealth, useServerName } from '../../connection/index.ts';
 import { desktop, useDesktopConnection } from '../../desktop.ts';
 import {
   Button, ButtonLink, Fingerprint, KV, LinkButton, Mono, Money, Pad, PadBody, PadHead, RowActions, SectionLabel, StatusLine, Sub, TextLink, useLoadingText,
@@ -107,7 +107,7 @@ function PrinterCard() {
   );
 }
 
-function Printer({ printer }: { printer: KnownPrinter }) {
+function Printer({ printer }: { printer: KnownPrinterListing }) {
   const state = useHealth()?.printers.find(item => item.id === printer.id)?.state, server = useServerName();
   const [showFingerprint, setShowFingerprint] = useState(false), [changing, setChanging] = useState(false);
   const [saved, setSaved] = useState<string>();
@@ -118,9 +118,9 @@ function Printer({ printer }: { printer: KnownPrinter }) {
         ['Fingerprint', state === 'needs_confirming'
           ? <span className="text-amber">Changed on the printer · <TextLink to="/setup" search={{ host: printer.host }}>Check it</TextLink></span>
           : <>Confirmed {dateShort(printer.confirmedAt)} · <LinkButton onClick={() => setShowFingerprint(!showFingerprint)}>{showFingerprint ? 'Hide' : 'Show'}</LinkButton></>],
-        ['Password', state === 'needs_password'
-          ? <span className="text-amber">Not stored{!changing && <> · <LinkButton onClick={() => setChanging(true)}>Enter it</LinkButton></>}</span>
-          : <>Stored in {server}'s keychain{!changing && <> · <LinkButton onClick={() => { setChanging(true); setSaved(undefined); }}>Change password</LinkButton></>}</>],
+        ['Password', printer.hasPassword === false
+          ? <span className="text-amber">Not saved yet{!changing && <> · <LinkButton onClick={() => setChanging(true)}>Enter it</LinkButton></>}</span>
+          : <>{printer.hasPassword ? `Stored in ${server}'s keychain` : `Couldn't check ${server}'s keychain`}{!changing && <> · <LinkButton onClick={() => { setChanging(true); setSaved(undefined); }}>Change password</LinkButton></>}</>],
       ]} />
       {showFingerprint && state !== 'needs_confirming' && <Fingerprint sha256={printer.fingerprintSha256} className="max-w-[420px]" />}
       {changing && <ChangePassword printer={printer} onDone={message => { setChanging(false); setSaved(message); }} />}
@@ -139,7 +139,7 @@ function ChangePassword({ printer, onDone }: { printer: KnownPrinter; onDone: (s
  *  computer whose address it opened. */
 function ComputerCard() {
   const name = useServerName(), connection = useDesktopConnection();
-  const local = ['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname);
+  const local = onServerMachine();
   if (desktop) return (
     <Card label="Computer">
       <div>Connected to <b>{name}</b> {connection && <Mono>({connection.host}:{connection.port})</Mono>}</div>

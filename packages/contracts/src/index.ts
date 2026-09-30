@@ -81,6 +81,7 @@ export const jobDetailsSchema = z.object({
 });
 export type JobDetails = z.infer<typeof jobDetailsSchema>;
 // Server status for every client. Collection runs on start, every 15 minutes and on request.
+// needs_printer: no printer is known yet (one that needs its password is reported in printers[].state instead).
 export type ServerState = 'needs_printer' | 'ready' | 'collecting' | 'printer_needs_confirming';
 // needs_confirming: the printer's root certificate changed, so its password is withheld until the user confirms it again.
 export type PrinterState = 'unknown' | 'ready' | 'needs_password' | 'needs_confirming' | 'unreachable' | 'failed';
@@ -127,6 +128,9 @@ export interface KnownPrinter {
   fingerprintSha256: string; validFrom: string; validTo: string;
   confirmedAt: string; lastVerifiedAt: string;
 }
+// GET /known-printers. hasPassword: whether the credential store holds the printer's password (null when the
+// store couldn't be read); the password itself is never returned.
+export interface KnownPrinterListing extends KnownPrinter { hasPassword: boolean | null }
 export interface PrinterTrustPreview {
   id: string; host: string; name: string; mac: string | null;
   fingerprintSha256: string; validFrom: string; validTo: string; expiresAt: string;

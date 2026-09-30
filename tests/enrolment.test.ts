@@ -148,7 +148,7 @@ test('API supports setup without a configured printer and collects only confirme
   assert.equal((await request('/known-printers/' + preview.id + '/password', 'PUT', { password: 'no trust yet' })).status, 404);
   assert.equal((await request('/known-printers/' + preview.id + '/collect', 'POST', {})).status, 404);
   const printer = await (await request('/printer-enrolments/' + preview.id + '/confirm', 'POST', confirmed(preview.fingerprintSha256))).json() as { id: string };
-  assert.equal(await health(), 'needs_printer');
+  assert.equal(await health(), 'ready', 'a known printer without its password is not set up again');
   assert.equal((await request('/known-printers/' + printer.id + '/password', 'PUT', { password: 'synthetic password' })).status, 200);
   assert.equal(await health(), 'ready');
   assert.equal((await request('/known-printers/' + printer.id + '/collect', 'POST', { host: secondHost })).status, 400);

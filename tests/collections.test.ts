@@ -4,9 +4,10 @@ import { createServer } from 'node:tls';
 import type { Socket } from 'node:net';
 import { X509Certificate } from 'node:crypto';
 import { collectSnapshot } from 'print-accounting-ivec';
-import type { ImportsResponse, Snapshot } from 'print-accounting-contracts';
+import type { ImportsResponse, KnownPrinterListing, Snapshot } from 'print-accounting-contracts';
 import { Collections, CollectionError } from '../apps/server/src/collections.ts';
 import { AccountingService } from '../apps/server/src/service.ts';
+import { CredentialError } from '../apps/server/src/credentials.ts';
 import { apiFixture } from './api-fixtures.ts';
 import { batch, sample } from './fixtures.ts';
 import { tlsFixtures } from './tls-fixtures.ts';
@@ -51,9 +52,17 @@ test('health reports each state, and a gap in the printer log as missed jobs', a
   assert.equal(health().state, 'needs_printer');
   assert.ok(health().hostName.length > 0 && !health().hostName.endsWith('.local'), 'names the server machine');
   const printer = await f.addPrinter();
-  assert.deepEqual([health().state, health().printers[0].state], ['needs_printer', 'needs_password']);
+  // A known printer that needs its password is shown on every screen, not set up again.
+  assert.deepEqual([health().state, health().printers[0].state], ['ready', 'needs_password']);
+  const hasPassword = async () => (await f.request('/api/v1/known-printers')).json<{ printers: KnownPrinterListing[] }>().printers[0].hasPassword;
+  assert.equal(await hasPassword(), false);
   await f.enrolment.setPassword(printer.id, { password: 'synthetic password' }); f.collections.passwordSaved(printer.id);
   assert.deepEqual([health().state, health().printers[0].state, health().lastCollection], ['ready', 'unknown', null]);
+  assert.equal(await hasPassword(), true);
+  const read = f.secrets.get.bind(f.secrets);
+  f.secrets.get = async () => { throw new CredentialError('locked'); };
+  assert.equal(await hasPassword(), null, "a store that can't be read doesn't claim either way");
+  f.secrets.get = read;
   await f.collections.collect(printer.id);
   await f.collections.collect(printer.id);
   assert.deepEqual(health().missedJobs, [], 'contiguous ranges');
@@ -90,7 +99,7 @@ test('a missing password asks for one; an unreachable printer says so', async t 
   assert.deepEqual([(await call()).status, f.collections.health().printers[0].state], [502, 'unreachable']);
   reachable = true;
   const missing = await call();
-  assert.deepEqual([missing.status, missing.json().error, f.collections.health().state], [409, 'printer_needs_password', 'needs_printer']);
+  assert.deepEqual([missing.status, missing.json().error, f.collections.health().state], [409, 'printer_needs_password', 'ready']);
 });
 
 test('a stored password is never sent to a printer whose certificate is not the confirmed one', async t => {

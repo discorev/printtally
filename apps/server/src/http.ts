@@ -78,7 +78,7 @@ export function createApi(service: AccountingService, options: ApiOptions): Serv
       }
       const preview = /^\/api\/v1\/printer-enrolments\/([a-f0-9-]{36})$/.exec(path);
       if (method === 'DELETE' && preview) { enrolment.cancel(preview[1]); return send(200, { cancelled: true }); }
-      if (method === 'GET' && path === '/api/v1/known-printers') return send(200, { printers: enrolment.list() });
+      if (method === 'GET' && path === '/api/v1/known-printers') return send(200, { printers: await enrolment.listing() });
       const known = /^\/api\/v1\/known-printers\/([a-f0-9-]{36})\/(password|collect)$/.exec(path);
       if (known && method === 'PUT' && known[2] === 'password') {
         await enrolment.setPassword(known[1], await jsonBody(request));

@@ -3,7 +3,7 @@ import {
   inkPurchaseSchema, inkPurchaseSetupSchema, paperPatchSchema, paperPurchaseSetupSchema, paperPurchasePatchSchema, paperPurchaseSchema, paperSchema, printerPasswordSchema,
   settingsSchema, stockPatchSchema, stockSchema, writeOffPatchSchema, writeOffSchema,
   type Annotation, type CartridgeInput, type DiscoveredPrinter, type EnrolmentRequest, type HealthResponse, type ImportResult, type ImportsResponse,
-  type InkPurchaseInput, type InkPurchaseSetup, type InkPurchaseSetupResult, type InkResponse, type JobResponse, type JobsResponse, type KnownPrinter, type LedgerJob,
+  type InkPurchaseInput, type InkPurchaseSetup, type InkPurchaseSetupResult, type InkResponse, type JobResponse, type JobsResponse, type KnownPrinter, type KnownPrinterListing,
   type MediaTypesResponse, type PaperInput, type PaperPurchaseInput, type PaperPurchaseSetup, type PaperPurchaseSetupResult, type PapersResponse, type PrinterTrustPreview, type Settings,
   type StockInput, type TotalsResponse, type WriteOffInput, type WriteOffPreview,
 } from 'print-accounting-contracts';
@@ -33,7 +33,7 @@ export const api = {
   jobs: (params: JobsQuery = {}): Promise<JobsResponse> => request('GET', '/jobs' + query({ ...params, q: params.q?.trim() || undefined })),
   job: (id: number): Promise<JobResponse> => request('GET', `/jobs/${id}`),
   /** Notes, hide/show, and correcting a job's paper or stock; returns the job as now costed. */
-  annotateJob: (id: number, annotation: Annotation): Promise<LedgerJob> => request('PATCH', `/jobs/${id}/annotation`, { body: annotation, schema: annotationSchema }),
+  annotateJob: (id: number, annotation: Annotation): Promise<JobResponse> => request('PATCH', `/jobs/${id}/annotation`, { body: annotation, schema: annotationSchema }),
   totals: (): Promise<TotalsResponse> => request('GET', '/totals'),
 
   papers: (): Promise<PapersResponse> => request('GET', '/papers'),
@@ -65,7 +65,7 @@ export const api = {
   confirmPrinter: (previewId: string, fingerprintSha256: string): Promise<KnownPrinter> =>
     request('POST', `/printer-enrolments/${previewId}/confirm`, { body: { fingerprintSha256, confirmed: true }, schema: confirmPrinterSchema, timeoutMs: 30_000 }),
   cancelPreview: (previewId: string): Promise<{ cancelled: true }> => request('DELETE', `/printer-enrolments/${previewId}`),
-  knownPrinters: (): Promise<{ printers: KnownPrinter[] }> => request('GET', '/known-printers'),
+  knownPrinters: (): Promise<{ printers: KnownPrinterListing[] }> => request('GET', '/known-printers'),
   savePrinterPassword: (printerId: string, password: string): Promise<{ saved: true }> =>
     request('PUT', `/known-printers/${printerId}/password`, { body: { password }, schema: printerPasswordSchema }),
   /** The import history, newest first (the printer's log range each collection read). */

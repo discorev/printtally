@@ -104,7 +104,8 @@ export class Collections {
       return { id: printer.id, name: printer.name, host: printer.host, state: status?.state ?? 'unknown', lastCollection: status?.lastCollection ?? null };
     });
     const last = printers.map(printer => printer.lastCollection).filter(item => item !== null).sort((a, b) => b.at.localeCompare(a.at))[0] ?? null;
-    const state = this.service.busy ? 'collecting' : printers.every(printer => printer.state === 'needs_password') ? 'needs_printer'
+    // A known printer that needs its password isn't set up again: every screen shows it and Settings takes the password.
+    const state = this.service.busy ? 'collecting' : !printers.length ? 'needs_printer'
       : printers.some(printer => printer.state === 'needs_confirming') ? 'printer_needs_confirming' : 'ready';
     return { service: 'printtally', apiVersion: API_VERSION, hostName: hostname().replace(/\.local$/i, ''), collecting: this.service.busy, state, printers, missedJobs, lastCollection: last,
       nextCollectionAt: this.nextAt === undefined ? null : new Date(this.nextAt).toISOString() };

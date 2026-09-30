@@ -6,7 +6,7 @@ import { queryClient } from '../api/queries.ts';
 import { ConnectionMonitor } from './monitor.ts';
 import { serverName, type ConnectionState } from './state.ts';
 
-export { canEdit, backoffMs, type ConnectionState, type ConnectionStatus } from './state.ts';
+export { canEdit, backoffMs, gateRedirect, type ConnectionState, type ConnectionStatus } from './state.ts';
 
 // The app's one connection monitor, fed by every API request.
 export const connection = new ConnectionMonitor({ fetchHealth: api.health });
@@ -34,6 +34,9 @@ const remembered = (): string | null => { try { return localStorage.getItem(name
 function remember(name: string): void { try { if (remembered() !== name) localStorage.setItem(nameKey(), name); } catch { /* storage unavailable */ } }
 /** The computer Print Tally runs on, e.g. "studio-mac": the name it last gave (kept while it's lost), else the address in use. */
 export const useServerName = (): string => serverName(useHealth(), remembered(), location.hostname);
+
+/** Whether this browser is on the computer Print Tally runs on (it opened a loopback address), not a paired device. */
+export const onServerMachine = (): boolean => ['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname);
 
 /** Seconds until the next retry while the server is lost, ticking each second; null otherwise. */
 export function useRetryCountdown(): number | null {

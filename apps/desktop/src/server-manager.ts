@@ -11,6 +11,8 @@ export interface Connection { host: string; port: number; owns: boolean; remote:
 type SpawnFn = (command: string, args: string[]) => ChildProcess;
 type Probe = 'printtally' | 'other' | 'down';
 const MAX_FAILED_STARTS = 3;
+// A server that exits this soon after answering counts as a failed start, so a crash loop still stops.
+const STABLE_MS = 30_000;
 
 export interface ServerManagerOptions {
   dataDirectory?: string; port?: number;
@@ -18,7 +20,7 @@ export interface ServerManagerOptions {
   // packaged build runs a compiled binary shipped under process.resourcesPath.
   packaged?: boolean; resourcesPath?: string; repoRoot?: string;
   spawnFn?: SpawnFn; fetchFn?: typeof fetch;
-  healthTimeoutMs?: number; startupTimeoutMs?: number; pollIntervalMs?: number;
+  healthTimeoutMs?: number; startupTimeoutMs?: number; pollIntervalMs?: number; clock?: () => number;
 }
 
 function serverCommand(options: Required<Pick<ServerManagerOptions, 'packaged' | 'resourcesPath' | 'repoRoot'>>, dataDirectory: string, port: number): { command: string; args: string[] } {
@@ -38,6 +40,7 @@ export class ServerManager {
   private readonly healthTimeoutMs: number;
   private readonly startupTimeoutMs: number;
   private readonly pollIntervalMs: number;
+  private readonly clock: () => number;
 
   private host = '127.0.0.1';
   private port: number;
@@ -60,6 +63,7 @@ export class ServerManager {
     this.healthTimeoutMs = options.healthTimeoutMs ?? 1500;
     this.startupTimeoutMs = options.startupTimeoutMs ?? 20000;
     this.pollIntervalMs = options.pollIntervalMs ?? 300;
+    this.clock = options.clock ?? Date.now;
   }
 
   get connection(): Connection {
@@ -87,11 +91,17 @@ export class ServerManager {
 
   private async spawnAndWait(): Promise<boolean> {
     const { command, args } = serverCommand({ packaged: this.packaged, resourcesPath: this.resourcesPath, repoRoot: this.repoRoot }, this.dataDirectory, this.port);
-    const child = this.spawnFn(command, args), gone = (): void => { if (this.child === child) this.child = undefined; };
+    let startedAt: number | undefined;
+    const child = this.spawnFn(command, args), gone = (): void => {
+      if (this.child !== child) return;
+      this.child = undefined;
+      // Exits before answering are counted below; one that ran a while is a fresh start.
+      if (startedAt !== undefined) this.failedStarts = this.clock() - startedAt < STABLE_MS ? this.failedStarts + 1 : 0;
+    };
     this.child = child;
     child.on('exit', gone).on('error', gone);
     for (const deadline = Date.now() + this.startupTimeoutMs; this.child === child && Date.now() < deadline;) {
-      if (await this.probe(this.host, this.port) === 'printtally') { this.failedStarts = 0; return true; }
+      if (await this.probe(this.host, this.port) === 'printtally') { startedAt = this.clock(); return true; }
       await new Promise(done => setTimeout(done, this.pollIntervalMs));
     }
     this.failedStarts++;
@@ -101,7 +111,8 @@ export class ServerManager {
   // Use Print Tally already answering on this Mac, else start the bundled server on the same port
   // and data folder (plan decision 5). Never another port, and never over another app.
   private async useLocal(state: Probe): Promise<void> {
-    if (state === 'printtally') { this.status = 'ready'; this.failedStarts = 0; return; }
+    // Our own server answering doesn't reset the count: it's judged when it exits.
+    if (state === 'printtally') { this.status = 'ready'; if (!this.child) this.failedStarts = 0; return; }
     if (state === 'other') { this.status = 'port_in_use'; return; }
     if (this.child || this.stopped) return; // Still starting, or quitting.
     if (this.failedStarts >= MAX_FAILED_STARTS) { this.status = 'failed'; return; }

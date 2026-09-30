@@ -10,8 +10,8 @@ instead), else whatever Print Tally answers `GET /api/v1/health` on
 `127.0.0.1:4318`; if nothing does, it starts the bundled server itself (in dev,
 `bun apps/server/src/cli.ts serve`; in the packaged app, the compiled server at
 `Contents/Resources/server/printtally-server`, which serves the UI from `client/`
-beside it). It never starts over another app on the port, and it stops after three failed
-starts. Every 5 seconds it checks the server: one it started that crashed is
+beside it). It never starts over another app on the port, and it stops (showing a problem page)
+after three failed starts, counting a server that exits within 30 seconds of starting. Every 5 seconds it checks the server: one it started that crashed is
 restarted, and one it only borrowed that disappeared is taken over on the same port
 and data folder. A remote host answering 401 counts as up: the window holds the
 session, and the UI handles signing in again.
@@ -52,11 +52,10 @@ is the app's; `build/entitlements.mac.inherit.plist` covers Electron's helpers a
 the embedded Bun server, which needs `allow-jit` to run at full speed. Local builds
 are never notarized; `bun run release:desktop` is (see the root README).
 
-To try a build without touching your real ledger or port:
-
-```sh
-PRINTTALLY_PORT=4402 PRINTTALLY_DATA_DIR=<temp folder> "release/mac-arm64/Print Tally.app/Contents/MacOS/Print Tally"
-```
+A packaged build always uses port 4318 and the default data folder, so opening it
+uses your real ledger. `PRINTTALLY_PORT` and `PRINTTALLY_DATA_DIR` work only in
+development (`bun run dev:desktop`), where they keep you off the real ledger and port;
+a packaged app ignores them so it can never start a second ledger by accident.
 
 Quitting the app stops the server it started. The app's own settings (the saved
 remote host) live in `~/Library/Application Support/Print Tally`, apart from the

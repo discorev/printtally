@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
 import { Banner, Button, ButtonLink } from '../components/index.ts';
-import { useConnection, useMissedJobs, useRetryCountdown, useServerName } from '../connection/index.ts';
+import { gateRedirect, onServerMachine, useConnection, useMissedJobs, useRetryCountdown, useServerName } from '../connection/index.ts';
 import { desktop, useDesktopConnection } from '../desktop.ts';
 import { count } from '../lib/format.ts';
 import { cx } from '../lib/cx.ts';
@@ -19,8 +19,8 @@ export function ConnectionGate() {
   const { status, health } = useConnection();
   const path = usePath(), navigate = useNavigate();
   useEffect(() => {
-    if (status === 'unauthorized' && path !== '/connect') void navigate({ to: '/connect' });
-    else if (status === 'connected' && health?.state === 'needs_printer' && path !== '/setup' && path !== '/connect') void navigate({ to: '/setup' });
+    const to = gateRedirect(status, health?.state, path);
+    if (to) void navigate({ to });
   }, [status, health?.state, path, navigate]);
   return null;
 }
@@ -29,7 +29,7 @@ export function ConnectionGate() {
 function ServerChip() {
   const { status } = useConnection(), name = useServerName(), connection = useDesktopConnection();
   const lost = status === 'lost';
-  const title = connection ? `Connected to ${name} (${connection.host}:${connection.port})` : `Serving on ${location.host}`;
+  const title = connection ? `Connected to ${name} (${connection.host}:${connection.port})` : `${onServerMachine() ? 'Serving on' : 'Connected to'} ${location.host}`;
   return (
     <span title={title} className={cx('ml-auto inline-flex items-center gap-2 rounded-[3px] border py-1 pr-2.5 pl-[9px] text-[12px] leading-4 font-medium whitespace-nowrap phone:hidden',
       lost ? 'border-amber bg-black/25 text-amber' : 'border-white/28 bg-black/12 text-inherit')}>

@@ -94,6 +94,40 @@ describe('ServerManager', () => {
     expect(manager.connection.status).toBe('failed');
   });
 
+  test('gives up on a server that keeps crashing soon after it starts', async () => {
+    const children: ReturnType<typeof fakeChild>[] = [];
+    const spawnFn = mock(() => { const made = fakeChild(); children.push(made); return made.child; });
+    const fetchFn = answering('down', 'printtally');
+    const manager = new ServerManager({ ...options, spawnFn, fetchFn });
+    await manager.connect();
+    for (let i = 0; i < 5; i++) {
+      children.at(-1)!.exit(); // Crashes seconds after answering.
+      fetchFn.answers = ['down', 'printtally'];
+      await manager.ensureAlive();
+    }
+    expect(spawnFn).toHaveBeenCalledTimes(3);
+    expect(manager.connection).toMatchObject({ owns: false, status: 'failed' });
+  });
+
+  test('keeps restarting a server that ran a while before each crash', async () => {
+    let now = 0;
+    const children: ReturnType<typeof fakeChild>[] = [];
+    const spawnFn = mock(() => { const made = fakeChild(); children.push(made); return made.child; });
+    const fetchFn = answering('down', 'printtally');
+    const manager = new ServerManager({ ...options, spawnFn, fetchFn, clock: () => now });
+    await manager.connect();
+    for (let i = 0; i < 5; i++) {
+      fetchFn.answers = ['printtally'];
+      await manager.ensureAlive(); // Answering polls while it runs don't change the count.
+      now += 31_000;
+      children.at(-1)!.exit();
+      fetchFn.answers = ['down', 'printtally'];
+      await manager.ensureAlive();
+    }
+    expect(spawnFn).toHaveBeenCalledTimes(6);
+    expect(manager.connection).toMatchObject({ owns: true, status: 'ready' });
+  });
+
   test('takes over when a borrowed local server disappears', async () => {
     const spawnFn = mock(() => fakeChild().child);
     const fetchFn = answering('printtally');

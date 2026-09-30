@@ -1,4 +1,4 @@
-import type { HealthResponse } from 'print-accounting-contracts';
+import type { HealthResponse, ServerState } from 'print-accounting-contracts';
 
 // The client side of the plan's state diagram (decision 6): connected, or the server is lost (banner,
 // loaded data read-only, edits blocked, retry with backoff), or this device's session was revoked (401).
@@ -31,3 +31,10 @@ export function reduce(state: ConnectionState, event: ConnectionEvent, now: numb
 export const canEdit = (state: ConnectionState): boolean => state.status === 'connected';
 /** The server's name: from its last health answer, else the one it gave last time this address was used, else the address. */
 export const serverName = (health: HealthResponse | null, remembered: string | null, address: string): string => health?.hostName ?? remembered ?? address;
+/** Where the app must go instead of `path`: a revoked session (401) to /connect, a server with no printer yet to /setup.
+ *  A known printer that needs its password isn't a reason to leave: the app-wide banner and Settings handle it. */
+export function gateRedirect(status: ConnectionStatus, state: ServerState | undefined, path: string): '/connect' | '/setup' | null {
+  if (status === 'unauthorized') return path === '/connect' ? null : '/connect';
+  if (status === 'connected' && state === 'needs_printer' && path !== '/setup' && path !== '/connect') return '/setup';
+  return null;
+}

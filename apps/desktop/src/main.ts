@@ -6,13 +6,13 @@ import { loadRemote, parseTarget, saveRemote } from './config.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const devWebUrl = process.env.PRINTTALLY_WEB_URL ?? 'http://127.0.0.1:5173';
-// Overridable for development and testing only; the packaged app always uses the fixed
-// default port (plan decision 13) so paired devices have a stable address.
-const port = process.env.PRINTTALLY_PORT ? Number(process.env.PRINTTALLY_PORT) : undefined;
+// Development only: a packaged app ignores these and always uses the fixed port and default data
+// folder (plan decisions 5 and 13), so it can't start a second ledger and paired devices keep one address.
+const devPort = !app.isPackaged && process.env.PRINTTALLY_PORT ? Number(process.env.PRINTTALLY_PORT) : undefined;
+const devDataDirectory = !app.isPackaged ? process.env.PRINTTALLY_DATA_DIR : undefined;
 
 const manager = new ServerManager({
-  packaged: app.isPackaged, resourcesPath: process.resourcesPath, port,
-  dataDirectory: process.env.PRINTTALLY_DATA_DIR,
+  packaged: app.isPackaged, resourcesPath: process.resourcesPath, port: devPort, dataDirectory: devDataDirectory,
 });
 let window: BrowserWindow | undefined;
 let quitting = false;

@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
-import type { HealthResponse } from 'print-accounting-contracts';
+import type { HealthResponse, ServerState } from 'print-accounting-contracts';
 import { ApiError, onRequestOutcome, request, setEditGate } from '../api/client.ts';
 import { ConnectionMonitor } from './monitor.ts';
-import { backoffMs, canEdit, serverName } from './state.ts';
+import { backoffMs, canEdit, gateRedirect, serverName } from './state.ts';
 
 const health: HealthResponse = {
   service: 'printtally', apiVersion: 1, hostName: 'studio-mac', collecting: false, state: 'ready',
@@ -139,4 +139,13 @@ test('the server is named by its last answer, then by the name it gave before at
   expect(serverName(health, 'old-name', '127.0.0.1')).toBe('studio-mac');
   expect(serverName(null, 'studio-mac', '127.0.0.1')).toBe('studio-mac');
   expect(serverName(null, null, '127.0.0.1')).toBe('127.0.0.1');
+});
+
+test('the gate sends a revoked session to Connect and a server with no printer to Setup, and nothing else away', () => {
+  expect(gateRedirect('unauthorized', 'ready', '/jobs')).toBe('/connect');
+  expect(gateRedirect('unauthorized', 'ready', '/connect')).toBeNull();
+  expect(['/jobs', '/settings', '/setup', '/connect'].map(path => gateRedirect('connected', 'needs_printer', path))).toEqual(['/setup', '/setup', null, null]);
+  // A known printer that needs its password reports 'ready' (see health()): Settings must stay reachable to take it.
+  expect(['ready', 'printer_needs_confirming', 'collecting'].map(state => gateRedirect('connected', state as ServerState, '/settings'))).toEqual([null, null, null]);
+  expect(gateRedirect('lost', 'needs_printer', '/jobs')).toBeNull();
 });

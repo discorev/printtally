@@ -65,7 +65,8 @@ Print Tally keeps its ledger in a data folder:
 
 `printer.json`, the certificate file and the `probe`, `password`, `import`,
 `annotate` and `summary` commands are gone. Your ledger is kept; set the printer up
-again in the setup screen and enter its password there. The old Keychain items
+again in the setup screen and enter its password there. Back up the data folder
+first: the upgrade rebuilds some of the ledger's tables the first time it runs. The old Keychain items
 (service `print-accounting`, accounts starting `printer:mac:` and `api:`) are no
 longer used, and you can delete them in Keychain Access.
 
