@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path';
 import { DEFAULT_PORT, LOCAL_PORT, defaultDataDirectory, localDataDirectory } from './paths.ts';
 
 // release: built by CI (or PRINTTALLY_RELEASE=1) with the real ledger. local: `bun run dist:desktop`, for
-// testing against dummy data. dev: `bun run dev:desktop` from source. scripts/bundle.sh writes
+// testing against dummy data. dev: `bun run dev:desktop` from source. apps/desktop/scripts/bundle.sh writes
 // dist/build-info.json into packaged builds; without it the app runs from source.
 export type BuildKind = 'release' | 'local' | 'dev';
 export interface BuildInfo { kind: BuildKind; version: string }
@@ -13,7 +13,7 @@ export function readBuildInfo(file: string, packaged: boolean, packageVersion: s
     const info = JSON.parse(readFileSync(file, 'utf8')) as Partial<BuildInfo>;
     if ((info.kind === 'release' || info.kind === 'local') && typeof info.version === 'string') return { kind: info.kind, version: info.version };
   }
-  // A packaged app without valid build info wasn't made by scripts/bundle.sh: keep it off the real ledger.
+  // A packaged app without valid build info wasn't made by apps/desktop/scripts/bundle.sh: keep it off the real ledger.
   return packaged ? { kind: 'local', version: `${packageVersion}-local` } : { kind: 'dev', version: `${packageVersion}-dev` };
 }
 

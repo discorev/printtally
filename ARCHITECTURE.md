@@ -149,8 +149,8 @@ The API stays under `/api`.
 - **Desktop.** electron-builder packages `apps/desktop` as a macOS arm64 `.app`
   (`appId` `com.olliespage.PrintTally`) and copies the compiled server and its
   `client/` into `Contents/Resources/server/`, where `server-manager.ts` runs it.
-  `scripts/bundle.sh` picks the signing identity and the build kind, and
-  `scripts/make-dmg.sh` makes the `.dmg` (see [docs/build.md](docs/build.md)).
+  `apps/desktop/scripts/bundle.sh` picks the signing identity and the build kind, and
+  `apps/desktop/scripts/make-dmg.sh` makes the `.dmg` (see [docs/build.md](docs/build.md)).
   Local and release builds share the app id; the build kind, baked into the app
   as `build-info.json`, keeps a local build on its own port (4319), data folder
   and settings. Everything is signed with Developer ID; release builds also use the hardened runtime. The app has

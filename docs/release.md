@@ -20,7 +20,7 @@ Only `feat`, `fix`, `perf` and `revert` commits and breaking changes (`!`) relea
 | --- | --- |
 | `apps/server`, `apps/web` or `packages/*` | the backend, and the app |
 | `apps/desktop` only | the app |
-| `docs`, `scripts`, `tests`, `assets` or `.github` only | nothing |
+| `docs`, `scripts`, `tests` or `.github` only | nothing |
 
 The app always follows a backend release, because it embeds the backend. It gets its own next version: a backend release alone bumps the app's patch version. The two versions are never kept equal. A commit that touches only top-level files, such as `package.json`, `bun.lock` or `README.md`, counts as a backend change.
 
@@ -36,7 +36,7 @@ Before 1.0.0, a breaking change bumps the minor version. The first release of ea
 | `backend-assets` | the backend was released and tested | `printtally-server-X.Y.Z-darwin-arm64.tar.gz` and its `.sha256`, on the backend's GitHub release: the compiled server and its UI, checked to report version X.Y.Z |
 | `app` | the app was released | `PrintTally-X.Y.Z.dmg` and `PrintTally-X.Y.Z.zip`, signed, notarized and stapled, on the app's GitHub release |
 
-The app doesn't compile its own server. It downloads the server archive from the backend release made in the same run, or, for an app-only release, from the latest `backend-v*` release. It checks the archive's checksum, then `scripts/bundle.sh` packages it (`PRINTTALLY_SERVER_ARCHIVE`). So the **Backend version** that Settings shows in a shipped app is always a published backend version.
+The app doesn't compile its own server. It downloads the server archive from the backend release made in the same run, or, for an app-only release, from the latest `backend-v*` release. It checks the archive's checksum, then `apps/desktop/scripts/bundle.sh` packages it (`PRINTTALLY_SERVER_ARCHIVE`). So the **Backend version** that Settings shows in a shipped app is always a published backend version.
 
 Every job uses Bun 1.3.9.
 
@@ -83,4 +83,4 @@ To go back to releasing by hand, delete:
 - `tests/release.test.ts`
 - this file, and the links to it in `README.md`, `ARCHITECTURE.md` and `docs/build.md`
 
-Then remove the `release-please` dev dependency from the root `package.json`, and the `peerDependencies` and `peerDependenciesMeta` from `apps/desktop/package.json`. The root `package.json` can drop its `version` too. `ci.yml` and the `PRINTTALLY_SERVER_ARCHIVE` option in `scripts/bundle.sh` work on their own, so you can keep them.
+Then remove the `release-please` dev dependency from the root `package.json`, and the `peerDependencies` and `peerDependenciesMeta` from `apps/desktop/package.json`. The root `package.json` can drop its `version` too. `ci.yml` and the `PRINTTALLY_SERVER_ARCHIVE` option in `apps/desktop/scripts/bundle.sh` work on their own, so you can keep them.

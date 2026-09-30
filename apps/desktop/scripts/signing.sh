@@ -1,4 +1,4 @@
-# Sourced by scripts/bundle.sh and scripts/make-dmg.sh with RELEASE set. Sets IDENTITY to
+# Sourced by apps/desktop/scripts/bundle.sh and apps/desktop/scripts/make-dmg.sh with RELEASE set. Sets IDENTITY to
 # PRINTTALLY_SIGN_IDENTITY or the first Developer ID Application identity in the keychain, or to "-"
 # (ad hoc) for a local build run with PRINTTALLY_ALLOW_ADHOC_SIGNING=1.
 # shellcheck shell=sh

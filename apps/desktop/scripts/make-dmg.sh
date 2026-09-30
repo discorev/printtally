@@ -1,10 +1,9 @@
 #!/bin/sh
-# Makes and signs apps/desktop/release/PrintTally-<version>.dmg from a built app (scripts/bundle.sh):
-# the app on the left, an Applications link on the right, over assets/dmg/background.svg.
+# Makes and signs apps/desktop/release/PrintTally-<version>.dmg from a built app (apps/desktop/scripts/bundle.sh):
+# the app on the left, an Applications link on the right, over apps/desktop/assets/dmg/background.svg.
 set -eu
 
-ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
-DESKTOP="$ROOT/apps/desktop"
+DESKTOP=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 
 APP=${1:-"$DESKTOP/release/mac-arm64/Print Tally.app"}
 case "$APP" in
@@ -19,10 +18,10 @@ VERSION=$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$APP/Con
 OUTPUT="$DESKTOP/release/PrintTally-$VERSION.dmg"
 
 RELEASE=${PRINTTALLY_RELEASE:-0}
-# shellcheck source=scripts/signing.sh
-. "$ROOT/scripts/signing.sh"
+# shellcheck source=apps/desktop/scripts/signing.sh
+. "$DESKTOP/scripts/signing.sh"
 
-SVG="$ROOT/assets/dmg/background.svg"
+SVG="$DESKTOP/assets/dmg/background.svg"
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/printtally-dmg.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT HUP INT TERM
 

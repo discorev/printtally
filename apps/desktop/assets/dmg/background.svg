@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Print Tally disk image background, 660x400 points, in the Docket design (apps/web/src/styles.css): a paper
-     docket lying on the green cutting mat. scripts/make-dmg.sh renders it at 1x and 2x. Finder draws the app at
+     docket lying on the green cutting mat. apps/desktop/scripts/make-dmg.sh renders it at 1x and 2x. Finder draws the app at
      (165,190) and the Applications link at (495,190) with 128pt icons (apps/desktop/electron-builder.yml), so the
      art only supplies the mat, the paper under the icons and their dark labels, the arrow and the hint. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 400" width="660" height="400">

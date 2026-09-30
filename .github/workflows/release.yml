@@ -237,7 +237,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PRINTTALLY_RELEASE=1 PRINTTALLY_VERSION="$VERSION" scripts/bundle.sh
+          PRINTTALLY_RELEASE=1 PRINTTALLY_VERSION="$VERSION" apps/desktop/scripts/bundle.sh
           codesign --verify --deep --strict --verbose=2 "$APP"
 
       - name: Notarize and staple app
@@ -278,7 +278,7 @@ jobs:
         run: |
           set -euo pipefail
           DMG="apps/desktop/release/PrintTally-$VERSION.dmg"
-          PRINTTALLY_RELEASE=1 scripts/make-dmg.sh
+          PRINTTALLY_RELEASE=1 apps/desktop/scripts/make-dmg.sh
           NOTARY_TEMP_DIR=$(mktemp -d "$RUNNER_TEMP/printtally-dmg-notary.XXXXXX")
           ASC_KEY_PATH="$NOTARY_TEMP_DIR/AuthKey_${ASC_KEY_ID}.p8"
           SUBMISSION_RESULT="$NOTARY_TEMP_DIR/submission.json"

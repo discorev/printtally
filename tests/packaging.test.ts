@@ -48,18 +48,18 @@ test('the desktop build embeds the compiled server and its UI where the app runs
   assert.deepEqual([config.mac.notarize, config.mac.hardenedRuntime], [false, true]);
   // The embedded Bun server needs the JIT entitlements under the hardened runtime.
   assert.match(readFileSync(new URL(`../apps/desktop/${config.mac.entitlementsInherit}`, import.meta.url), 'utf8'), /com\.apple\.security\.cs\.allow-jit/);
-  // The app on the left and Applications on the right, where assets/dmg/background.svg draws the arrow between them.
+  // The app on the left and Applications on the right, where apps/desktop/assets/dmg/background.svg draws the arrow between them.
   assert.deepEqual(config.dmg.contents, [{ x: 165, y: 190 }, { x: 495, y: 190, type: 'link', path: '/Applications' }]);
-  assert.match(readFileSync(new URL('../assets/dmg/background.svg', import.meta.url), 'utf8'), /viewBox="0 0 660 400"/);
-  // scripts/make-dmg.sh signs the .dmg; the release workflow uploads PrintTally-<version>.dmg.
+  assert.match(readFileSync(new URL('../apps/desktop/assets/dmg/background.svg', import.meta.url), 'utf8'), /viewBox="0 0 660 400"/);
+  // apps/desktop/scripts/make-dmg.sh signs the .dmg; the release workflow uploads PrintTally-<version>.dmg.
   assert.deepEqual([config.dmg.sign, config.dmg.artifactName], [false, 'PrintTally-${version}.${ext}']);
 });
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
-test('scripts/bundle.sh packages a released server when given one, and compiles it otherwise', () => {
+test('apps/desktop/scripts/bundle.sh packages a released server when given one, and compiles it otherwise', () => {
   // The release workflow sets PRINTTALLY_SERVER_ARCHIVE to a backend release's server (docs/release.md).
-  const script = read('../scripts/bundle.sh');
+  const script = read('../apps/desktop/scripts/bundle.sh');
   assert.match(script, /if \[ -n "\$SERVER_ARCHIVE" \]; then\n(?:.*\n)*?\s+tar -xzf "\$SERVER_ARCHIVE" -C apps\/server\/dist printtally-server client\nelse\n\s+bun run build:server\nfi\n/);
 });
 
@@ -73,12 +73,12 @@ test('CI runs the checks main requires on pull requests and pushes to main, with
   for (const command of ['bun run typecheck', 'bun test', 'bun run test:packed']) assert.ok(steps.some(step => step.run === command), command);
   for (const step of steps.filter(step => step.uses?.startsWith('oven-sh/setup-bun@'))) assert.equal(step.with?.['bun-version'], '1.3.9');
   const root = JSON.parse(read('../package.json'));
-  assert.equal(root.scripts['dist:desktop'], 'sh scripts/bundle.sh && sh scripts/make-dmg.sh');
+  assert.equal(root.scripts['dist:desktop'], 'sh apps/desktop/scripts/bundle.sh && sh apps/desktop/scripts/make-dmg.sh');
   assert.equal(root.scripts['release:desktop'], undefined);
 });
 
 bunTest.skipIf(!Bun.which('shellcheck'))('the build scripts pass shellcheck', () => {
-  const scripts = ['bundle.sh', 'make-dmg.sh', 'signing.sh'].map(name => fileURLToPath(new URL(`../scripts/${name}`, import.meta.url)));
+  const scripts = ['bundle.sh', 'make-dmg.sh', 'signing.sh'].map(name => fileURLToPath(new URL(`../apps/desktop/scripts/${name}`, import.meta.url)));
   const result = Bun.spawnSync(['shellcheck', '-x', ...scripts], { cwd: fileURLToPath(new URL('..', import.meta.url)) });
   assert.equal(result.exitCode, 0, result.stdout.toString() + result.stderr.toString());
 });

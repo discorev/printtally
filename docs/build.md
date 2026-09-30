@@ -26,7 +26,7 @@ Build a local desktop app with:
 bun run dist:desktop
 ```
 
-This runs two scripts. `scripts/bundle.sh` compiles the server, builds the app with electron-builder and signs it. It writes `apps/desktop/release/mac-arm64/Print Tally.app`. `scripts/make-dmg.sh` then makes `apps/desktop/release/PrintTally-<version>.dmg` from that app. The disk image shows the app on the left and an Applications link on the right, over `assets/dmg/background.svg`.
+This runs two scripts. `apps/desktop/scripts/bundle.sh` compiles the server, builds the app with electron-builder and signs it. It writes `apps/desktop/release/mac-arm64/Print Tally.app`. `apps/desktop/scripts/make-dmg.sh` then makes `apps/desktop/release/PrintTally-<version>.dmg` from that app. The disk image shows the app on the left and an Applications link on the right, over `apps/desktop/assets/dmg/background.svg`.
 
 Local and release builds use the same name, Print Tally, and the same bundle identifier, `com.olliespage.PrintTally`. Run a local build from `apps/desktop/release`. Don't drag it into Applications over the release app.
 

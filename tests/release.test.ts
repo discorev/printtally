@@ -79,12 +79,19 @@ test('a desktop change releases only the app', async () => {
   assert.equal(pullRequests[0]!.files['apps/server/package.json'], '0.4.2');
 });
 
+test('a desktop build script change releases only the app, since desktop-only build files live under apps/desktop', async () => {
+  const buildScript = { message: 'fix(desktop): tidy the bundle script', files: ['apps/desktop/scripts/bundle.sh'] };
+  const pullRequests = await releasePullRequests(released, [buildScript]);
+  assert.deepEqual(pullRequests.map(pullRequest => pullRequest.versions), [{ app: '1.3.1' }]);
+  assert.equal(pullRequests[0]!.files['apps/server/package.json'], '0.4.2');
+});
+
 test('docs, chores and commits outside the apps and packages release nothing', async () => {
   const commits = [
     { message: 'docs: explain releases', files: ['docs/release.md', 'apps/server/README.md'] },
     { message: 'chore(desktop): tidy', files: ['apps/desktop/src/main.ts'] },
     { message: 'fix(ci): pin bun', files: ['.github/workflows/ci.yml'] },
-    { message: 'fix: make-dmg.sh', files: ['scripts/make-dmg.sh', 'docs/build.md'] },
+    { message: 'fix: dev-seed.ts', files: ['scripts/dev-seed.ts', 'docs/build.md'] },
     { message: 'test: cover labels', files: ['tests/ledger.test.ts', 'packages/core/src/ledger.test.ts'] },
   ];
   assert.deepEqual(await releasePullRequests(released, commits), []);
@@ -165,8 +172,8 @@ test('an app release waits for its backend, then signs, notarizes and uploads th
   assert.equal(app!.if, "!cancelled() && needs.release-please.outputs.app_release == 'true' && (needs.backend-assets.result == 'success' || (needs.backend-assets.result == 'skipped' && needs.release-please.outputs.backend_release != 'true'))");
   assert.deepEqual([app!['runs-on'], app!.environment, app!.env!.APPLE_TEAM_ID], ['macos-26', 'release', 'D6AAJCLH87']);
   const build = script(app!);
-  for (const command of ['security create-keychain', 'PRINTTALLY_RELEASE=1 PRINTTALLY_VERSION="$VERSION" scripts/bundle.sh', 'codesign --verify --deep --strict',
-    'xcrun notarytool submit', 'xcrun stapler staple "$APP"', 'spctl --assess --type execute', 'PRINTTALLY_RELEASE=1 scripts/make-dmg.sh', 'xcrun stapler staple "$DMG"',
+  for (const command of ['security create-keychain', 'PRINTTALLY_RELEASE=1 PRINTTALLY_VERSION="$VERSION" apps/desktop/scripts/bundle.sh', 'codesign --verify --deep --strict',
+    'xcrun notarytool submit', 'xcrun stapler staple "$APP"', 'spctl --assess --type execute', 'PRINTTALLY_RELEASE=1 apps/desktop/scripts/make-dmg.sh', 'xcrun stapler staple "$DMG"',
     'spctl --assess --type open', 'gh release upload "$TAG" "apps/desktop/release/PrintTally-$VERSION.dmg" "apps/desktop/release/PrintTally-$VERSION.zip"'])
     assert.ok(build.includes(command), command);
   const cleanup = app!.steps.at(-1)!;

@@ -5,8 +5,8 @@
 # printtally-server-<version>-darwin-arm64.tar.gz), which is how CI ships a published backend.
 set -eu
 
-ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
-DESKTOP="$ROOT/apps/desktop"
+DESKTOP=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+ROOT=$(CDPATH='' cd -- "$DESKTOP/../.." && pwd)
 
 RELEASE=${PRINTTALLY_RELEASE:-0}
 VERSION=${PRINTTALLY_VERSION:-$(bun -p "require('$DESKTOP/package.json').version")}
@@ -21,8 +21,8 @@ if [ "$RELEASE" != "1" ]; then
     VERSION="$VERSION-local+$BUILD_LABEL.$BUILD_STAMP"
 fi
 
-# shellcheck source=scripts/signing.sh
-. "$ROOT/scripts/signing.sh"
+# shellcheck source=apps/desktop/scripts/signing.sh
+. "$DESKTOP/scripts/signing.sh"
 if [ "$IDENTITY" = "-" ]; then
     printf '%s\n' \
         'WARNING: Print Tally.app will be ad-hoc signed.' \

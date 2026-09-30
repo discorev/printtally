@@ -1,6 +1,6 @@
 # macOS arm64 .app and .dmg. Build from the repo root with `bun run dist:desktop` (docs/build.md):
-# scripts/bundle.sh compiles the server (apps/server/dist/printtally-server, with the UI in client/ beside
-# it), writes dist/build-info.json and builds the signed .app; scripts/make-dmg.sh then makes the .dmg.
+# apps/desktop/scripts/bundle.sh compiles the server (apps/server/dist/printtally-server, with the UI in client/
+# beside it), writes dist/build-info.json and builds the signed .app; apps/desktop/scripts/make-dmg.sh then makes the .dmg.
 appId: com.olliespage.PrintTally
 productName: Print Tally
 directories:
@@ -25,15 +25,15 @@ protocols:
 mac:
   target: [{ target: dmg, arch: arm64 }]
   category: public.app-category.productivity
-  # scripts/bundle.sh picks the identity, and turns on the hardened runtime and a secure timestamp for
+  # apps/desktop/scripts/bundle.sh picks the identity, and turns on the hardened runtime and a secure timestamp for
   # release builds (PRINTTALLY_RELEASE=1). The entitlements cover every executable, the server included.
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.inherit.plist
   # The release workflow notarizes with notarytool (.github/workflows/release.yml); local builds never are.
   notarize: false
-# Built by scripts/make-dmg.sh from the signed app, which signs the .dmg itself. It passes the background,
-# assets/dmg/background.svg rendered to background.png with background@2x.png beside it; the 660x400 window
+# Built by apps/desktop/scripts/make-dmg.sh from the signed app, which signs the .dmg itself. It passes the background,
+# apps/desktop/assets/dmg/background.svg rendered to background.png with background@2x.png beside it; the 660x400 window
 # takes its size from the image.
 dmg:
   title: ${productName}

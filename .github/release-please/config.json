@@ -9,7 +9,7 @@
       "release-type": "node",
       "changelog-path": "apps/server/CHANGELOG.md",
       "extra-files": [{ "type": "json", "path": "apps/server/package.json", "jsonpath": "$.version" }],
-      "exclude-paths": ["apps/desktop", "assets", "docs", "scripts", "tests", ".github"]
+      "exclude-paths": ["apps/desktop", "docs", "scripts", "tests", ".github"]
     },
     "apps/desktop": {
       "component": "app",
