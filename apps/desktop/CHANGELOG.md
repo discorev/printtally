@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1](https://github.com/discorev/printtally/compare/app-v0.1.0...app-v0.1.1) (2026-09-30)
+
+
+### Bug Fixes
+
+* **desktop:** ask for local network access to reach the printer ([11d68bf](https://github.com/discorev/printtally/commit/11d68bf312bcd9fee78b9df32b2941e8af67626f))
+* **desktop:** ask for local network access to reach the printer ([706fc77](https://github.com/discorev/printtally/commit/706fc775f7979ab27217f817694f75e8b9e4e942))
+
 ## 0.1.0 (2026-09-30)
 
 
