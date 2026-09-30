@@ -1,14 +1,14 @@
-import { eq, sql } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core';
 import {
-  allocationPreviewQuerySchema, cartridgePatchSchema, cartridgeSchema, inkPurchasePatchSchema, inkPurchaseSchema, inkPurchaseSetupSchema, jobDetailsSchema, paperPatchSchema,
+  allocationPreviewQuerySchema, cartridgePatchSchema, cartridgeSchema, inkPurchasePatchSchema, inkPurchaseSchema, inkPurchaseSetupSchema, inkSetPurchaseSchema, jobDetailsSchema, paperPatchSchema,
   paperPurchasePatchSchema, paperPurchaseSchema, paperPurchaseSetupSchema, paperSchema, settingsSchema, stockPatchSchema, stockSchema,
   writeOffPatchSchema, writeOffSchema,
-  type AllocationPreview, type CartridgeView, type CostTotals, type InkPurchaseSetupResult, type InkResponse, type JobDetails, type JobsResponse, type LedgerJob,
+  type AllocationPreview, type CartridgeView, type CostTotals, type InkPurchaseSetupResult, type InkResponse, type InkSetPurchaseResult, type JobDetails, type JobsResponse, type LedgerJob,
   type MediaTypesResponse, type PaperPurchaseSetupResult, type PapersResponse, type Settings, type StockFormat, type TotalsResponse,
   type WriteOffPreview, type WriteOffView,
 } from 'print-accounting-contracts';
-import { computeLedger, type LedgerInput, type LedgerResult } from 'print-accounting-core';
+import { computeLedger, splitByWeight, type LedgerInput, type LedgerResult } from 'print-accounting-core';
 import type { AccountingDatabase } from './index.ts';
 import { ink_products, ink_purchases, paper_media_types, paper_purchases, paper_stocks, papers, settings, stock_write_offs } from './schema.ts';
 
@@ -146,6 +146,22 @@ export class Ledger {
     return this.write(() => {
       const productId = cartridge ? this.insert(ink_products, cartridge) : ink_product_id!;
       return { ink_product_id: productId, id: this.insert(ink_purchases, { ...purchase, ink_product_id: productId }) };
+    });
+  }
+  /** A whole set: `sets` of each cartridge, with any new products, in one transaction. The price is split by
+   *  capacity so every ml costs the same, in exact micros that add up to what was paid. One cartridge per channel. */
+  purchaseInkSet(input: unknown): InkSetPurchaseResult {
+    const { ink_product_ids, new_cartridges, purchased_on, sets, price_micros } = inkSetPurchaseSchema.parse(input);
+    return this.write(() => {
+      const created = (new_cartridges?.channels ?? []).map(channel => this.insert(ink_products, { name: `${new_cartridges!.series} ${channel}`, channel, capacity_nl: new_cartridges!.capacity_nl }));
+      const ids = [...ink_product_ids, ...created];
+      const found = new Map(this.db.orm.select().from(ink_products).where(inArray(ink_products.id, ids)).all().map(row => [row.id, row]));
+      if (found.size !== ids.length) throw new LedgerError(400, 'unknown_reference');
+      const products = ids.map(id => found.get(id)!);
+      if (new Set(products.map(p => p.channel)).size !== products.length) throw new LedgerError(400, 'duplicate_channel');
+      const prices = splitByWeight(price_micros, products.map(p => p.capacity_nl));
+      return { purchases: products.map((p, index) => ({ ink_product_id: p.id, channel: p.channel, price_micros: prices[index],
+        id: this.insert(ink_purchases, { ink_product_id: p.id, purchased_on, cartridges: sets, price_micros: prices[index] }) })) };
     });
   }
 

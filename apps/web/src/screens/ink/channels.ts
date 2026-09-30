@@ -49,3 +49,14 @@ export const fittedPurchase = (channel: InkChannelView): InkPurchaseView | undef
   const product = channel.fitted ? channel.product : undefined;
   return product?.purchases.find(p => p.id === product.open_purchase_id);
 };
+/** A whole set is one cartridge for every channel in the list: the channel's product, or a new one where it has none. */
+export const inkSet = (channels: InkChannelView[]): { productIds: number[]; missing: string[] } =>
+  ({ productIds: channels.flatMap(c => c.product ? [c.product.id] : []), missing: channels.filter(c => !c.product).map(c => c.code) });
+/** The size most cartridge products are (the first in cartridge order on a tie), for a new one; undefined with none. */
+export function commonCapacity(channels: InkChannelView[]): number | undefined {
+  const tally = new Map<number, number>();
+  for (const { capacity_nl } of channels.flatMap(c => c.cartridges)) tally.set(capacity_nl, (tally.get(capacity_nl) ?? 0) + 1);
+  let best: [number, number] | undefined;
+  for (const entry of tally) if (!best || entry[1] > best[1]) best = entry;
+  return best?.[0];
+}

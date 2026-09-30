@@ -36,6 +36,8 @@ export async function ledgerRoute(ledger: Ledger, method: string | undefined, ur
   // A purchase created with what's new for it (stock item, paper, cartridge) in one transaction.
   if (method === 'POST' && path === '/api/v1/paper-purchases/setup') return [201, ledger.setupPaperPurchase(await body())];
   if (method === 'POST' && path === '/api/v1/ink-purchases/setup') return [201, ledger.setupInkPurchase(await body())];
+  // A whole set: a purchase per cartridge, the price split by capacity, and any missing products, in one transaction.
+  if (method === 'POST' && path === '/api/v1/ink-purchases/set') return [201, ledger.purchaseInkSet(await body())];
   if (method === 'GET' && path === '/api/v1/write-offs/preview') {
     const param = (name: string) => { const value = url.searchParams.get(name); return value === null ? undefined : Number(value); };
     return [200, ledger.writeOffPreview({ paper_stock_id: param('paper_stock_id'), ink_product_id: param('ink_product_id') }, url.searchParams.get('written_off_on') ?? '')];

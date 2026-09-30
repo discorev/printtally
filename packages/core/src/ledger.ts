@@ -123,3 +123,15 @@ export function computeLedger(input: LedgerInput): LedgerResult {
   for (const lot of [...paperLots.values(), ...inkLots.values()].flat()) result.lots.set(lot.key, { quantity: lot.quantity, remaining: lot.left });
   return result;
 }
+
+/** `total` split in proportion to `weights`, in whole units and exactly: each part's floor share, then the units
+ *  left over one at a time by largest fractional part (earlier parts first on a tie), so the parts add up to `total`. */
+export function splitByWeight(total: number, weights: number[]): number[] {
+  const sum = weights.reduce((a, b) => a + BigInt(b), 0n), whole = BigInt(total);
+  if (sum <= 0n || weights.some(w => w < 0)) throw new Error('Weights must be non-negative with a positive sum');
+  const shares = weights.map(w => whole * BigInt(w)), parts = shares.map(share => share / sum);
+  const order = shares.map((share, index) => ({ index, fraction: share % sum })).sort((a, b) => a.fraction === b.fraction ? a.index - b.index : a.fraction > b.fraction ? -1 : 1);
+  let left = whole - parts.reduce((a, b) => a + b, 0n);
+  for (const { index } of order) { if (left === 0n) break; parts[index]++; left--; }
+  return parts.map(Number);
+}

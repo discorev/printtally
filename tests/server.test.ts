@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { AccountingDatabase } from 'print-accounting-database';
 import { AccountingService, CollectionBusyError } from '../apps/server/src/service.ts';
 import { apiFixture } from './api-fixtures.ts';
-import type { AllocationPreview, InkResponse, JobsResponse, LedgerJob, MediaTypesResponse, PapersResponse, TotalsResponse } from 'print-accounting-contracts';
+import type { AllocationPreview, InkResponse, InkSetPurchaseResult, JobsResponse, LedgerJob, MediaTypesResponse, PapersResponse, TotalsResponse } from 'print-accounting-contracts';
 import { batch, MEDIA, sample } from './fixtures.ts';
 const options = { host: '127.0.0.1', cacheDirectory: '/unused' };
 function fixture(t: TestContext) {
@@ -131,6 +131,20 @@ test('a purchase is set up with its new stock, paper or cartridge in one go or n
   assert.deepEqual([totals.jobs, totals.ink_micros, totals.waste_micros], [1, overall.ink_micros, 0]);
   const papers = ((await call('GET', '/papers')).body as unknown as PapersResponse).papers;
   assert.deepEqual([papers[0].totals.jobs, papers[0].totals.unknown_paper_jobs], [1, 0]);
+});
+test('API adds a whole ink set in one request: the price split by capacity, missing products created, or nothing on failure', async t => {
+  const f = await apiFixture(t);
+  const call = async (body: unknown) => { const reply = await f.request('/api/v1/ink-purchases/set', { method: 'POST', body }); return { status: reply.status, body: reply.json() }; };
+  const cyan = (await f.request('/api/v1/ink-cartridges', { method: 'POST', body: { name: 'PFI-1100 C', channel: 'C', capacity_nl: 160_000_000 } })).json<{ id: number }>().id;
+  const body = { ink_product_ids: [cyan], new_cartridges: { series: 'PFI-1100', capacity_nl: 80_000_000, channels: ['PM', 'R'] }, purchased_on: '2026-03-01', sets: 1, price_micros: 100_000_000 };
+  assert.deepEqual((await call({ ...body, ink_product_ids: [cyan, 999] })), { status: 400, body: { error: 'unknown_reference' } });
+  assert.equal((await call({ ...body, sets: 0 })).status, 400);
+  assert.equal(f.db.all('SELECT * FROM ink_purchases').length + f.db.all('SELECT * FROM ink_products').length, 1, 'nothing was written');
+  const saved = await call(body);
+  assert.equal(saved.status, 201);
+  assert.deepEqual((saved.body as unknown as InkSetPurchaseResult).purchases.map(p => [p.channel, p.price_micros]), [['C', 50_000_000], ['PM', 25_000_000], ['R', 25_000_000]]);
+  const ink = (await f.request('/api/v1/ink')).json<InkResponse>();
+  assert.deepEqual(ink.cartridges.map(c => [c.name, c.purchases.map(p => p.price_micros)]), [['PFI-1100 C', [50_000_000]], ['PFI-1100 PM', [25_000_000]], ['PFI-1100 R', [25_000_000]]]);
 });
 test('an allocation preview costs a job as corrected to a paper or stock item without saving it, and says when stock runs short', async t => {
   const f = await apiFixture(t);

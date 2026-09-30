@@ -1,9 +1,9 @@
 import {
   annotationSchema, cartridgePatchSchema, cartridgeSchema, confirmPrinterSchema, enrolmentRequestSchema, inkPurchasePatchSchema,
-  inkPurchaseSchema, inkPurchaseSetupSchema, paperPatchSchema, paperPurchaseSetupSchema, paperPurchasePatchSchema, paperPurchaseSchema, paperSchema, printerPasswordSchema,
+  inkPurchaseSchema, inkPurchaseSetupSchema, inkSetPurchaseSchema, paperPatchSchema, paperPurchaseSetupSchema, paperPurchasePatchSchema, paperPurchaseSchema, paperSchema, printerPasswordSchema,
   settingsSchema, stockPatchSchema, stockSchema, writeOffPatchSchema, writeOffSchema,
   type AllocationPreview, type AllocationPreviewQuery, type Annotation, type CartridgeInput, type DiscoveredPrinter, type EnrolmentRequest, type HealthResponse, type ImportResult, type ImportsResponse,
-  type InkPurchaseInput, type InkPurchaseSetup, type InkPurchaseSetupResult, type InkResponse, type JobResponse, type JobsResponse, type KnownPrinter, type KnownPrinterListing,
+  type InkPurchaseInput, type InkPurchaseSetup, type InkPurchaseSetupResult, type InkResponse, type InkSetPurchase, type InkSetPurchaseResult, type JobResponse, type JobsResponse, type KnownPrinter, type KnownPrinterListing,
   type MediaTypesResponse, type PaperInput, type PaperPurchaseInput, type PaperPurchaseSetup, type PaperPurchaseSetupResult, type PapersResponse, type PrinterTrustPreview, type Settings,
   type StockInput, type TotalsResponse, type WriteOffInput, type WriteOffPreview,
 } from 'print-accounting-contracts';
@@ -54,6 +54,9 @@ export const api = {
   /** A purchase with its new cartridge product, created together or not at all. */
   setupInkPurchase: (input: InkPurchaseSetup): Promise<InkPurchaseSetupResult> =>
     request('POST', '/ink-purchases/setup', { body: input, schema: inkPurchaseSetupSchema }),
+  /** A whole set: a purchase per cartridge (the server splits the price) and any missing products, together or not at all. */
+  purchaseInkSet: (input: InkSetPurchase): Promise<InkSetPurchaseResult> =>
+    request('POST', '/ink-purchases/set', { body: input, schema: inkSetPurchaseSchema }),
   writeOff: collection<WriteOffInput>('write-offs', writeOffSchema, writeOffPatchSchema),
   /** What writing off all that's left of a stock item or cartridge would take on a day. */
   writeOffPreview: (target: { paper_stock_id: number } | { ink_product_id: number }, day: string): Promise<WriteOffPreview> =>

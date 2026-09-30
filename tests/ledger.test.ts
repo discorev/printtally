@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AccountingDatabase, Ledger, LedgerError } from 'print-accounting-database';
+import { splitByWeight } from 'print-accounting-core';
 import { batch, MEDIA, OTHER, type JobSpec } from './fixtures.ts';
 const GBP = 1_000_000;
 function fixture(t: TestContext, specs: JobSpec[]) {
@@ -196,4 +197,57 @@ test('using more than was bought draws the newest purchase below zero at its own
   buy(a4, '2026-01-01', 1, 1); buy(a4, '2026-01-02', 2, 4);
   assert.deepEqual(job(1).paper.from.map(use => [use.quantity, use.cost_micros]), [[1, GBP], [3, 6 * GBP]]);
   assert.equal(ledger.papers().papers[0].stock[0].remaining, -1);
+});
+
+test('a set price splits by capacity in exact micros: floor shares, then the remainder by largest fraction', () => {
+  assert.deepEqual(splitByWeight(120 * GBP, [80, 80, 80]), [40 * GBP, 40 * GBP, 40 * GBP], 'equal sizes split evenly');
+  assert.deepEqual(splitByWeight(120 * GBP, [80, 160]), [40 * GBP, 80 * GBP], 'every ml costs the same');
+  assert.deepEqual(splitByWeight(100, [1, 1, 1]), [34, 33, 33], 'ties go to the earlier part');
+  assert.deepEqual(splitByWeight(10, [3, 5, 7]), [2, 3, 5], 'the remainder goes to the largest fraction (4.67)');
+  assert.deepEqual(splitByWeight(0, [80, 130]), [0, 0]);
+  for (const [total, weights] of [[Number.MAX_SAFE_INTEGER, [80_000_000, 80_000_000, 130_000_000]], [999_999_999, Array(12).fill(80_000_000)], [7, [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]]] as [number, number[]][]) {
+    const parts = splitByWeight(total, weights);
+    assert.equal(parts.reduce((a, b) => a + b, 0), total, 'the parts add up to the total exactly');
+    assert.ok(parts.every(part => Number.isSafeInteger(part) && part >= 0));
+  }
+});
+
+test('a whole ink set is a purchase per cartridge at its share of the price, with missing products created alongside', t => {
+  const { ledger, cyan, db } = fixture(t, []);
+  const big = ledger.createCartridge({ name: 'PFI-1100 PBK', channel: 'PBK', capacity_nl: 160_000_000 });
+  const set = ledger.purchaseInkSet({ ink_product_ids: [cyan, big], new_cartridges: { series: 'PFI-1100', capacity_nl: 80_000_000, channels: ['PM', 'Y'] },
+    purchased_on: '2026-03-01', sets: 2, price_micros: 100 * GBP + 1 });
+  assert.deepEqual(set.purchases.map(p => [p.channel, p.price_micros]), [['C', 20 * GBP], ['PBK', 40 * GBP + 1], ['PM', 20 * GBP], ['Y', 20 * GBP]],
+    'by capacity (80 + 160 + 80 + 80 ml), the odd micro to the largest fraction');
+  assert.equal(set.purchases.reduce((sum, p) => sum + p.price_micros, 0), 100 * GBP + 1);
+  const cartridges = ledger.ink().cartridges;
+  assert.deepEqual(cartridges.filter(c => ['PM', 'Y'].includes(c.channel)).map(c => [c.name, c.capacity_nl]), [['PFI-1100 PM', 80_000_000], ['PFI-1100 Y', 80_000_000]]);
+  for (const p of set.purchases) {
+    const cartridge = cartridges.find(c => c.id === p.ink_product_id)!, bought = cartridge.purchases.find(b => b.id === p.id)!;
+    assert.deepEqual([bought.purchased_on, bought.cartridges, bought.price_micros], ['2026-03-01', 2, p.price_micros], 'several sets: each purchase is that many cartridges');
+  }
+  assert.equal(db.all('SELECT * FROM ink_purchases').length, 1 + 4);
+});
+
+test('a whole ink set is all or nothing, and validated', t => {
+  const { ledger, cyan, db } = fixture(t, []);
+  const counts = () => [db.all('SELECT * FROM ink_products').length, db.all('SELECT * FROM ink_purchases').length];
+  const before = counts(), buy = (input: Record<string, unknown>) => ledger.purchaseInkSet({ purchased_on: '2026-03-01', sets: 1, price_micros: 60 * GBP, ink_product_ids: [cyan], ...input });
+  const code = (action: () => unknown) => { try { action(); } catch (error) { return error instanceof LedgerError ? error.message : 'invalid'; } return 'ok'; };
+  const newOnes = { series: 'PFI-1100', capacity_nl: 80_000_000, channels: ['PM', 'R'] };
+  assert.equal(code(() => buy({ ink_product_ids: [cyan, 999], new_cartridges: newOnes })), 'unknown_reference', 'fails after the new products are inserted');
+  assert.equal(code(() => buy({ new_cartridges: { ...newOnes, channels: ['PM', 'C'] } })), 'duplicate_channel', 'one cartridge per channel');
+  // A failure part-way through (the third purchase) leaves neither the new products nor the purchases before it.
+  db.run("CREATE TRIGGER forced_failure BEFORE INSERT ON ink_purchases WHEN (SELECT count(*) FROM ink_purchases) >= 3 BEGIN SELECT RAISE(ABORT, 'forced'); END");
+  assert.notEqual(code(() => buy({ new_cartridges: newOnes })), 'ok');
+  db.run('DROP TRIGGER forced_failure');
+  assert.deepEqual(counts(), before, 'nothing was written');
+  for (const input of [{ ink_product_ids: [] }, { ink_product_ids: [cyan, cyan] }, { sets: 0 }, { price_micros: -1 }, { price_micros: 1.5 }, { purchased_on: 'soon' },
+    { new_cartridges: { ...newOnes, channels: [] } }, { new_cartridges: { ...newOnes, channels: ['PM', 'PM'] } }, { new_cartridges: { ...newOnes, channels: ['P M'] } },
+    { new_cartridges: { ...newOnes, series: ' ' } }, { new_cartridges: { ...newOnes, capacity_nl: 0 } }, { extra: 1 }])
+    assert.equal(code(() => buy(input)), 'invalid', JSON.stringify(input));
+  assert.equal(code(() => ledger.purchaseInkSet({ purchased_on: '2026-03-01', sets: 1, ink_product_ids: [cyan] })), 'invalid', 'a price is required');
+  assert.deepEqual(counts(), before);
+  assert.equal(code(() => buy({ new_cartridges: newOnes })), 'ok');
+  assert.deepEqual(counts(), [before[0] + 2, before[1] + 3]);
 });
