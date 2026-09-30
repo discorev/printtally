@@ -17,7 +17,7 @@ export function byChannelOrder<T>(items: T[], code: (item: T) => string): T[] {
   const rank = (c: string) => { const i = INK_CHANNELS.findIndex(channel => channel.code === c); return i < 0 ? INK_CHANNELS.length : i; };
   return [...items].sort((a, b) => rank(code(a)) - rank(code(b)) || code(a).localeCompare(code(b)));
 }
-/** How strongly a patch is tinted for the ink a print used (0 = none, 1 = full colour), as in the mockup's wedge. */
+/** How strongly a patch is tinted for the ink a print used (0 = none, 1 = full colour), as in the ink wedge. */
 export const inkTint = (nl: number | null): number => {
   const mlUsed = (nl ?? 0) / 1e6;
   return mlUsed <= 0 ? 0 : Math.min(1, 0.14 + 0.86 * Math.min(1, mlUsed / 0.28));

@@ -1,7 +1,7 @@
 import type { KeyboardEvent, ReactNode } from 'react';
 import { cx } from '../lib/cx.ts';
 
-/** A boxed radio list (the mockup's .picker): paper corrections, choosing the stock a print came from.
+/** A boxed radio list: paper corrections, choosing the stock a print came from.
  *  Up/Down move between options. */
 export function RadioList({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {

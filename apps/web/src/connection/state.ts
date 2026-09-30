@@ -1,6 +1,6 @@
 import type { HealthResponse, ServerState } from 'print-accounting-contracts';
 
-// The client side of the plan's state diagram (decision 6): connected, or the server is lost (banner,
+// The client's connection state: connected, or the server is lost (banner,
 // loaded data read-only, edits blocked, retry with backoff), or this device's session was revoked (401).
 export type ConnectionStatus = 'connecting' | 'connected' | 'lost' | 'unauthorized';
 export interface ConnectionState {

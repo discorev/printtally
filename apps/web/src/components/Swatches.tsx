@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 import { cx } from '../lib/cx.ts';
 import { INK_CHANNELS, inkChannel, inkTint, withAlpha } from '../lib/inks.ts';
 
-// A neutral paper tone for every paper: the API doesn't record paper tones (yet), and the mockup's are all
+// A neutral paper tone for every paper: the API doesn't record paper tones (yet), and real papers are all
 // within a few shades of this.
 export const PAPER_TONE = '#F4F3EE';
 

@@ -1,7 +1,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-// Same fixed default as `printtally serve` (plan decision 13): a stable address for
+// Same fixed default as `printtally serve`: a stable address for
 // paired devices, and the second client on a machine finds the first there.
 export const DEFAULT_PORT = 4318;
 // A local (non-release) packaged build's port, so it never borrows or opens the release server.

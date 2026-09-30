@@ -13,7 +13,7 @@ test('typed prices parse to micros, refusing anything that is not a positive amo
     .toEqual([37_990_000, 37_990_000, 1_200_000_000, 500_000, null, null, null, null]);
 });
 
-test('quantities and dates read as in the mockup', () => {
+test('quantities and dates format to the expected display strings', () => {
   expect([ml(940_000), ml(null), metres(10_500_000), stockQuantity(31, 'sheet'), stockQuantity(10_460_000, 'roll'), plural(1, 'print'), plural(1398, 'job')])
     .toEqual(['0.94 ml', '—', '10.5 m', '31 sheets', '10.5 m', '1 print', '1,398 jobs']);
   expect([dateShort('2026-09-12'), dateDay('2026-09-12'), dateLong('2026-09-12'), monthLong('2026-09-12')])

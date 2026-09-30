@@ -5,7 +5,7 @@ import { desktop, useDesktopConnection } from '../../desktop.ts';
 import { Button, Docket, DocketHead, DocketSection, Field, FieldPair, Mono, RowActions, Sub, TextInput } from '../../components/index.ts';
 import { cx } from '../../lib/cx.ts';
 
-// Connect (plan decisions 3, 4 and 6). The desktop app can switch to Print Tally on another computer with a
+// The desktop app can switch to Print Tally on another computer with a
 // pairing link, or an address and pairing code, through its bridge. A browser can't switch computer: one whose
 // session isn't valid (401) is told how to pair with `printtally pair` on the host.
 export function Connect() {
@@ -79,7 +79,7 @@ function DesktopConnect() {
   );
 }
 
-/** One way to connect: a radio header that opens its fields (the mockup's .opt2). */
+/** One way to connect: a radio header that opens its fields. */
 function Option({ on, onSelect, title, detail, children }: { on: boolean; onSelect: () => void; title: string; detail: ReactNode; children: ReactNode }) {
   return (
     <div className={cx('rounded-[3px] border', on ? 'border-green' : 'border-rule-2')}>

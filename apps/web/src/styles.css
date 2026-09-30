@@ -9,7 +9,7 @@
 @import "@fontsource/public-sans/latin-600.css";
 @import "@fontsource/public-sans/latin-400-italic.css";
 
-/* The docket direction (.plans/designs/docket.html): the cutting mat is the bench and every screen is a
+/* The Docket direction: the cutting mat is the bench and every screen is a
    paper docket lying on it. Chroma comes from the inks and paper tones; the only accent is the mat's green.
    Colours follow the system appearance. Use them as Tailwind colours: bg-paper, text-muted, border-rule… */
 @theme {
@@ -53,7 +53,7 @@
   }
 }
 
-/* phone: the single-column layout with a bottom nav, where a docket is its own page (the mockup's 390 frame).
+/* phone: the single-column layout with a bottom nav, where a docket is its own page (a 390px-wide frame).
    narrow: windows from 900 to 1100px, where the docket slims to 380px. desktop: inside Electron. */
 @custom-variant phone (@media (width < 900px));
 @custom-variant narrow (@media (900px <= width < 1100px));

@@ -12,7 +12,7 @@ import { cx } from '../../lib/cx.ts';
 import { problem, problemCode } from './problem.ts';
 import { PasswordForm } from './PasswordForm.tsx';
 
-// Printer setup (plan decision 10): find the printer or type its address, compare its root certificate's
+// Printer setup: find the printer or type its address, compare its root certificate's
 // fingerprint with the one the printer shows, confirm, store the password, then the first collection lands on Jobs.
 // Opened with ?host=… (from Collect or Settings) it starts by checking that printer again, e.g. after its
 // certificate changed.

@@ -12,11 +12,11 @@ const variants: Record<ButtonVariant, string> = {
   danger: 'border-transparent bg-transparent text-red hover:bg-hover',
 };
 const disabled = 'disabled:border-rule disabled:bg-transparent disabled:text-faint aria-disabled:border-rule aria-disabled:bg-transparent aria-disabled:text-faint aria-disabled:pointer-events-none';
-/** The mockup's .btn classes, for anything that should look like a button (e.g. a router Link). */
+/** The button styles, for anything that should look like a button (e.g. a router Link). */
 export const buttonClass = (variant: ButtonVariant = 'default', size: 'md' | 'sm' = 'md'): string => cx(base, variants[variant], disabled,
   size === 'sm' ? 'px-2 py-[3px] text-[12px] leading-[18px]' : variant === 'text' || variant === 'danger' ? 'px-1.5 py-[5px] text-[13px] leading-[18px]' : 'px-3 py-[5px] text-[13px] leading-[18px]');
 
-/** `edit`: this button changes the ledger, so it's disabled while the server is lost (plan decision 6). */
+/** `edit`: this button changes the ledger, so it's disabled while the server is lost. */
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> { variant?: ButtonVariant; size?: 'md' | 'sm'; edit?: boolean }
 /** Primary (green), default (outlined), text (green, borderless) or danger; size sm for docket actions. */
 export function Button({ variant = 'default', size = 'md', edit, disabled, className, type = 'button', ...props }: ButtonProps) {
@@ -29,7 +29,7 @@ export function ButtonLink({ variant = 'default', size = 'md', className, disabl
   return <Link className={cx(buttonClass(variant, size), className)} aria-disabled={disabled || undefined} tabIndex={disabled ? -1 : undefined} {...props} />;
 }
 
-/** An underlined inline text action (the mockup's .link), e.g. "oldest price", "Show", "Connect to it". */
+/** An underlined inline text action, e.g. "oldest price", "Show", "Connect to it". */
 export function LinkButton({ className, type = 'button', ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {
   return <button type={type} className={cx('cursor-pointer border-0 bg-transparent p-0 text-green underline underline-offset-2 disabled:text-faint', className)} {...props} />;
 }

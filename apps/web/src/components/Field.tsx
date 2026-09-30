@@ -4,7 +4,7 @@ import { cx } from '../lib/cx.ts';
 import { currencySymbol } from '../lib/format.ts';
 import { useCurrency } from '../api/queries.ts';
 
-// Form controls are native elements styled by the base stylesheet (styles.css), as in the mockup.
+// Form controls are native elements styled by the base stylesheet (styles.css).
 
 /** A labelled field: slab small-caps label, the control, then an optional hint (muted) and error (amber).
  *  `children` is a render function given the id to put on the control, or plain nodes (then pass `htmlFor`). */
@@ -27,7 +27,7 @@ export function Field({ label, optional, hint, error, children, className, htmlF
 /** Two fields side by side; one column on phones. */
 export const FieldPair = ({ children, className }: { children: ReactNode; className?: string }) =>
   <div className={cx('grid grid-cols-2 gap-3 phone:grid-cols-1', className)}>{children}</div>;
-/** A column of fields with the mockup's 12px rhythm. */
+/** A column of fields with a 12px rhythm. */
 export const FieldStack = ({ children, className }: { children: ReactNode; className?: string }) =>
   <div className={cx('flex flex-col gap-3', className)}>{children}</div>;
 

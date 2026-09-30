@@ -3,8 +3,8 @@ import { Link, type LinkProps } from '@tanstack/react-router';
 import { cx } from '../lib/cx.ts';
 
 // The pad: the main sheet of paper on the mat, holding a screen's list. It's a size container, so rows can
-// drop columns as it narrows: use Tailwind's @max-[840px]: and @max-[640px]: variants inside it (the mockup's
-// "wedge first, then ml, then stock"), and phone: for the phone layout.
+// drop columns as it narrows: use Tailwind's @max-[840px]: and @max-[640px]: variants inside it
+// ("wedge first, then ml, then stock"), and phone: for the phone layout.
 
 export function Pad({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
   return (

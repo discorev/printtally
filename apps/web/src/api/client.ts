@@ -20,7 +20,7 @@ const NOT_SAVED: Record<Exclude<ApiErrorKind, 'rejected' | 'invalid'>, string> =
 export type RequestOutcome = 'ok' | 'unreachable' | 'unauthorized';
 let reportOutcome: (outcome: RequestOutcome) => void = () => undefined;
 export const onRequestOutcome = (listener: (outcome: RequestOutcome) => void): void => { reportOutcome = listener; };
-// Edits check this before sending, so nothing is sent or queued while the server is lost (plan decision 6).
+// Edits check this before sending, so nothing is sent or queued while the server is lost.
 let editable: () => boolean = () => true;
 export const setEditGate = (gate: () => boolean): void => { editable = gate; };
 

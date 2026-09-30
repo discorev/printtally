@@ -47,7 +47,7 @@ function Card({ label, lockable, children }: { label: ReactNode; lockable?: bool
   );
 }
 
-/** The costing method: only the chosen method's figures are shown (plan decision 1), so the total sits on its card.
+/** The costing method: only the chosen method's figures are shown, so the total sits on its card.
  *  The card shows the method the server has; a choice is marked "Saving…" until the server confirms it. */
 function CostingCard() {
   const settings = useSettings().data, totals = useTotals().data?.overall, canEdit = useCanEdit(), client = useQueryClient();
@@ -135,7 +135,7 @@ function ChangePassword({ printer, onDone }: { printer: KnownPrinter; onDone: (s
     actions={() => <Button variant="text" size="sm" onClick={() => onDone()}>Cancel</Button>} />;
 }
 
-/** Which computer this client uses. Only the desktop app can switch (plan decision 4); a browser uses the
+/** Which computer this client uses. Only the desktop app can switch; a browser uses the
  *  computer whose address it opened. Each part shows its own version: the desktop app's, and the server's. */
 function ComputerCard() {
   const name = useServerName(), connection = useDesktopConnection();

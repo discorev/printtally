@@ -41,7 +41,7 @@ export function StockLine({ stock, className }: { stock: Pick<StockView, 'name' 
   );
 }
 
-/** A two-column ruled line (the mockup's .item): name (with a muted note after it) and a sub line on the
+/** A two-column ruled line: name (with a muted note after it) and a sub line on the
  *  left, a figure (with a small caption under it) or an action on the right. "In stock", "In the printer", "Prints as". */
 export function ItemLine({ name, note, sub, value, caption, className }: { name: ReactNode; note?: ReactNode; sub?: ReactNode; value?: ReactNode; caption?: ReactNode; className?: string }) {
   return (
@@ -53,7 +53,7 @@ export function ItemLine({ name, note, sub, value, caption, className }: { name:
   );
 }
 
-/** A costing line (the mockup's .cl): what, a sub line, and the amount. `total` draws the double rule. */
+/** A costing line: what, a sub line, and the amount. `total` draws the double rule. */
 export function SummaryLine({ what, sub, amount, total, muted, className }: { what: ReactNode; sub?: ReactNode; amount: ReactNode; total?: boolean; muted?: boolean; className?: string }) {
   return (
     <div className={cx('grid grid-cols-[1fr_84px] items-baseline gap-x-3 gap-y-0.5 py-1.5 [&+&]:border-t [&+&]:border-rule',

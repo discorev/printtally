@@ -1,4 +1,4 @@
-// A throwaway data folder with a ledger for UI work, modelled on the docket mockup's data:
+// A throwaway data folder with a ledger for UI work, seeded with realistic sample data:
 //   bun run seed:dev [snapshot.json]   (default tests/fixtures/reference.json; e.g. a copy of jobs.json)
 // The printer sits at a TEST-NET address (192.0.2.10), so collection fails fast and never reaches a
 // real printer, and no password or Keychain item is created.

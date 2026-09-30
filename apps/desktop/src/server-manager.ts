@@ -3,8 +3,8 @@ import { resolve } from 'node:path';
 import { DEFAULT_PORT, defaultDataDirectory } from './paths.ts';
 import type { Remote } from './config.ts';
 
-// ready: Print Tally answers. unreachable: a remote host doesn't (left for "Switch computer",
-// plan decision 6). port_in_use: another app answers on the local port. failed: the bundled
+// ready: Print Tally answers. unreachable: a remote host doesn't (left for "Switch computer").
+// port_in_use: another app answers on the local port. failed: the bundled
 // server didn't start, after a few tries.
 export type ConnectionStatus = 'ready' | 'unreachable' | 'port_in_use' | 'failed';
 export interface Connection { host: string; port: number; owns: boolean; remote: boolean; status: ConnectionStatus }
@@ -18,7 +18,7 @@ export interface ServerManagerOptions {
   dataDirectory?: string; port?: number;
   // Added to the bundled server's environment (a local build keeps printer passwords in memory).
   serverEnv?: Record<string, string>;
-  // The packaging seam (plan step 06): dev runs the server from source with Bun, a
+  // The packaging seam: dev runs the server from source with Bun, a
   // packaged build runs a compiled binary shipped under process.resourcesPath.
   packaged?: boolean; resourcesPath?: string; repoRoot?: string;
   spawnFn?: SpawnFn; fetchFn?: typeof fetch;
@@ -112,7 +112,7 @@ export class ServerManager {
   }
 
   // Use Print Tally already answering on this Mac, else start the bundled server on the same port
-  // and data folder (plan decision 5). Never another port, and never over another app.
+  // and data folder. Never another port, and never over another app.
   private async useLocal(state: Probe): Promise<void> {
     // Our own server answering doesn't reset the count: it's judged when it exits.
     if (state === 'printtally') { this.status = 'ready'; if (!this.child) this.failedStarts = 0; return; }
@@ -122,7 +122,7 @@ export class ServerManager {
     this.status = await this.spawnAndWait() ? 'ready' : 'failed';
   }
 
-  // A saved remote host is kept even when it doesn't answer; otherwise this Mac (plan decisions 3, 5, 6).
+  // A saved remote host is kept even when it doesn't answer; otherwise this Mac.
   connect(remote?: Remote): Promise<Connection> {
     return this.serial(async () => {
       if (remote) {
@@ -136,8 +136,8 @@ export class ServerManager {
     });
   }
 
-  // Polled by the app: restarts a server it launched, or takes over a borrowed one that went away
-  // (plan decision 6). Each poll is one try, so a server that won't start isn't respawned in a loop.
+  // Polled by the app: restarts a server it launched, or takes over a borrowed one that went away.
+  // Each poll is one try, so a server that won't start isn't respawned in a loop.
   async ensureAlive(): Promise<void> {
     if (this.busy) return;
     await this.serial(async () => {

@@ -8,8 +8,8 @@ import { readBuildInfo, runtimeSettings } from './build.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const devWebUrl = process.env.PRINTTALLY_WEB_URL ?? 'http://127.0.0.1:5173';
-// Release, local or dev (src/build.ts): a release build always uses the fixed port and default data folder
-// (plan decisions 5 and 13), a local build its own, and dev honours PRINTTALLY_PORT and PRINTTALLY_DATA_DIR.
+// Release, local or dev (src/build.ts): a release build always uses the fixed port and default data folder,
+// a local build its own, and dev honours PRINTTALLY_PORT and PRINTTALLY_DATA_DIR.
 const build = readBuildInfo(join(__dirname, 'build-info.json'), app.isPackaged, app.getVersion());
 const packaged = build.kind !== 'dev';
 const settings = runtimeSettings(build.kind, process.env, homedir());
@@ -55,8 +55,7 @@ async function show(): Promise<void> {
 }
 
 // A pairing link (opened through printtally:// or pasted in), another computer's address, or
-// none for this Mac (plan decisions 3, 4 and 6). The window redeems a pairing code itself, so
-// its session keeps the cookie.
+// none for this Mac. The window redeems a pairing code itself, so its session keeps the cookie.
 async function useComputer(target: string | undefined): Promise<void> {
   const parsed = target ? parseTarget(target) : undefined;
   if (target && !parsed) throw new Error('not_a_print_tally_address');
@@ -79,7 +78,7 @@ async function createWindow(): Promise<void> {
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event, url) => { if (new URL(url).origin !== new URL(targetUrl()).origin) event.preventDefault(); });
   window.on('close', event => {
-    // Keep the app in the Dock; only quitting stops a server it owns (plan decision 7).
+    // Keep the app in the Dock; only quitting stops a server it owns, so collection continues.
     if (quitting) return;
     event.preventDefault();
     window?.hide();
@@ -108,7 +107,7 @@ app.whenReady().then(async () => {
       const { status } = manager.connection;
       broadcastConnection();
       // Recover from the problem page, or leave the UI when this Mac's server can't come back. A lost
-      // remote keeps the UI, which shows its own banner (plan decision 6).
+      // remote keeps the UI, which shows its own banner.
       if (showingProblem ? status === 'ready' : status === 'port_in_use' || status === 'failed') return show();
     });
   }, 5000);

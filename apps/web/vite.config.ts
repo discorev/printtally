@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import { apiProxy } from './dev-proxy.ts';
 
-// The server the UI talks to. Same default port as `printtally serve` (plan decision 13);
+// The server the UI talks to. Same default port as `printtally serve`;
 // override for a remote host or a server started on another port.
 const apiTarget = process.env.PRINTTALLY_API ?? 'http://127.0.0.1:4318';
 

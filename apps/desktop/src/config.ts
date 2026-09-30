@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DEFAULT_PORT } from './paths.ts';
 
-// The paired remote host remembered between launches (plan decisions 3 and 6); none means this Mac.
+// The paired remote host remembered between launches; none means this Mac.
 export interface Remote { host: string; port: number }
 
 export function loadRemote(userDataDirectory: string): Remote | undefined {
