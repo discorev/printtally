@@ -46,6 +46,8 @@ Both builds sign with the first Developer ID Application identity in your keycha
 
 Both builds give Electron's helpers and the embedded Bun server the JIT entitlements in `apps/desktop/build/`. Without `allow-jit`, the server runs about 9 times slower under the hardened runtime.
 
+Before signing, an electron-builder `afterPack` hook (`apps/desktop/scripts/after-pack.mjs`) gives the main executable, each Electron helper and the embedded server their own Mach-O UUID (`apps/desktop/scripts/macho-uuid.ts`). macOS Local Network privacy tracks an executable partly by that UUID ([TN3179](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)). Without the hook, the executables would share their UUIDs with every Electron app of the same version and with the Bun runtime, and macOS can then fail to ask for access. Each UUID is derived from the executable's path in the app, the version and the commit, or the label for a local build, so rebuilding a commit gives the same UUIDs.
+
 ### Local builds never touch your real ledger
 
 A local build writes `dist/build-info.json` into the app, and the app reads it at launch (`apps/desktop/src/build.ts`). Because of that, a local build:
