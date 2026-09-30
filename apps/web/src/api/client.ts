@@ -66,6 +66,9 @@ export async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DEL
   return json as T;
 }
 
+// Shown wherever a printer request or its steady-state health hits a macOS Local Network privacy block
+// (setup preview, the printer strip, Collect, Settings): the fix is the same System Settings toggle everywhere.
+export const LOCAL_NETWORK_BLOCKED = 'macOS is blocking Print Tally from your local network. Turn on Print Tally in System Settings → Privacy & Security → Local Network, then try again. If it isn\'t listed, add it with the + button.';
 // The server's error codes, in words. Screens may map a code to something more specific first.
 const MESSAGES: Record<string, string> = {
   in_use: "It's still in use, so it can't be deleted.",
@@ -78,11 +81,13 @@ const MESSAGES: Record<string, string> = {
   invalid_printer_address: 'That isn\'t a printer address on this network.',
   discovery_failed: "Couldn't look for printers on the network.",
   printer_inspection_failed: "Couldn't reach the printer at that address.",
+  local_network_blocked: LOCAL_NETWORK_BLOCKED,
   fingerprint_mismatch: "The printer's fingerprint changed. Start again.",
   preview_expired: 'That took too long. Start again.',
   printer_needs_password: 'The printer needs its password.',
   printer_needs_confirming: "The printer's certificate changed. Confirm it again under Settings.",
   printer_unreachable: "Can't reach the printer.",
+  printer_local_network_blocked: LOCAL_NETWORK_BLOCKED,
   collection_failed: "Couldn't read the printer's log.",
   credential_store_failed: "Couldn't use the keychain.",
   printer_verification_failed: "The printer didn't pass the security check.",

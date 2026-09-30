@@ -3,6 +3,7 @@ import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
 import { Banner, Button, ButtonLink } from '../components/index.ts';
 import { gateRedirect, onServerMachine, useConnection, useMissedJobs, useRetryCountdown, useServerName } from '../connection/index.ts';
 import { desktop, useDesktopConnection } from '../desktop.ts';
+import { LOCAL_NETWORK_BLOCKED } from '../api/client.ts';
 import { count } from '../lib/format.ts';
 import { cx } from '../lib/cx.ts';
 import { SECTION_ICONS } from './icons.tsx';
@@ -106,6 +107,8 @@ function PrinterBanner() {
       <Banner key={printer.id} action={<ButtonLink variant="text" size="sm" to="/settings">Enter the password</ButtonLink>}>
         Print Tally has no password for {printer.name}, so it can't collect from it.
       </Banner>
+    ) : printer.state === 'local_network_blocked' ? (
+      <Banner key={printer.id}>{LOCAL_NETWORK_BLOCKED}</Banner>
     ) : null);
 }
 

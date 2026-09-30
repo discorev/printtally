@@ -10,7 +10,9 @@ export interface InspectedPrinter { rootCertificatePem: string; mac: string | nu
 export async function downloadPrinterRoot(host: string, port = 443): Promise<string> {
   if (!isIPv4(host)) throw new Error('Expected IPv4');
   return new Promise((resolve, reject) => {
-    const fail = (): void => reject(new Error('Printer root download failed'));
+    // The cause (never its message) lets callers recognise a macOS Local Network block; nothing
+    // downstream reads error.message, so the raw connection error never reaches an API response.
+    const fail = (cause?: unknown): void => reject(new Error('Printer root download failed', { cause }));
     const request = get({ host, port, path: '/cert_root.der', agent: false,
       rejectUnauthorized: false, minVersion: 'TLSv1.2', signal: AbortSignal.timeout(10000),
       headers: { Accept: 'application/pkix-cert, application/octet-stream' } }, response => {

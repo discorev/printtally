@@ -99,6 +99,22 @@ test('onboarding validates address/input before networking and bounds pending pr
   for (let i = 0; i < 32; i++) await f.enrolment.preview({ host });
   await assert.rejects(f.enrolment.preview({ host }), errorCode('too_many_previews'));
 });
+test('a macOS Local Network block surfaces its own preview error, distinct from an unrelated connection failure', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'printer-enrolment-block-')), db = new AccountingDatabase(join(dir, 'test.sqlite3'));
+  const known = new KnownPrinters(db), store = { get: async () => undefined, set: async () => undefined };
+  const originalPlatform = process.platform;
+  t.after(() => { db.close(); rmSync(dir, { recursive: true }); Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true }); });
+  const hostUnreachable = async () => { throw Object.assign(new Error('connect'), { code: 'EHOSTUNREACH' }); };
+  Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+  const blocked = new PrinterEnrolment(known, store, dir, { inspect: hostUnreachable, discover: async () => [] });
+  await assert.rejects(blocked.preview({ host }), errorCode('local_network_blocked'));
+  const generic = new PrinterEnrolment(known, store, dir, { inspect: async () => { throw new Error('offline'); }, discover: async () => [] });
+  await assert.rejects(generic.preview({ host }), errorCode('printer_inspection_failed'), 'an unrelated error never claims to be a Local Network block');
+  // The same host-unreachable error off darwin is never a Local Network block; only the platform differs here.
+  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  const offDarwin = new PrinterEnrolment(known, store, dir, { inspect: hostUnreachable, discover: async () => [] });
+  await assert.rejects(offDarwin.preview({ host }), errorCode('printer_inspection_failed'));
+});
 test('Bonjour results deduplicate printer services and never mark advertisements trusted', () => {
   const result = discoveredPrinters([
     { type: 'ipp', name: 'Test printer', addresses: [host, '::1'], txt: { ty: 'Test model' } },
