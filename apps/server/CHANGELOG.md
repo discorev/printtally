@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/discorev/printtally/compare/backend-v0.2.0...backend-v0.2.1) (2026-09-30)
+
+
+### Bug Fixes
+
+* **web:** accept a zero price for stock that came free ([3fdcc74](https://github.com/discorev/printtally/commit/3fdcc7464a136646ddfa78f93a56a48a5387b21d))
+* **web:** accept a zero price for stock that came free ([397fb4c](https://github.com/discorev/printtally/commit/397fb4c27a7f0d7b0c993754f9778c0aea67033a))
+
 ## [0.2.0](https://github.com/discorev/printtally/compare/backend-v0.1.1...backend-v0.2.0) (2026-09-30)
 
 
