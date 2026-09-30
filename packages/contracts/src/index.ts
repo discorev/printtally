@@ -84,7 +84,8 @@ export type JobDetails = z.infer<typeof jobDetailsSchema>;
 // needs_printer: no printer is known yet (one that needs its password is reported in printers[].state instead).
 export type ServerState = 'needs_printer' | 'ready' | 'collecting' | 'printer_needs_confirming';
 // needs_confirming: the printer's root certificate changed, so its password is withheld until the user confirms it again.
-export type PrinterState = 'unknown' | 'ready' | 'needs_password' | 'needs_confirming' | 'unreachable' | 'failed';
+// local_network_blocked: macOS refused every connection to the printer's address until Local Network access is granted.
+export type PrinterState = 'unknown' | 'ready' | 'needs_password' | 'needs_confirming' | 'unreachable' | 'local_network_blocked' | 'failed';
 export interface CollectionStatus { at: string; result: 'succeeded' | 'failed'; newJobs: number | null }
 export interface PrinterStatus { id: string; name: string; host: string; state: PrinterState; lastCollection: CollectionStatus | null }
 // The printer's oldest kept record was newer than the last one collected + 1: records from..to were never collected.

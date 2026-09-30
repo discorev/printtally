@@ -2,7 +2,7 @@ import { useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { costingMethods, type CostingMethod, type KnownPrinter, type KnownPrinterListing } from 'print-accounting-contracts';
 import { api } from '../../api/endpoints.ts';
-import { describeError } from '../../api/client.ts';
+import { describeError, LOCAL_NETWORK_BLOCKED } from '../../api/client.ts';
 import { keys, useEdit, useKnownPrinters, useSettings, useTotals } from '../../api/queries.ts';
 import { onServerMachine, useCanEdit, useHealth, useServerName } from '../../connection/index.ts';
 import { desktop, useDesktopConnection, useDesktopVersion } from '../../desktop.ts';
@@ -122,6 +122,7 @@ function Printer({ printer }: { printer: KnownPrinterListing }) {
           ? <span className="text-amber">Not saved yet{!changing && <> · <LinkButton onClick={() => setChanging(true)}>Enter it</LinkButton></>}</span>
           : <>{printer.hasPassword ? `Stored in ${server}'s keychain` : `Couldn't check ${server}'s keychain`}{!changing && <> · <LinkButton onClick={() => { setChanging(true); setSaved(undefined); }}>Change password</LinkButton></>}</>],
       ]} />
+      {state === 'local_network_blocked' && <Sub tone="amber" className="mt-1.5">{LOCAL_NETWORK_BLOCKED}</Sub>}
       {showFingerprint && state !== 'needs_confirming' && <Fingerprint sha256={printer.fingerprintSha256} className="max-w-[420px]" />}
       {changing && <ChangePassword printer={printer} onDone={message => { setChanging(false); setSaved(message); }} />}
       {saved && !changing && <StatusLine>{saved}</StatusLine>}

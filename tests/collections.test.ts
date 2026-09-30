@@ -102,6 +102,25 @@ test('a missing password asks for one; an unreachable printer says so', async t 
   assert.deepEqual([missing.status, missing.json().error, f.collections.health().state], [409, 'printer_needs_password', 'ready']);
 });
 
+test('a collection distinguishes a macOS Local Network block from a printer that is simply unreachable', async t => {
+  const originalPlatform = process.platform;
+  t.after(() => Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true }));
+  Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+  const f = await apiFixture(t, {
+    collector: async () => { throw new Error('offline'); },
+    inspectRoot: async () => { throw Object.assign(new Error('connect'), { code: 'EHOSTUNREACH' }); },
+  });
+  const printer = await f.addPrinter();
+  const call = () => f.request(`/api/v1/known-printers/${printer.id}/collect`, { method: 'POST', body: {} });
+  assert.deepEqual([(await call()).status, f.collections.health().printers[0].state], [502, 'local_network_blocked']);
+  const reply = await call();
+  assert.deepEqual([reply.status, reply.json().error], [502, 'printer_local_network_blocked']);
+  // Off darwin the identical host-unreachable error stays the generic, pre-existing state.
+  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  await call();
+  assert.equal(f.collections.health().printers[0].state, 'unreachable');
+});
+
 test('a stored password is never sent to a printer whose certificate is not the confirmed one', async t => {
   // The printer now presents a chain from a root the user never confirmed.
   let applicationBytes = 0, handshakes = 0;

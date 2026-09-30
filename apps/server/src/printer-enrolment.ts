@@ -4,6 +4,7 @@ import { KnownPrinters, TrustConflictError, type StoredPrinter } from 'print-acc
 import { discoverPrinters, isPrinterAddress } from './printer-discovery.ts';
 import { inspectPrinter, verifyPrinter } from './printer-certificate.ts';
 import { saveVerified, printerPassword, type SecretStore } from './credentials.ts';
+import { isLocalNetworkBlocked } from './local-network.ts';
 export class EnrolmentError extends Error {
   status: number;
   constructor(code: string, status = 400) { super(code); this.status = status; }
@@ -49,7 +50,7 @@ export class PrinterEnrolment {
       const input = parsed.data;
       let inspected;
       try { inspected = await this.dependencies.inspect(input.host, input.mac); }
-      catch { throw new EnrolmentError('printer_inspection_failed', 502); }
+      catch (error) { throw new EnrolmentError(isLocalNetworkBlocked(input.host, error) ? 'local_network_blocked' : 'printer_inspection_failed', 502); }
       const root = new X509Certificate(inspected.rootCertificatePem);
       const now = this.dependencies.clock();
       if (!root.ca || root.subject !== root.issuer || !root.verify(root.publicKey) || root.validFromDate.getTime() > now || root.validToDate.getTime() <= now) throw new EnrolmentError('invalid_printer_root', 502);

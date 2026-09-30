@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ImportRun, PrinterStatus } from 'print-accounting-contracts';
 import { api } from '../../api/endpoints.ts';
+import { LOCAL_NETWORK_BLOCKED } from '../../api/client.ts';
 import { useEdit, useImports } from '../../api/queries.ts';
 import { connection, useHealth } from '../../connection/index.ts';
 import { Button, ButtonLink, DocketSection, KV, Loading, Mono, Notice, Pad, PadBody, PadHead, RowActions, Sub, Sweep } from '../../components/index.ts';
@@ -87,6 +88,7 @@ const rangeText = (log: ImportRun | undefined): string => log?.requested_first !
 
 /** Why the last collection from this printer didn't work, when it's something to wait out or check. */
 function PrinterProblem({ printer }: { printer: PrinterStatus }) {
+  if (printer.state === 'local_network_blocked') return <Sub tone="amber">{LOCAL_NETWORK_BLOCKED}</Sub>;
   if (printer.state === 'unreachable') return <Sub tone="amber">Can't reach {printer.name} at <Mono>{printer.host}</Mono>. Check it's switched on and on the network.</Sub>;
   if (printer.state === 'failed') return <Sub tone="amber">Couldn't read {printer.name}'s log. Print Tally tries again at the next collection.</Sub>;
   return null;

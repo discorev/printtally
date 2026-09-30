@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import type { HealthResponse, ServerState } from 'print-accounting-contracts';
-import { ApiError, onRequestOutcome, request, setEditGate } from '../api/client.ts';
+import { ApiError, errorMessage, LOCAL_NETWORK_BLOCKED, onRequestOutcome, request, setEditGate } from '../api/client.ts';
 import { ConnectionMonitor } from './monitor.ts';
 import { backoffMs, canEdit, gateRedirect, serverName } from './state.ts';
 
@@ -139,6 +139,11 @@ test('the server is named by its last answer, then by the name it gave before at
   expect(serverName(health, 'old-name', '127.0.0.1')).toBe('studio-mac');
   expect(serverName(null, 'studio-mac', '127.0.0.1')).toBe('studio-mac');
   expect(serverName(null, null, '127.0.0.1')).toBe('127.0.0.1');
+});
+
+test('a macOS Local Network block shows the same copy whether it came from a preview or a live collection', () => {
+  expect(errorMessage('local_network_blocked', false)).toBe(LOCAL_NETWORK_BLOCKED);
+  expect(errorMessage('printer_local_network_blocked', false)).toBe(LOCAL_NETWORK_BLOCKED);
 });
 
 test('the gate sends a revoked session to Connect and a server with no printer to Setup, and nothing else away', () => {

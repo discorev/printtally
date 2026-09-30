@@ -7,6 +7,7 @@ import type { AccountingService } from './service.ts';
 import type { PrinterEnrolment } from './printer-enrolment.ts';
 import { MissingCredentialError } from './credentials.ts';
 import { downloadPrinterRoot } from './printer-certificate.ts';
+import { isLocalNetworkBlocked } from './local-network.ts';
 import { COLLECTION_INTERVAL_MS } from './config.ts';
 
 export class CollectionError extends Error {
@@ -67,7 +68,8 @@ export class Collections {
   }
   private async diagnose(host: string, trusted: string): Promise<PrinterState> {
     let presented: string;
-    try { presented = await this.inspectRoot(host); } catch { return 'unreachable'; }
+    try { presented = await this.inspectRoot(host); }
+    catch (error) { return isLocalNetworkBlocked(host, error) ? 'local_network_blocked' : 'unreachable'; }
     return new X509Certificate(presented).fingerprint256 === new X509Certificate(trusted).fingerprint256 ? 'failed' : 'needs_confirming';
   }
   async collectAll(): Promise<void> {
