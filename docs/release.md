@@ -45,12 +45,12 @@ Every job uses Bun 1.3.9.
 1. **The `release` environment.** In the repository settings, under Environments, limit `release` to the `main` branch. Add these secrets to it:
    - `DEVID_P12_BASE64` and `DEVID_P12_PASSWORD`: the Developer ID Application certificate for team D6AAJCLH87, exported as a `.p12` and base64-encoded.
    - `ASC_KEY_ID`, `ASC_ISSUER_ID` and `ASC_KEY_P8`: an App Store Connect API key for notarization. `ASC_KEY_P8` is the contents of the `.p8` file.
-2. **`RELEASE_PLEASE_TOKEN`.** GitHub doesn't run workflows for pull requests opened with the workflow's own `GITHUB_TOKEN`, so without this token CI never runs on the release PR. Create a fine-grained personal access token for `discorev/printtally` only, with read and write access to Contents, Pull requests and Issues. Add it as a repository secret. Without it, release-please falls back to `GITHUB_TOKEN`, and you have to close and reopen the release PR to run CI.
+2. **Let Actions open pull requests.** Under Settings → Actions → General → Workflow permissions, turn on "Allow GitHub Actions to create and approve pull requests". release-please uses the workflow's own `GITHUB_TOKEN`. GitHub doesn't run other workflows for pull requests opened with that token, so CI doesn't run on the release PR. That's fine: the release PR only changes versions and changelogs, the code already passed CI on `main`, and the release jobs run the tests again before publishing. Merge it using your bypass, or close and reopen it to run CI.
 3. **Protect main.** Add a branch ruleset for `main` that:
    - requires a pull request before merging.
    - requires the status checks **Typecheck and test** and **Package**.
    - blocks direct pushes and force pushes.
-   - lets only you bypass or merge. The release PR ships when it's merged, so only the owner should merge it.
+   - lets only you bypass it, by pull request only. The release PR ships when it's merged, so only the owner should merge it.
 4. **npm trusted publishing.** On npmjs.com, open the `printtally` package settings and add a trusted publisher: GitHub Actions, repository `discorev/printtally`, workflow `release.yml`, no environment. The package's `repository` field (`apps/server/package.json`) must name the same repository, as it already does. If the package doesn't exist on npm yet, publish 0.1.0 once by hand, then add the trusted publisher.
 
 ## How release-please is configured

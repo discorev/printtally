@@ -129,7 +129,7 @@ test('merging the release PR on main runs release-please, then publishes what it
   });
   const { 'release-please': releasePlease } = workflow.jobs;
   assert.deepEqual(releasePlease!.steps, [{ id: 'release', uses: 'googleapis/release-please-action@v5', with: {
-    token: '${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}', 'config-file': CONFIG, 'manifest-file': MANIFEST,
+    token: '${{ github.token }}', 'config-file': CONFIG, 'manifest-file': MANIFEST,
   } }]);
   // release-please-action names the root package's outputs plainly and prefixes the others with their path.
   for (const [component, prefix] of [['backend', ''], ['app', 'apps/desktop--']])
