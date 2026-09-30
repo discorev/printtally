@@ -4,8 +4,7 @@ import { Button, DateInput, DocketSection, Field, FieldPair, FieldStack, NumberI
 import { api } from '../../api/endpoints.ts';
 import { describeError } from '../../api/client.ts';
 import { useEdit, useWriteOffPreview } from '../../api/queries.ts';
-import { today } from '../../lib/format.ts';
-import { stockAmount } from './common.ts';
+import { stockAmount, today } from '../../lib/format.ts';
 
 // Writing off paper that's gone without being printed (vWriteoffForm): some sheets or metres, or what's left
 // of the open pack or roll. It shows as waste in totals, never inside a print's cost. What "everything left"
@@ -42,7 +41,7 @@ export function WriteOffForm({ papers, paperId, onSaved, onCancel }: {
         <Field label="Size or roll">{id => (
           <Select id={id} value={stockId ?? ''} onChange={e => setStockId(Number(e.target.value))} disabled={!chosen?.stock.length}>
             {!chosen?.stock.length && <option value="">Nothing bought yet</option>}
-            {chosen?.stock.map(s => <option key={s.id} value={s.id}>{s.name} · {stockAmount(s, s.remaining)}{s.format === 'roll' ? '' : ' sheets'} left</option>)}
+            {chosen?.stock.map(s => <option key={s.id} value={s.id}>{s.name} · {stockAmount(s.remaining, s.format)}{s.format === 'roll' ? '' : ' sheets'} left</option>)}
           </Select>
         )}</Field>
         <FieldPair>
@@ -50,8 +49,8 @@ export function WriteOffForm({ papers, paperId, onSaved, onCancel }: {
           <Field label="How much" htmlFor="writeoff-some">
             <Toggle type="radio" id="writeoff-some" name="writeoff-how" checked={how === 'some'} onChange={() => setHow('some')} label={roll ? 'Some of the roll' : 'Some sheets'} />
             <Toggle type="radio" name="writeoff-how" className="whitespace-normal" checked={how === 'all'} onChange={() => setHow('all')}
-              label={stock && preview && left === preview.remaining ? `Everything left (${stockAmount(stock, left)})`
-                : `The rest of the open ${roll ? 'roll' : 'pack'}${stock && preview ? ` (${stockAmount(stock, left)})` : ''}`} />
+              label={stock && preview && left === preview.remaining ? `Everything left (${stockAmount(left, stock.format)})`
+                : `The rest of the open ${roll ? 'roll' : 'pack'}${stock && preview ? ` (${stockAmount(left, stock.format)})` : ''}`} />
           </Field>
         </FieldPair>
         {how === 'some' && (

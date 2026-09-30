@@ -1,0 +1,37 @@
+# macOS arm64 .app and .dmg. Build from the repo root with `bun run dist:desktop`, which compiles
+# the server first (apps/server/dist/printtally-server, with the UI in client/ beside it).
+appId: dev.printtally.app
+productName: Print Tally
+directories:
+  output: release
+  buildResources: build
+files: [dist/**/*]
+# The packaged app runs <Resources>/server/printtally-server (src/server-manager.ts), which serves the
+# UI from client/ beside itself.
+extraResources:
+  - { from: ../server/dist/printtally-server, to: server/printtally-server }
+  - { from: ../server/dist/client, to: server/client }
+# Electron fuses: the signed binary can't be reused as a Node runtime or debugged through
+# environment variables or flags, and only loads its own, integrity-checked app.asar.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+protocols:
+  - { name: Print Tally pairing link, schemes: [printtally] }
+mac:
+  target: [{ target: dmg, arch: arm64 }]
+  category: public.app-category.productivity
+  # Signs with the Developer ID Application identity found in the keychain; CSC_NAME picks one. With
+  # no identity, `-c.mac.identity=- -c.mac.hardenedRuntime=false` signs ad hoc for local use.
+  # Hardened runtime covers every executable, the server included.
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
+  # Only `bun run release:desktop` notarizes (with APPLE_KEYCHAIN_PROFILE); local builds never do.
+  notarize: false
+# Signed too, so the .dmg itself can be notarized and stapled (see the README's release steps).
+dmg:
+  sign: true

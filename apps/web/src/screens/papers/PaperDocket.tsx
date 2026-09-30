@@ -9,8 +9,8 @@ import { api } from '../../api/endpoints.ts';
 import { describeError } from '../../api/client.ts';
 import { useEdit, useMediaTypes, usePapers } from '../../api/queries.ts';
 import { useCanEdit } from '../../connection/index.ts';
-import { dateShort, ml, plural } from '../../lib/format.ts';
-import { mediaName, methodName, stockAmount, stockAtSize, type PurchasePrefill } from './common.ts';
+import { dateShort, ml, plural, stockAmount } from '../../lib/format.ts';
+import { mediaName, methodName, stockAtSize, type PurchasePrefill } from './common.ts';
 import { WriteOffForm } from './WriteOffForm.tsx';
 import { PaperCost, unknownPaper } from './PaperCost.tsx';
 
@@ -77,8 +77,8 @@ function InStock({ paper }: { paper: PaperView }) {
     <DocketSection label="In stock">
       {paper.stock.map(s => (
         <ItemLine key={s.id} name={s.name} note={s.deckle && !/deckle/i.test(s.name) ? 'deckle edge' : undefined}
-          sub={<>bought {stockAmount(s, s.bought)} · used by prints {stockAmount(s, s.used)}{s.wasted > 0 && <> · written off {stockAmount(s, s.wasted)}</>}</>}
-          value={<b className="font-semibold">{stockAmount(s, s.remaining)}</b>} caption="left" />
+          sub={<>bought {stockAmount(s.bought, s.format)} · used by prints {stockAmount(s.used, s.format)}{s.wasted > 0 && <> · written off {stockAmount(s.wasted, s.format)}</>}</>}
+          value={<b className="font-semibold">{stockAmount(s.remaining, s.format)}</b>} caption="left" />
       ))}
       {!paper.stock.length && <Sub>Nothing bought yet.</Sub>}
       <RowActions>

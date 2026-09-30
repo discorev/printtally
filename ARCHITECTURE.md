@@ -131,3 +131,24 @@ back to `../web/dist` when run from source (or `client/` beside a compiled binar
 Paths without a file extension get `index.html`, so the UI's routes work on reload;
 hashed files under `assets/` are cached for good, everything else is revalidated.
 The API stays under `/api`.
+
+## Packaging
+
+- **npm.** `apps/server` is the published `printtally` package. The `print-accounting-*`
+  workspace packages are private, so `bun build --target bun` bundles the CLI and
+  everything it imports into `dist/cli.js` (with its `#!/usr/bin/env bun` line), and
+  the package has no runtime dependencies. The built UI ships in `dist/client`, and
+  Drizzle's migrations are embedded in the code, as for the compiled binary.
+- **Compiled server.** `bun build --compile --target bun-darwin-arm64` makes
+  `apps/server/dist/printtally-server`, with the UI copied to `client/` beside it.
+- **Desktop.** electron-builder packages `apps/desktop` as a macOS arm64 `.app` and
+  `.dmg` (`appId` `dev.printtally.app`) and copies the compiled server and its
+  `client/` into `Contents/Resources/server/`, where `server-manager.ts` runs it.
+  Everything is signed with Developer ID under the hardened runtime. The app has
+  `allow-jit` and `allow-unsigned-executable-memory`; so do Electron's helpers and
+  the embedded server, through the inherited entitlements. JavaScriptCore needs
+  `allow-jit`: without it the server still runs, but about 9 times slower, because
+  it falls back to its interpreter. Electron fuses turn off `ELECTRON_RUN_AS_NODE`,
+  `NODE_OPTIONS` and the inspector flags, and the app only loads its own
+  integrity-checked `app.asar`. The app registers `printtally://` in its Info.plist.
+  Only the release build is notarized.

@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import type { InkPurchaseView, LedgerJob, PaperPurchaseView, StockView, WriteOffView } from 'print-accounting-contracts';
 import { cx } from '../lib/cx.ts';
-import { count, dateShort, metres, ml, money, plural, stockQuantity } from '../lib/format.ts';
+import { dateShort, metres, ml, money, plural, stockAmount, stockQuantity } from '../lib/format.ts';
 import { jobPaperName, jobSize, jobSwatch } from '../lib/jobs.ts';
 import { useCurrency, useEdit } from '../api/queries.ts';
 import { ApiError, describeError } from '../api/client.ts';
@@ -37,7 +37,7 @@ const low = (stock: Pick<StockView, 'format' | 'remaining'>) => stock.format ===
 export function StockLine({ stock, className }: { stock: Pick<StockView, 'name' | 'format' | 'remaining'>; className?: string }) {
   return (
     <span className={cx('whitespace-nowrap', className)}>{stock.name} · <b className={cx('font-medium', low(stock) ? 'text-amber' : 'text-ink')}>
-      {stock.format === 'roll' ? metres(stock.remaining) : count(stock.remaining)}</b> {stock.format === 'roll' ? 'left' : 'sheets left'}</span>
+      {stockAmount(stock.remaining, stock.format, 1)}</b> {stock.format === 'roll' ? 'left' : 'sheets left'}</span>
   );
 }
 

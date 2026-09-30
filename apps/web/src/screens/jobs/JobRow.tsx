@@ -28,7 +28,7 @@ export function JobRow({ job, selected, paper }: { job: LedgerJob; selected: boo
         {paper && <span className={cx(tag, 'text-muted')}>{paper}</span>}
         {unknown && !cancelled && <span className={cx(tag, 'text-amber')}>{unknownShort(job)}</span>}
         {cancelled && <> <Chip tone="red">Cancelled</Chip></>}
-        {hidden && <span className="ml-2 rounded-[2px] border border-rule-2 px-1 py-px align-[1px] font-slab text-[10px] leading-3 font-semibold tracking-[.08em] text-muted uppercase">hidden</span>}
+        {hidden && <Chip size="sm" className="ml-2">hidden</Chip>}
       </span>
       <span className={cx('flex items-center gap-1.5 whitespace-nowrap phone:col-start-2 phone:row-start-2 phone:justify-end', cancelled && 'text-muted')}>
         {sizeCode(jobSize(job))}

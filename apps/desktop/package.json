@@ -1,9 +1,12 @@
 {
   "name": "printtally-desktop", "version": "0.1.0", "private": true, "type": "module",
+  "description": "Print Tally for macOS", "author": "Oliver Hayman", "license": "MIT",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "bun run build && electron ."
+    "dev": "bun run build && electron .",
+    "dist": "rm -rf dist && bun run build && electron-builder --mac --arm64 --publish never",
+    "release": "test -n \"$APPLE_KEYCHAIN_PROFILE\" || { echo 'Set APPLE_KEYCHAIN_PROFILE to your notarytool keychain profile.'; exit 1; }; bun run dist -c.mac.notarize=true"
   },
-  "devDependencies": { "electron": "^44.5.0", "typescript": "^5.9.0" }
+  "devDependencies": { "electron": "^44.5.0", "electron-builder": "^26.15.3", "typescript": "^5.9.0" }
 }

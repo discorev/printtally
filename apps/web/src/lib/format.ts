@@ -33,6 +33,9 @@ export const metres = (um: number, digits = 1): string => `${(um / 1e6).toFixed(
 /** A stock quantity in its own unit: sheets are counted, rolls are micrometres. */
 export const stockQuantity = (quantity: number, format: 'sheet' | 'roll', digits = 1): string =>
   format === 'roll' ? metres(quantity, digits) : plural(quantity, 'sheet');
+/** A bare stock figure, no unit word: "31" (sheets), or "10.50 m" for a roll (the paper docket's stock rows). */
+export const stockAmount = (quantity: number, format: 'sheet' | 'roll', digits = 2): string =>
+  format === 'roll' ? metres(quantity, digits) : count(quantity);
 /** Millimetres for a size readout: 210000 → "210", 101600 → "101.6". */
 export const mm = (um: number): string => String(Math.round(um / 100) / 10);
 

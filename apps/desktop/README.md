@@ -8,9 +8,9 @@ On launch it finds a server: the saved remote host if one is configured (kept ev
 when it doesn't answer, with a "Can't reach … retrying" page offering this Mac
 instead), else whatever Print Tally answers `GET /api/v1/health` on
 `127.0.0.1:4318`; if nothing does, it starts the bundled server itself (in dev,
-`bun apps/server/src/cli.ts serve`; in a packaged build, a compiled binary under
-`process.resourcesPath` — see `src/server-manager.ts` for the seam step 06 fills
-in). It never starts over another app on the port, and it stops after three failed
+`bun apps/server/src/cli.ts serve`; in the packaged app, the compiled server at
+`Contents/Resources/server/printtally-server`, which serves the UI from `client/`
+beside it). It never starts over another app on the port, and it stops after three failed
 starts. Every 5 seconds it checks the server: one it started that crashed is
 restarted, and one it only borrowed that disappeared is taken over on the same port
 and data folder. A remote host answering 401 counts as up: the window holds the
@@ -37,3 +37,27 @@ which serves the built UI.
 
 To run just this app against an already-running web dev server:
 `bun run --cwd apps/desktop dev`.
+
+## Package
+
+`bun run dist:desktop` from the repo root compiles the server
+(`apps/server/dist/printtally-server` and its `client/`), then runs electron-builder
+(`electron-builder.yml`) to make `release/mac-arm64/Print Tally.app` and
+`release/Print Tally-<version>-arm64.dmg` for Apple silicon. The app id is
+`dev.printtally.app`; the compiled server goes in `Contents/Resources/server/`.
+
+It signs with the Developer ID Application identity in your keychain (set
+`CSC_NAME` to choose one) under the hardened runtime. `build/entitlements.mac.plist`
+is the app's; `build/entitlements.mac.inherit.plist` covers Electron's helpers and
+the embedded Bun server, which needs `allow-jit` to run at full speed. Local builds
+are never notarized; `bun run release:desktop` is (see the root README).
+
+To try a build without touching your real ledger or port:
+
+```sh
+PRINTTALLY_PORT=4402 PRINTTALLY_DATA_DIR=<temp folder> "release/mac-arm64/Print Tally.app/Contents/MacOS/Print Tally"
+```
+
+Quitting the app stops the server it started. The app's own settings (the saved
+remote host) live in `~/Library/Application Support/Print Tally`, apart from the
+ledger's data folder.

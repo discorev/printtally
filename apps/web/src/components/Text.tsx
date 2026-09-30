@@ -24,10 +24,16 @@ const TONES = { amber: 'text-amber', green: 'text-green', red: 'text-red' };
 /** " · " between parts of a meta line. */
 export const Dot = () => <> · </>;
 
-/** A small outlined flag: Cancelled (red), Hidden (muted), Paper corrected (green), Missed (amber). */
-export function Chip({ children, tone = 'muted' }: { children: ReactNode; tone?: 'muted' | 'red' | 'amber' | 'green' }) {
+/** A small outlined flag: Cancelled (red), Hidden (muted), Paper corrected (green), Missed (amber).
+ *  `size` 'sm' is a tighter inline variant (e.g. inside a Jobs row's paper name), with a neutral border. */
+export function Chip({ children, tone = 'muted', size = 'md', className }: {
+  children: ReactNode; tone?: 'muted' | 'red' | 'amber' | 'green'; size?: 'md' | 'sm'; className?: string;
+}) {
   const colour = { muted: 'text-muted', red: 'text-red', amber: 'text-amber', green: 'text-green' }[tone];
-  return <span className={cx('inline-block rounded-[2px] border border-current px-1.5 py-px align-[1px] font-slab text-[10.5px] leading-[14px] font-semibold tracking-[.08em] uppercase', colour)}>{children}</span>;
+  return (
+    <span className={cx('inline-block rounded-[2px] border py-px align-[1px] font-slab font-semibold tracking-[.08em] uppercase',
+      size === 'sm' ? 'border-rule-2 px-1 text-[10px] leading-3' : 'border-current px-1.5 text-[10.5px] leading-[14px]', colour, className)}>{children}</span>
+  );
 }
 
 /** A job note as written on the docket: slab italic. */
