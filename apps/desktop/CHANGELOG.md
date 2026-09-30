@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.2.0](https://github.com/discorev/printtally/compare/app-v0.1.2...app-v0.2.0) (2026-09-30)
+
+
+### Features
+
+* **desktop:** app icon ([fd76164](https://github.com/discorev/printtally/commit/fd7616469ae6301b6043fb33365a1dd90785276f))
+* **desktop:** app icon ([01ab1d8](https://github.com/discorev/printtally/commit/01ab1d83157182d57fbe1b275298fa92f377ac48))
+
+
+### Bug Fixes
+
+* **desktop:** hide the server chip when the app runs its own server ([e839b9c](https://github.com/discorev/printtally/commit/e839b9c7d4b26a7c0fde832a6d052352e44033b3))
+* **desktop:** hide the server chip when the app runs its own server ([5c36da9](https://github.com/discorev/printtally/commit/5c36da93a0e04fb66295faffb577b6db757ba0e4))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * peerDependencies
+    * printtally-workspace bumped to 0.2.0
+
 ## [0.1.2](https://github.com/discorev/printtally/compare/app-v0.1.1...app-v0.1.2) (2026-09-30)
 
 
