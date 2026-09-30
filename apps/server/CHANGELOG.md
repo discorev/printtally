@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.0](https://github.com/discorev/printtally/compare/backend-v0.1.1...backend-v0.2.0) (2026-09-30)
+
+
+### Features
+
+* **desktop:** app icon ([fd76164](https://github.com/discorev/printtally/commit/fd7616469ae6301b6043fb33365a1dd90785276f))
+* **desktop:** app icon ([01ab1d8](https://github.com/discorev/printtally/commit/01ab1d83157182d57fbe1b275298fa92f377ac48))
+* **web:** add a whole ink set in one go ([ea02225](https://github.com/discorev/printtally/commit/ea022257549d00d162dd8f3610d7b9708194c29b))
+* **web:** add a whole ink set in one go ([1175895](https://github.com/discorev/printtally/commit/1175895a638b7d6d8ed72ffb601a9e7e2a52a318))
+
+
+### Bug Fixes
+
+* **desktop:** hide the server chip when the app runs its own server ([e839b9c](https://github.com/discorev/printtally/commit/e839b9c7d4b26a7c0fde832a6d052352e44033b3))
+* **desktop:** hide the server chip when the app runs its own server ([5c36da9](https://github.com/discorev/printtally/commit/5c36da93a0e04fb66295faffb577b6db757ba0e4))
+* **web:** say whether a job is missing its paper or its ink cost ([6a63666](https://github.com/discorev/printtally/commit/6a6366639add835dcbed960b48d09b8da17c356b))
+* **web:** say whether a job is missing its paper or its ink cost ([cd77ad6](https://github.com/discorev/printtally/commit/cd77ad6015da222685ec5943caf302db9680850e))
+
 ## [0.1.1](https://github.com/discorev/printtally/compare/backend-v0.1.0...backend-v0.1.1) (2026-09-30)
 
 
