@@ -36,7 +36,7 @@ test('the published bundle imports only Bun and Node built-ins, and keeps its bu
 });
 test('the desktop build embeds the compiled server and its UI where the app runs them', () => {
   const config = Bun.YAML.parse(readFileSync(new URL('../apps/desktop/electron-builder.yml', import.meta.url), 'utf8')) as {
-    appId: string; productName: string; extraResources: { from: string; to: string }[]; mac: { notarize: boolean; hardenedRuntime: boolean; entitlementsInherit: string };
+    appId: string; productName: string; extraResources: { from: string; to: string }[]; mac: { notarize: boolean; hardenedRuntime: boolean; entitlementsInherit: string; extendInfo: Record<string, unknown> };
     dmg: { contents: { x: number; y: number; type?: string; path?: string }[]; sign: boolean; artifactName: string };
   };
   const server = JSON.parse(readFileSync(new URL('../apps/server/package.json', import.meta.url), 'utf8'));
@@ -46,6 +46,8 @@ test('the desktop build embeds the compiled server and its UI where the app runs
   // One identity for local and release builds; only the release workflow notarizes, with notarytool.
   assert.deepEqual([config.appId, config.productName], ['com.olliespage.PrintTally', 'Print Tally']);
   assert.deepEqual([config.mac.notarize, config.mac.hardenedRuntime], [false, true]);
+  // macOS refuses the bundled server's connection to the printer unless the app says why it uses the local network.
+  assert.match(String(config.mac.extendInfo.NSLocalNetworkUsageDescription), /printer on the local network/);
   // The embedded Bun server needs the JIT entitlements under the hardened runtime.
   assert.match(readFileSync(new URL(`../apps/desktop/${config.mac.entitlementsInherit}`, import.meta.url), 'utf8'), /com\.apple\.security\.cs\.allow-jit/);
   // The app on the left and Applications on the right, where apps/desktop/assets/dmg/background.svg draws the arrow between them.
