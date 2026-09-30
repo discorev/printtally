@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.2](https://github.com/discorev/printtally/compare/app-v0.1.1...app-v0.1.2) (2026-09-30)
+
+
+### Bug Fixes
+
+* **desktop:** give the app's executables their own Mach-O UUIDs ([13eb583](https://github.com/discorev/printtally/commit/13eb583ec54096ce08161cd1adb45258ad046a24))
+* **desktop:** give the app's executables their own Mach-O UUIDs ([736eb30](https://github.com/discorev/printtally/commit/736eb30f1d144ec11825f97ce9869bd91e5c4314))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * peerDependencies
+    * printtally-workspace bumped to 0.1.1
+
 ## [0.1.1](https://github.com/discorev/printtally/compare/app-v0.1.0...app-v0.1.1) (2026-09-30)
 
 
