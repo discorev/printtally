@@ -21,3 +21,11 @@ Every new feature must work on both.
 
 **Desktop** is a full Electron app that bundles the server and loads the same UI.
 The desktop can either connect to a local backend that starts when you run it, or a remote machine (the one next to the printer).
+
+## Definition of done
+
+A change is done only when all of these are true:
+
+1. `bun run typecheck` and `bun test` pass.
+2. It has been seen working in the running app, on web and desktop.
+3. It is committed on a branch, pushed, and the PR has been merged.
