@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import { test as bunTest } from 'bun:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { isBuiltin } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
@@ -39,13 +39,23 @@ test('the published bundle imports only Bun and Node built-ins, and keeps its bu
 });
 test('the desktop build embeds the compiled server and its UI where the app runs them', () => {
   const config = Bun.YAML.parse(readFileSync(new URL('../apps/desktop/electron-builder.yml', import.meta.url), 'utf8')) as {
-    appId: string; productName: string; afterPack: string; extraResources: { from: string; to: string }[]; mac: { notarize: boolean; hardenedRuntime: boolean; entitlementsInherit: string; extendInfo: Record<string, unknown> };
+    appId: string; productName: string; afterPack: string; extraResources: { from: string; to: string }[]; mac: { icon: string; notarize: boolean; hardenedRuntime: boolean; entitlementsInherit: string; extendInfo: Record<string, unknown> };
     dmg: { contents: { x: number; y: number; type?: string; path?: string }[]; sign: boolean; artifactName: string };
   };
   const server = JSON.parse(readFileSync(new URL('../apps/server/package.json', import.meta.url), 'utf8'));
   assert.match(server.scripts['build:binary'], /--outfile dist\/printtally-server$/);
   // src/server-manager.ts runs <resources>/server/printtally-server; static.ts serves client/ beside it.
-  assert.deepEqual(config.extraResources, [{ from: '../server/dist/printtally-server', to: 'server/printtally-server' }, { from: '../server/dist/client', to: 'server/client' }]);
+  assert.deepEqual(config.extraResources, [
+    { from: '../server/dist/printtally-server', to: 'server/printtally-server' },
+    { from: '../server/dist/client', to: 'server/client' },
+    { from: 'assets/icon/Assets.car', to: 'Assets.car' },
+  ]);
+  // apps/desktop/scripts/make-icon.sh renders assets/icon/print-tally.svg into both committed icon artifacts.
+  assert.equal(config.mac.icon, 'assets/icon/PrintTally.icns');
+  assert.equal(config.mac.extendInfo.CFBundleIconName, 'AppIcon');
+  for (const file of ['PrintTally.icns', 'Assets.car']) {
+    assert.ok(existsSync(new URL(`../apps/desktop/assets/icon/${file}`, import.meta.url)), file);
+  }
   // The afterPack hook stamps the executables' own Mach-O UUIDs (apps/desktop/scripts/macho-uuid.ts) before signing.
   assert.equal(config.afterPack, './scripts/after-pack.mjs');
   assert.match(read('../apps/desktop/scripts/after-pack.mjs'), /macho-uuid\.ts/);

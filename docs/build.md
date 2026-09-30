@@ -80,7 +80,7 @@ PRINTTALLY_API=http://127.0.0.1:4400 bun run dev:web
 
 ### App icon
 
-The app doesn't have an icon yet, so it uses Electron's default.
+`apps/desktop/assets/icon/PrintTally.icns` and `Assets.car` are committed, so the build doesn't depend on regenerating them. To change the icon, edit `apps/desktop/assets/icon/print-tally.svg` and run `bun run make:icon`, which needs Xcode (it renders the SVG with AppKit and compiles the asset catalog with `actool`). Commit the regenerated `.icns` and `Assets.car` alongside the SVG.
 
 ## Version labels
 

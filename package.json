@@ -26,6 +26,7 @@
     "pack:server": "mkdir -p release && cd apps/server && bun pm pack --destination ../../release",
     "test:packed": "bun scripts/test-packed.ts",
     "dist:desktop": "sh apps/desktop/scripts/bundle.sh && sh apps/desktop/scripts/make-dmg.sh",
+    "make:icon": "sh apps/desktop/scripts/make-icon.sh",
     "seed:dev": "bun scripts/dev-seed.ts"
   },
   "devDependencies": {

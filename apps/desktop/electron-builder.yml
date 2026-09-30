@@ -12,6 +12,9 @@ files: [dist/**/*]
 extraResources:
   - { from: ../server/dist/printtally-server, to: server/printtally-server }
   - { from: ../server/dist/client, to: server/client }
+  # apps/desktop/scripts/make-icon.sh compiles this asset catalog; Finder and the Dock read it via
+  # CFBundleIconName (mac.extendInfo below), falling back to mac.icon's .icns only where the catalog can't apply.
+  - { from: assets/icon/Assets.car, to: Assets.car }
 # Gives the main executable, the helpers and the server their own Mach-O UUIDs, which macOS Local Network privacy
 # tracks them by (scripts/macho-uuid.ts). It runs before signing; `--prepackaged` (make-dmg.sh) skips it.
 afterPack: ./scripts/after-pack.mjs
@@ -28,6 +31,8 @@ protocols:
 mac:
   target: [{ target: dmg, arch: arm64 }]
   category: public.app-category.productivity
+  # apps/desktop/scripts/make-icon.sh renders assets/icon/print-tally.svg into this and Assets.car above.
+  icon: assets/icon/PrintTally.icns
   # apps/desktop/scripts/bundle.sh picks the identity, and turns on the hardened runtime and a secure timestamp for
   # release builds (PRINTTALLY_RELEASE=1). The entitlements cover every executable, the server included.
   hardenedRuntime: true
@@ -40,9 +45,11 @@ mac:
   extendInfo:
     NSLocalNetworkUsageDescription: Print Tally connects to your printer on the local network to read its job log.
     NSBonjourServices: [_ipp._tcp, _ipps._tcp, _printer._tcp]
+    # Finder and the Dock use the Assets.car catalog (extraResources above) under this name instead of mac.icon's .icns.
+    CFBundleIconName: AppIcon
 # Built by apps/desktop/scripts/make-dmg.sh from the signed app, which signs the .dmg itself. It passes the background,
 # apps/desktop/assets/dmg/background.svg rendered to background.png with background@2x.png beside it; the 660x400 window
-# takes its size from the image.
+# takes its size from the image. The volume icon defaults to mac.icon above, so it's not repeated here.
 dmg:
   title: ${productName}
   artifactName: PrintTally-${version}.${ext}
