@@ -12,6 +12,9 @@ files: [dist/**/*]
 extraResources:
   - { from: ../server/dist/printtally-server, to: server/printtally-server }
   - { from: ../server/dist/client, to: server/client }
+# Gives the main executable, the helpers and the server their own Mach-O UUIDs, which macOS Local Network privacy
+# tracks them by (scripts/macho-uuid.ts). It runs before signing; `--prepackaged` (make-dmg.sh) skips it.
+afterPack: ./scripts/after-pack.mjs
 # Electron fuses: the signed binary can't be reused as a Node runtime or debugged through
 # environment variables or flags, and only loads its own, integrity-checked app.asar.
 electronFuses:

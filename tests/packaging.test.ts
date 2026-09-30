@@ -36,13 +36,16 @@ test('the published bundle imports only Bun and Node built-ins, and keeps its bu
 });
 test('the desktop build embeds the compiled server and its UI where the app runs them', () => {
   const config = Bun.YAML.parse(readFileSync(new URL('../apps/desktop/electron-builder.yml', import.meta.url), 'utf8')) as {
-    appId: string; productName: string; extraResources: { from: string; to: string }[]; mac: { notarize: boolean; hardenedRuntime: boolean; entitlementsInherit: string; extendInfo: Record<string, unknown> };
+    appId: string; productName: string; afterPack: string; extraResources: { from: string; to: string }[]; mac: { notarize: boolean; hardenedRuntime: boolean; entitlementsInherit: string; extendInfo: Record<string, unknown> };
     dmg: { contents: { x: number; y: number; type?: string; path?: string }[]; sign: boolean; artifactName: string };
   };
   const server = JSON.parse(readFileSync(new URL('../apps/server/package.json', import.meta.url), 'utf8'));
   assert.match(server.scripts['build:binary'], /--outfile dist\/printtally-server$/);
   // src/server-manager.ts runs <resources>/server/printtally-server; static.ts serves client/ beside it.
   assert.deepEqual(config.extraResources, [{ from: '../server/dist/printtally-server', to: 'server/printtally-server' }, { from: '../server/dist/client', to: 'server/client' }]);
+  // The afterPack hook stamps the executables' own Mach-O UUIDs (apps/desktop/scripts/macho-uuid.ts) before signing.
+  assert.equal(config.afterPack, './scripts/after-pack.mjs');
+  assert.match(read('../apps/desktop/scripts/after-pack.mjs'), /macho-uuid\.ts/);
   // One identity for local and release builds; only the release workflow notarizes, with notarytool.
   assert.deepEqual([config.appId, config.productName], ['com.olliespage.PrintTally', 'Print Tally']);
   assert.deepEqual([config.mac.notarize, config.mac.hardenedRuntime], [false, true]);
