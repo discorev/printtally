@@ -42,6 +42,7 @@ Both builds sign with the first Developer ID Application identity in your keycha
 | `PRINTTALLY_ALLOW_ADHOC_SIGNING=1` | Deliberately permit an ad-hoc signature for a local build when there's no identity. The app only opens on this Mac, and the disk image isn't signed. |
 | `PRINTTALLY_VERSION` | Build this version instead of the one in `apps/desktop/package.json`. |
 | `PRINTTALLY_RELEASE=1` | Make a release build: it uses the hardened runtime and a secure timestamp, and it fails without a Developer ID identity. `PRINTTALLY_SIGN_IDENTITY` still overrides the identity. |
+| `PRINTTALLY_SERVER_ARCHIVE` | Package the server from this archive, a backend release's `printtally-server-<version>-darwin-arm64.tar.gz`, instead of compiling it from the checkout. The release workflow uses it (see [release.md](release.md#what-each-job-publishes)). |
 
 Both builds give Electron's helpers and the embedded Bun server the JIT entitlements in `apps/desktop/build/`. Without `allow-jit`, the server runs about 9 times slower under the hardened runtime.
 
@@ -84,7 +85,7 @@ The app doesn't have an icon yet, so it uses Electron's default.
 Settings shows each part's own version in the Computer card:
 
 - **App version** is the desktop app's version. On a release build it's the release version. On a local build it's `<version>-local+<git hash>[-dirty].<UTC timestamp>`, such as `0.1.0-local+e5867d19-dirty.20260930T132341Z`. `-dirty` means the checkout had uncommitted changes, and the timestamp tells apart rebuilds of the same checkout. When run from source it's `<version>-dev`.
-- **Backend version** is the version of the server the UI is connected to: the `printtally` package version, from `GET /api/v1/health`. A browser only shows this one.
+- **Backend version** is the version of the server the UI is connected to: the `printtally` package version, from `GET /api/v1/health`. A browser only shows this one. A released app packages a published backend release, so its embedded server always reports a published version.
 
 ## npm package
 

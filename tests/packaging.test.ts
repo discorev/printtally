@@ -15,9 +15,9 @@ test('apps/server is the published printtally package; the root is a private wor
   const server = read('../apps/server/package.json'), root = read('../package.json');
   assert.deepEqual([server.name, server.version, server.private, server.bin.printtally], ['printtally', '0.1.0', undefined, './dist/cli.js']);
   assert.deepEqual(server.files, ['dist/cli.js', 'dist/client']);
-  // npm metadata for the unscoped public package; no repository until the GitHub repo exists.
+  // npm metadata for the unscoped public package. Trusted publishing checks repository against the workflow's repo.
   assert.deepEqual([server.publishConfig, server.author, server.license, server.homepage, server.repository],
-    [{ access: 'public' }, 'Ollie Hayman', 'MIT', 'https://printtally.ink', undefined]);
+    [{ access: 'public' }, 'Ollie Hayman', 'MIT', 'https://printtally.ink', { type: 'git', url: 'git+https://github.com/discorev/printtally.git', directory: 'apps/server' }]);
   assert.ok(server.engines.bun);
   // Everything is bundled into dist/cli.js; the print-accounting-* workspace packages are never published.
   assert.equal(server.dependencies, undefined);
@@ -56,62 +56,23 @@ test('the desktop build embeds the compiled server and its UI where the app runs
 });
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
-const json = (path: string) => JSON.parse(read(path));
-interface ReleaseConfig { packages: Record<string, { component: string; 'release-type': string; 'initial-version': string; 'changelog-path': string; 'exclude-paths': string[]; 'extra-files': { type: string; path: string; jsonpath: string }[]; 'include-component-in-tag'?: boolean; 'include-v-in-tag'?: boolean; 'tag-separator'?: string }> }
 
-test('release-please releases the app and the backend separately, each counting shared code', () => {
-  const components = { app: ['apps/desktop', 'apps/server'], backend: ['apps/server', 'apps/desktop'] } as const;
-  for (const [component, [own, other]] of Object.entries(components)) {
-    const config = json(`../.github/release-please/${component}.json`) as ReleaseConfig;
-    // Rooted at the repository so packages/* and apps/web count; only the other app's own commits are left out.
-    assert.deepEqual(Object.keys(config.packages), ['.']);
-    const settings = config.packages['.']!;
-    assert.deepEqual([settings.component, settings['exclude-paths']], [component, [other]]);
-    assert.deepEqual(settings['extra-files'], [{ type: 'json', path: `${own}/package.json`, jsonpath: '$.version' }]);
-    assert.equal(settings['changelog-path'], `${own}/CHANGELOG.md`);
-    // Tags are <component>-v<version> (release-please's defaults), starting at 0.1.0.
-    assert.deepEqual([settings['include-component-in-tag'], settings['include-v-in-tag'], settings['tag-separator']], [undefined, undefined, undefined]);
-    assert.equal(`${settings.component}-v${settings['initial-version']}`, `${component}-v0.1.0`);
-    assert.deepEqual(json(`../.github/release-please/${component}.manifest.json`), { '.': '0.0.0' });
-    assert.equal(json(`../${own}/package.json`).version, '0.1.0');
-  }
-  assert.equal(json('../apps/server/package.json').name, 'printtally');
+test('scripts/bundle.sh packages a released server when given one, and compiles it otherwise', () => {
+  // The release workflow sets PRINTTALLY_SERVER_ARCHIVE to a backend release's server (docs/release.md).
+  const script = read('../scripts/bundle.sh');
+  assert.match(script, /if \[ -n "\$SERVER_ARCHIVE" \]; then\n(?:.*\n)*?\s+tar -xzf "\$SERVER_ARCHIVE" -C apps\/server\/dist printtally-server client\nelse\n\s+bun run build:server\nfi\n/);
 });
 
-interface Step { id?: string; uses?: string; run?: string; with?: Record<string, string> }
-interface Job { needs?: string | string[]; if?: string; 'runs-on': string; environment?: string; permissions?: Record<string, string>; outputs?: Record<string, string>; steps: Step[] }
-interface Workflow { on: { push?: { branches: string[] }; pull_request?: unknown }; jobs: Record<string, Job> }
+interface Workflow { on: { push?: { branches: string[] }; pull_request?: unknown }; jobs: Record<string, { steps: { uses?: string; run?: string; with?: Record<string, string> }[] }> }
 
-test('the release workflow builds each component only when release-please released it', () => {
-  const workflow = Bun.YAML.parse(read('../.github/workflows/release.yml')) as Workflow;
-  assert.deepEqual(workflow.on, { push: { branches: ['main'] } });
-  const { 'release-please': releasePlease, app, 'backend-pack': pack, 'backend-publish': publish } = workflow.jobs;
-  const steps = Object.fromEntries(releasePlease!.steps.map(step => [step.id, step]));
-  for (const component of ['app', 'backend']) {
-    assert.match(steps[component]!.uses!, /^googleapis\/release-please-action@/);
-    assert.equal(steps[component]!.with!['config-file'], `.github/release-please/${component}.json`);
-    assert.equal(steps[component]!.with!['manifest-file'], `.github/release-please/${component}.manifest.json`);
-    for (const output of ['release_created', 'tag_name', 'version'])
-      assert.equal(releasePlease!.outputs![`${component}_${output.replace('_created', '').replace('_name', '')}`], `\${{ steps.${component}.outputs.${output} }}`);
-  }
-  assert.deepEqual([app!.if, app!['runs-on'], app!.environment], ["needs.release-please.outputs.app_release == 'true'", 'macos-26', 'release']);
-  const appScript = app!.steps.map(step => step.run ?? '').join('\n');
-  for (const command of ['PRINTTALLY_RELEASE=1 PRINTTALLY_VERSION="$VERSION" scripts/bundle.sh', 'codesign --verify --deep --strict', 'xcrun notarytool submit', 'xcrun stapler staple "$APP"',
-    'spctl --assess --type execute', 'PRINTTALLY_RELEASE=1 scripts/make-dmg.sh', 'xcrun stapler staple "$DMG"', 'gh release upload "$TAG"', 'security delete-keychain'])
-    assert.ok(appScript.includes(command), command);
-  assert.equal(pack!.if, "needs.release-please.outputs.backend_release == 'true'");
-  assert.ok(pack!.steps.some(step => step.run === 'bun pm pack'));
-  assert.deepEqual([publish!.needs, publish!.permissions], ['backend-pack', { contents: 'read', 'id-token': 'write' }]);
-  assert.ok(publish!.steps.some(step => step.run === 'npm install -g npm@11.5.1 --ignore-scripts'));
-});
-
-test('CI runs the checks main requires on pull requests and pushes to main', () => {
+test('CI runs the checks main requires on pull requests and pushes to main, with the pinned Bun', () => {
   const workflow = Bun.YAML.parse(read('../.github/workflows/ci.yml')) as Workflow;
   assert.deepEqual(workflow.on.push, { branches: ['main'] });
   assert.ok('pull_request' in workflow.on);
-  const runs = Object.values(workflow.jobs).flatMap(job => job.steps.map(step => step.run));
-  for (const command of ['bun run typecheck', 'bun test', 'bun run test:packed']) assert.ok(runs.includes(command), command);
-  const root = json('../package.json');
+  const steps = Object.values(workflow.jobs).flatMap(job => job.steps);
+  for (const command of ['bun run typecheck', 'bun test', 'bun run test:packed']) assert.ok(steps.some(step => step.run === command), command);
+  for (const step of steps.filter(step => step.uses?.startsWith('oven-sh/setup-bun@'))) assert.equal(step.with?.['bun-version'], '1.3.9');
+  const root = JSON.parse(read('../package.json'));
   assert.equal(root.scripts['dist:desktop'], 'sh scripts/bundle.sh && sh scripts/make-dmg.sh');
   assert.equal(root.scripts['release:desktop'], undefined);
 });

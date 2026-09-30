@@ -1,6 +1,8 @@
 #!/bin/sh
 # Builds and signs apps/desktop/release/mac-arm64/Print Tally.app (docs/build.md). A local build by default;
-# PRINTTALLY_RELEASE=1 for a release build, which CI then notarizes (docs/release.md).
+# PRINTTALLY_RELEASE=1 for a release build, which CI then notarizes (docs/release.md). The app embeds the
+# server compiled from this checkout, or the one in PRINTTALLY_SERVER_ARCHIVE (a backend release's
+# printtally-server-<version>-darwin-arm64.tar.gz), which is how CI ships a published backend.
 set -eu
 
 ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
@@ -35,8 +37,21 @@ else
     set -- -c.mac.hardenedRuntime=false -c.mac.timestamp=none
 fi
 
+SERVER_ARCHIVE=${PRINTTALLY_SERVER_ARCHIVE:-}
+case "$SERVER_ARCHIVE" in
+    ''|/*) ;;
+    *) SERVER_ARCHIVE="$PWD/$SERVER_ARCHIVE" ;;
+esac
+
 cd "$ROOT"
-bun run build:server
+if [ -n "$SERVER_ARCHIVE" ]; then
+    # electron-builder.yml takes the server and its UI from apps/server/dist.
+    rm -rf apps/server/dist/printtally-server apps/server/dist/client
+    mkdir -p apps/server/dist
+    tar -xzf "$SERVER_ARCHIVE" -C apps/server/dist printtally-server client
+else
+    bun run build:server
+fi
 bun run --cwd apps/desktop build
 # Read by src/main.ts: a local build keeps off the real ledger and port (src/build.ts).
 printf '{ "kind": "%s", "version": "%s" }\n' "$KIND" "$VERSION" > "$DESKTOP/dist/build-info.json"

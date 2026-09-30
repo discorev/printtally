@@ -1,10 +1,23 @@
 {
-  "name": "printtally-workspace", "private": true, "license": "MIT",
-  "type": "module", "workspaces": ["packages/*", "apps/server", "apps/web", "apps/desktop"],
-  "engines": {"bun": ">=1.3.9"},
+  "name": "printtally-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/server",
+    "apps/web",
+    "apps/desktop"
+  ],
+  "engines": {
+    "bun": ">=1.3.9"
+  },
   "scripts": {
-    "typecheck": "tsc --noEmit", "test": "bun test",
-    "cli": "bun apps/server/src/cli.ts", "dev:server": "bun --watch apps/server/src/cli.ts serve",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "cli": "bun apps/server/src/cli.ts",
+    "dev:server": "bun --watch apps/server/src/cli.ts serve",
     "dev:web": "bun run --cwd apps/web dev",
     "dev": "bun run dev:server & trap \"kill $!\" EXIT INT TERM; bun run dev:web",
     "dev:desktop": "bun run --cwd apps/web dev & trap \"kill $!\" EXIT INT TERM; bun run --cwd apps/desktop dev",
@@ -15,5 +28,16 @@
     "dist:desktop": "sh scripts/bundle.sh && sh scripts/make-dmg.sh",
     "seed:dev": "bun scripts/dev-seed.ts"
   },
-  "devDependencies": {"@peculiar/x509": "^2.1.0", "@types/bun": "^1.3.0", "drizzle-orm": "^0.45.3", "reflect-metadata": "^0.2.0", "typescript": "^5.9.0", "print-accounting-contracts": "workspace:*", "print-accounting-core": "workspace:*", "print-accounting-database": "workspace:*", "print-accounting-ivec": "workspace:*"}
+  "devDependencies": {
+    "@peculiar/x509": "^2.1.0",
+    "@types/bun": "^1.3.0",
+    "drizzle-orm": "^0.45.3",
+    "print-accounting-contracts": "workspace:*",
+    "print-accounting-core": "workspace:*",
+    "print-accounting-database": "workspace:*",
+    "print-accounting-ivec": "workspace:*",
+    "reflect-metadata": "^0.2.0",
+    "release-please": "17.6.0",
+    "typescript": "^5.9.0"
+  }
 }

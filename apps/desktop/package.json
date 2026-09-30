@@ -15,5 +15,13 @@
     "electron": "^44.5.0",
     "electron-builder": "^26.15.3",
     "typescript": "^5.9.0"
+  },
+  "peerDependencies": {
+    "printtally-workspace": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "printtally-workspace": {
+      "optional": true
+    }
   }
 }

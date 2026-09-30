@@ -5,6 +5,11 @@
   "author": "Ollie Hayman",
   "description": "Per-job print cost accounting for Canon imagePROGRAF printers",
   "homepage": "https://printtally.ink",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/discorev/printtally.git",
+    "directory": "apps/server"
+  },
   "type": "module",
   "engines": {
     "bun": ">=1.3.9"

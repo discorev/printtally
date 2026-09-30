@@ -131,7 +131,8 @@ when run from source.
 
 [docs/build.md](docs/build.md) covers building the npm package and the desktop
 app, signing, and local builds, which keep to their own data folder and port.
-[docs/release.md](docs/release.md) covers releases.
+[docs/release.md](docs/release.md) covers how the backend and the app are
+versioned and released.
 
 ## Licence and disclaimer
 

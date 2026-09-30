@@ -161,3 +161,9 @@ The API stays under `/api`.
   `NODE_OPTIONS` and the inspector flags, and the app only loads its own
   integrity-checked `app.asar`. The app registers `printtally://` in its Info.plist.
   Only the release workflow notarizes ([docs/release.md](docs/release.md)).
+- **Releases.** release-please versions the backend (`apps/server`, which also ships
+  `apps/web` and `packages/*`) and the app (`apps/desktop`) separately, in one release
+  PR; a backend release always releases the app too. A backend release attaches its
+  compiled server to its GitHub release, and a release build of the app packages that
+  server (`PRINTTALLY_SERVER_ARCHIVE`) instead of compiling its own
+  ([docs/release.md](docs/release.md)).
