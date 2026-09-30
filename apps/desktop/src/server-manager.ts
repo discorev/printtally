@@ -7,7 +7,10 @@ import type { Remote } from './config.ts';
 // port_in_use: another app answers on the local port. failed: the bundled
 // server didn't start, after a few tries.
 export type ConnectionStatus = 'ready' | 'unreachable' | 'port_in_use' | 'failed';
-export interface Connection { host: string; port: number; owns: boolean; remote: boolean; status: ConnectionStatus }
+// What's answering: a server this app spawned, one it found already running locally, or a saved remote host.
+// Drives the UI's server chip, which only needs to name the computer when it isn't obviously this app's own server.
+export type ServerOwnership = 'owned' | 'borrowed' | 'remote';
+export interface Connection { host: string; port: number; owns: boolean; remote: boolean; ownership: ServerOwnership; status: ConnectionStatus }
 type SpawnFn = (command: string, args: string[]) => ChildProcess;
 type Probe = 'printtally' | 'other' | 'down';
 const MAX_FAILED_STARTS = 3;
@@ -70,7 +73,9 @@ export class ServerManager {
   }
 
   get connection(): Connection {
-    return { host: this.host, port: this.port, owns: !this.remote && this.child !== undefined, remote: this.remote, status: this.status };
+    const owns = !this.remote && this.child !== undefined;
+    const ownership: ServerOwnership = this.remote ? 'remote' : owns ? 'owned' : 'borrowed';
+    return { host: this.host, port: this.port, owns, remote: this.remote, ownership, status: this.status };
   }
 
   // Same test as the CLI's checkPort. A remote host answers 401 until this device is paired;

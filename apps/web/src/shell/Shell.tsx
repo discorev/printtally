@@ -7,6 +7,7 @@ import { LOCAL_NETWORK_BLOCKED } from '../api/client.ts';
 import { count } from '../lib/format.ts';
 import { cx } from '../lib/cx.ts';
 import { SECTION_ICONS } from './icons.tsx';
+import { showServerChip } from './serverChip.ts';
 
 const SECTIONS = [
   { to: '/jobs', label: 'Jobs', icon: SECTION_ICONS.jobs }, { to: '/papers', label: 'Papers', icon: SECTION_ICONS.papers },
@@ -26,9 +27,12 @@ export function ConnectionGate() {
   return null;
 }
 
-/** The server chip at the top right: the computer's name, and "retrying" (amber, pulsing) while it's lost. */
+/** The server chip at the top right: the computer's name, and "retrying" (amber, pulsing) while it's lost.
+ *  Hidden in the desktop app once it's running the server it started itself — naming the computer is only
+ *  useful there for a borrowed local server or a remote host. The server-lost banner still shows regardless. */
 function ServerChip() {
   const { status } = useConnection(), name = useServerName(), connection = useDesktopConnection();
+  if (!showServerChip({ desktop: !!desktop, ownership: connection?.ownership })) return null;
   const lost = status === 'lost';
   const title = connection ? `Connected to ${name} (${connection.host}:${connection.port})` : `${onServerMachine() ? 'Serving on' : 'Connected to'} ${location.host}`;
   return (

@@ -29,7 +29,7 @@ describe('ServerManager', () => {
   test('borrows a Print Tally already answering locally, without spawning', async () => {
     const spawnFn = mock(() => fakeChild().child);
     const manager = new ServerManager({ spawnFn, fetchFn: answering('printtally') });
-    expect(await manager.connect()).toEqual({ host: '127.0.0.1', port: 4318, owns: false, remote: false, status: 'ready' });
+    expect(await manager.connect()).toEqual({ host: '127.0.0.1', port: 4318, owns: false, remote: false, ownership: 'borrowed', status: 'ready' });
     expect(spawnFn).not.toHaveBeenCalled();
   });
 
@@ -39,6 +39,17 @@ describe('ServerManager', () => {
     const [first, second] = await Promise.all([manager.connect(), manager.connect()]);
     expect([first.owns, first.status, second.owns]).toEqual([true, 'ready', true]);
     expect(spawnFn).toHaveBeenCalledTimes(1);
+  });
+
+  test('reports ownership: owned once it spawns a server, borrowed when it found one, remote for a saved host', async () => {
+    const owned = new ServerManager({ ...options, spawnFn: mock(() => fakeChild().child), fetchFn: answering('down', 'printtally') });
+    expect((await owned.connect()).ownership).toBe('owned');
+
+    const borrowed = new ServerManager({ spawnFn: mock(() => fakeChild().child), fetchFn: answering('printtally') });
+    expect((await borrowed.connect()).ownership).toBe('borrowed');
+
+    const remote = new ServerManager({ spawnFn: mock(() => fakeChild().child), fetchFn: answering('printtally') });
+    expect((await remote.connect({ host: 'studio-mac', port: 4500 })).ownership).toBe('remote');
   });
 
   test('never starts over another app on the port', async () => {
@@ -52,7 +63,7 @@ describe('ServerManager', () => {
   test('uses a saved remote host on its own port, including one that needs this device paired', async () => {
     const spawnFn = mock(() => fakeChild().child);
     const manager = new ServerManager({ spawnFn, fetchFn: answering('unpaired'), port: 4400 });
-    expect(await manager.connect({ host: 'studio-mac', port: 4500 })).toEqual({ host: 'studio-mac', port: 4500, owns: false, remote: true, status: 'ready' });
+    expect(await manager.connect({ host: 'studio-mac', port: 4500 })).toEqual({ host: 'studio-mac', port: 4500, owns: false, remote: true, ownership: 'remote', status: 'ready' });
     expect(spawnFn).not.toHaveBeenCalled();
   });
 
@@ -60,7 +71,7 @@ describe('ServerManager', () => {
     const spawnFn = mock(() => fakeChild().child);
     const fetchFn = answering('down');
     const manager = new ServerManager({ ...options, spawnFn, fetchFn, port: 4400 });
-    expect(await manager.connect({ host: 'studio-mac', port: 4318 })).toEqual({ host: 'studio-mac', port: 4318, owns: false, remote: true, status: 'unreachable' });
+    expect(await manager.connect({ host: 'studio-mac', port: 4318 })).toEqual({ host: 'studio-mac', port: 4318, owns: false, remote: true, ownership: 'remote', status: 'unreachable' });
     await manager.ensureAlive();
     fetchFn.answers = ['printtally'];
     await manager.ensureAlive();
