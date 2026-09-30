@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.1](https://github.com/discorev/printtally/compare/backend-v0.1.0...backend-v0.1.1) (2026-09-30)
+
+
+### Bug Fixes
+
+* explain when macOS blocks local network access ([8ddd59a](https://github.com/discorev/printtally/commit/8ddd59a765af2653e91d965a9a72bf282af778a5))
+* explain when macOS blocks local network access ([56b0c96](https://github.com/discorev/printtally/commit/56b0c9617ba150dd3d01e1cccb1b5556f1cfbc4c))
+* **web:** lay out the fingerprint as the printer's screen does ([100b73a](https://github.com/discorev/printtally/commit/100b73a120a3a51b9f36938cc5a2ace78c978b0e))
+* **web:** lay out the fingerprint as the printer's screen does ([d2e9bf2](https://github.com/discorev/printtally/commit/d2e9bf2222c06252ff2c4673be01bb81f1633b11))
+
 ## 0.1.0 (2026-09-30)
 
 
