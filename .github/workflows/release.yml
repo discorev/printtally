@@ -6,11 +6,11 @@ name: Release
 on:
   push:
     branches: [main]
-  # Stage an already released backend on npm again, e.g. after a failed publish.
+  # Publish an already released backend to npm again, e.g. after a failed publish.
   workflow_dispatch:
     inputs:
       backend_tag:
-        description: Backend tag to stage on npm (e.g. backend-v0.1.0)
+        description: Backend tag to publish to npm (e.g. backend-v0.1.0)
         required: true
 
 permissions:
@@ -92,34 +92,30 @@ jobs:
           if-no-files-found: error
 
   npm-publish:
-    name: Backend (npm stage)
+    name: Backend (npm publish)
     needs: npm-prepare
     # !cancelled(): a manual run skips release-please, and a skipped job upstream would otherwise skip this one.
     if: ${{ !cancelled() && needs.npm-prepare.outputs.publish == 'true' }}
     runs-on: ubuntu-latest
+    # npm's trusted publisher only accepts this environment, which only main can deploy to.
+    environment: release
     permissions:
       contents: read
       id-token: write
     steps:
-      - uses: actions/setup-node@v7
+      # The only job that can publish: its actions are pinned to commits, not movable tags.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-      # Trusted publishing is stage-only: CI stages the version and a maintainer approves it on npmjs.com
-      # with 2FA. `npm stage` needs npm >= 11.15.0. Pin it and disable lifecycle scripts in this privileged job.
+      # Pin npm and disable lifecycle scripts in this privileged job.
       - run: npm install -g npm@11.21.0 --ignore-scripts
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: backend-package
-      - name: Stage on npm
+      - name: Publish to npm
         # Packed with bun in the unprivileged job, which bundles the private workspace packages into
-        # dist/cli.js and rewrites their workspace:* devDependencies. `npm stage publish` packs the current
-        # directory, so stage the unpacked package as is, without its prepack build.
-        env:
-          npm_config_ignore_scripts: 'true'
-        run: |
-          tar -xzf printtally-*.tgz
-          cd package
-          npm stage publish --provenance
+        # dist/cli.js and rewrites their workspace:* devDependencies.
+        run: npm publish printtally-*.tgz --provenance --ignore-scripts
 
   backend-assets:
     name: Backend (server for the app)

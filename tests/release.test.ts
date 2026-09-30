@@ -125,7 +125,7 @@ const script = (job: Job) => job.steps.map(step => step.run ?? '').join('\n');
 test('merging the release PR on main runs release-please, then publishes what it released', () => {
   assert.deepEqual([workflow.on, workflow.permissions], [{
     push: { branches: ['main'] },
-    workflow_dispatch: { inputs: { backend_tag: { description: 'Backend tag to stage on npm (e.g. backend-v0.1.0)', required: true } } },
+    workflow_dispatch: { inputs: { backend_tag: { description: 'Backend tag to publish to npm (e.g. backend-v0.1.0)', required: true } } },
   }, { contents: 'read' }]);
   assert.deepEqual(Object.fromEntries(Object.entries(workflow.jobs).map(([name, job]) => [name, job.needs ?? []])), {
     'release-please': [], 'npm-prepare': 'release-please', 'npm-publish': 'npm-prepare', 'backend-assets': ['release-please', 'npm-prepare'], app: ['release-please', 'backend-assets'],
@@ -144,7 +144,7 @@ test('merging the release PR on main runs release-please, then publishes what it
     for (const step of job.steps.filter(step => step.uses?.startsWith('oven-sh/setup-bun@'))) assert.deepEqual(step.with, { 'bun-version': '1.3.9' });
 });
 
-test('a backend release is tested and packed unprivileged, then staged on npm with OIDC for a maintainer to approve', () => {
+test('a backend release is tested and packed unprivileged, then published to npm with OIDC from the release environment', () => {
   const { 'release-please': releasePlease, 'npm-prepare': prepare, 'npm-publish': publish } = workflow.jobs;
   // A manual run stages an already released backend tag again and skips release-please and the app.
   assert.equal(releasePlease!.if, "github.event_name == 'push'");
@@ -155,9 +155,11 @@ test('a backend release is tested and packed unprivileged, then staged on npm wi
   for (const command of ['bun install --frozen-lockfile', 'bun run typecheck && bun test', 'npm view "printtally@$VERSION" version', 'bun pm pack'])
     assert.ok(script(prepare!).includes(command), command);
   assert.deepEqual([publish!.if, publish!.permissions], ["${{ !cancelled() && needs.npm-prepare.outputs.publish == 'true' }}", { contents: 'read', 'id-token': 'write' }]);
-  // The trusted publisher is stage-only, so a direct `npm publish` is refused.
-  assert.deepEqual(publish!.steps.flatMap(step => step.run ?? []), ['npm install -g npm@11.21.0 --ignore-scripts', 'tar -xzf printtally-*.tgz\ncd package\nnpm stage publish --provenance\n']);
-  assert.deepEqual(publish!.steps.find(step => step.name === 'Stage on npm')!.env, { npm_config_ignore_scripts: 'true' });
+  // npm's trusted publisher only accepts the release environment, which only main can deploy to.
+  assert.equal(publish!.environment, 'release');
+  assert.deepEqual(publish!.steps.flatMap(step => step.run ?? []), ['npm install -g npm@11.21.0 --ignore-scripts', 'npm publish printtally-*.tgz --provenance --ignore-scripts']);
+  // The job that can publish pins its actions to commits.
+  for (const step of publish!.steps.filter(step => step.uses)) assert.match(step.uses!, /@[0-9a-f]{40}$/);
 });
 
 test('a backend release attaches its compiled server, checked and checksummed, for the app to package', () => {
