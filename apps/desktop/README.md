@@ -44,7 +44,7 @@ To run just this app against an already-running web dev server:
 (`apps/server/dist/printtally-server` and its `client/`), then runs electron-builder
 (`electron-builder.yml`) to make `release/mac-arm64/Print Tally.app` and
 `release/Print Tally-<version>-arm64.dmg` for Apple silicon. The app id is
-`dev.printtally.app`; the compiled server goes in `Contents/Resources/server/`.
+`com.olliespage.PrintTally`; the compiled server goes in `Contents/Resources/server/`.
 
 It signs with the Developer ID Application identity in your keychain (set
 `CSC_NAME` to choose one) under the hardened runtime. `build/entitlements.mac.plist`

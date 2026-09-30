@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { HealthResponse, PairingCodeResponse, SessionsResponse } from 'print-accounting-contracts';
 import { Sessions, PAIRING_TTL_MS } from '../apps/server/src/sessions.ts';
-import { allowedHosts, hostNames, isLoopback } from '../apps/server/src/access.ts';
+import { hostChecker, hostNames, isLoopback, loopbackHosts, type Network } from '../apps/server/src/access.ts';
 import { startServer } from '../apps/server/src/server.ts';
 import { MemoryStore } from '../apps/server/src/credentials.ts';
 import { apiFixture, network } from './api-fixtures.ts';
@@ -40,11 +40,89 @@ test('remote access is off by default: loopback only, and LAN names are rejected
     assert.ok(address && typeof address === 'object');
     assert.equal(address.address, remote ? '0.0.0.0' : '127.0.0.1');
   }
-  assert.deepEqual([...allowedHosts(4318, false, network)], ['127.0.0.1:4318', 'localhost:4318']);
-  assert.ok(allowedHosts(4318, true, network).has('studio-mac.local:4318'));
   assert.deepEqual(hostNames('Studio-Mac.local'), ['studio-mac', 'studio-mac.local']);
   assert.ok(isLoopback('127.0.0.1') && isLoopback('::1') && isLoopback('::ffff:127.0.0.1'));
   assert.ok(!isLoopback('192.0.2.50') && !isLoopback('::ffff:192.0.2.50') && !isLoopback(undefined));
+});
+
+// A Tailscale-style machine: a LAN address, a 100.x address, and names resolved by a fake resolver.
+function tailnet(records: Record<string, string[] | 'fail' | 'hang'> = {}) {
+  const calls: string[] = [];
+  const net: Network = {
+    addresses: () => ['192.0.2.50', '100.101.102.103'], names: () => ['studio-mac', 'studio-mac.local'],
+    lookup: name => {
+      calls.push(name);
+      const record = records[name];
+      if (record === 'hang') return new Promise(() => {});
+      return record === undefined || record === 'fail' ? Promise.reject(new Error('ENOTFOUND')) : Promise.resolve(record);
+    },
+  };
+  return { net, calls };
+}
+const headers = (host: string, origin?: string) => ({ headers: { host, ...origin === undefined ? {} : { origin } } });
+
+test('loopback connections accept only 127.0.0.1 and localhost; the network also gets this machine\'s names', async () => {
+  const { net, calls } = tailnet({ 'studio-mac.tail1234.ts.net': ['100.101.102.103'] });
+  assert.deepEqual(loopbackHosts(4318), ['127.0.0.1:4318', 'localhost:4318']);
+  const off = hostChecker(false, net), on = hostChecker(true, net);
+  for (const check of [off, on]) {
+    assert.equal(await check(headers('127.0.0.1:4318'), 4318, true), '127.0.0.1:4318');
+    assert.equal(await check(headers('LOCALHOST:4318', 'http://localhost:4318'), 4318, true), 'localhost:4318');
+    // The no-sign-in path never widens, even with remote access on.
+    for (const host of ['192.0.2.50:4318', 'studio-mac.local:4318', 'studio-mac.tail1234.ts.net:4318', 'localhost.:4318', '127.0.0.1:4319']) {
+      assert.equal(await check(headers(host), 4318, true), undefined, host);
+    }
+  }
+  assert.equal(await off(headers('192.0.2.50:4318'), 4318, false), undefined, 'remote access off');
+  assert.equal(await on(headers('192.0.2.50:4318'), 4318, false), '192.0.2.50:4318');
+  assert.equal(await on(headers('studio-mac.local.:4318'), 4318, false), 'studio-mac.local.:4318');
+  // IP literals must be this machine's own; they, and non-DNS names, are never looked up.
+  for (const host of ['198.51.100.7:4318', '3232235781:4318', '[::1]:4318', 'under_score:4318', 'a..b:4318', '.:4318']) {
+    assert.equal(await on(headers(host), 4318, false), undefined, host);
+  }
+  assert.deepEqual(calls, []);
+});
+
+test('from the network, a DNS name (MagicDNS or custom) is accepted only when it resolves to this machine', async () => {
+  const clock = { time: 0 };
+  const { net, calls } = tailnet({
+    'studio-mac.tail1234.ts.net': ['100.101.102.103'], 'printer-mac.home.arpa': ['192.0.2.50', '100.101.102.103'],
+    'elsewhere.tail1234.ts.net': ['100.64.0.9'], 'mixed.example': ['100.101.102.103', '203.0.113.9'], 'empty.example': [],
+    'v6.example': ['fd7a:115c:a1e0::1'], 'slow.example': 'hang',
+  });
+  const check = hostChecker(true, net, { timeoutMs: 20, clock: () => clock.time });
+  const magic = 'studio-mac.tail1234.ts.net:4318';
+  assert.equal(await check(headers(magic, 'http://' + magic), 4318, false), magic);
+  assert.equal(await check(headers('STUDIO-MAC.Tail1234.ts.net.:4318', 'http://studio-mac.tail1234.ts.net.:4318'), 4318, false), 'studio-mac.tail1234.ts.net.:4318');
+  assert.equal(await check(headers('printer-mac.home.arpa:4318'), 4318, false), 'printer-mac.home.arpa:4318');
+  for (const [host, origin] of [[magic, 'http://unrelated.example'], [magic, 'https://' + magic], ['studio-mac.tail1234.ts.net:4319', undefined], ['studio-mac.tail1234.ts.net', undefined], ['studio-mac.tail1234.ts.net:04318', undefined]]) {
+    assert.equal(await check(headers(host!, origin), 4318, false), undefined, `${host} ${origin}`);
+  }
+  assert.equal(await check(headers('studio-mac.tail1234.ts.net'), 80, false), 'studio-mac.tail1234.ts.net');
+  for (const name of ['elsewhere.tail1234.ts.net', 'mixed.example', 'empty.example', 'v6.example', 'unknown.example', 'slow.example']) {
+    assert.equal(await check(headers(name + ':4318'), 4318, false), undefined, name);
+  }
+  // Answers, including failures, are cached for a minute.
+  const counted = (name: string): number => calls.filter(item => item === name).length;
+  await check(headers('unknown.example:4318'), 4318, false); await check(headers(magic), 4318, false);
+  assert.deepEqual([counted('studio-mac.tail1234.ts.net'), counted('unknown.example'), counted('slow.example')], [1, 1, 1]);
+  clock.time += 60_000;
+  await check(headers('unknown.example:4318'), 4318, false); await check(headers(magic), 4318, false);
+  assert.deepEqual([counted('studio-mac.tail1234.ts.net'), counted('unknown.example')], [2, 2]);
+});
+
+test('a MagicDNS name reaches the API from another device only with a session, and never from loopback', async t => {
+  const { net } = tailnet({ 'studio-mac.tail1234.ts.net': ['100.101.102.103'], 'elsewhere.tail1234.ts.net': ['100.64.0.9'] });
+  const f = await apiFixture(t, { remote: true, network: net }), magic = `studio-mac.tail1234.ts.net:${f.port}`;
+  const token = f.sessions.redeem(f.sessions.createPairing('Phone').code)!;
+  f.peer.remote = true;
+  assert.equal((await f.request('/api/v1/health', { host: magic })).status, 401);
+  assert.equal((await f.request('/api/v1/health', { host: magic, headers: { Cookie: 'printtally_session=' + token } })).status, 200);
+  assert.equal((await f.request('/api/v1/papers', { method: 'POST', host: magic, headers: { Cookie: 'printtally_session=' + token, Origin: 'http://unrelated.example' }, body: { name: 'Cross-site' } })).status, 403);
+  assert.equal((await f.request('/api/v1/health', { host: `elsewhere.tail1234.ts.net:${f.port}`, headers: { Cookie: 'printtally_session=' + token } })).status, 403);
+  f.peer.remote = false;
+  assert.equal((await f.request('/api/v1/health', { host: magic })).status, 403);
+  assert.equal((await f.request('/', { host: magic })).status, 403);
 });
 
 test('other devices need a paired session; a pairing code works once, and sessions can be revoked', async t => {

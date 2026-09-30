@@ -91,6 +91,11 @@ Open the link, or scan the QR code, on the device. It works once and expires aft
 `printtally sessions revoke <id>`. On a Mac with the desktop app, open the
 `printtally://` link it prints instead, or choose "Connect to it" on the setup screen.
 
+Other devices can use any name for the host that resolves to one of its own
+addresses, as well as the addresses it prints. With [Tailscale](https://tailscale.com),
+both its 100.x address and its MagicDNS name (such as
+`http://studio-mac.your-tailnet.ts.net:4318`) work.
+
 Print Tally doesn't encrypt traffic between devices. Use remote access only on a
 network you trust, such as your home network, or across
 [Tailscale](https://tailscale.com), which encrypts it for you. Never forward the port

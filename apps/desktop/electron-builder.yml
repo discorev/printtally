@@ -1,6 +1,6 @@
 # macOS arm64 .app and .dmg. Build from the repo root with `bun run dist:desktop`, which compiles
 # the server first (apps/server/dist/printtally-server, with the UI in client/ beside it).
-appId: dev.printtally.app
+appId: com.olliespage.PrintTally
 productName: Print Tally
 directories:
   output: release

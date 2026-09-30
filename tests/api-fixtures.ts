@@ -13,11 +13,14 @@ import { MemoryStore } from '../apps/server/src/credentials.ts';
 import type { Network } from '../apps/server/src/access.ts';
 import { tlsFixtures } from './tls-fixtures.ts';
 
-// A LAN address and hostname from TEST-NET; nothing is ever sent there.
-export const network: Network = { addresses: () => ['192.0.2.50'], names: () => ['studio-mac', 'studio-mac.local'] };
+// A LAN address and hostname from TEST-NET; nothing is ever sent there, and nothing touches real DNS.
+export const network: Network = {
+  addresses: () => ['192.0.2.50'], names: () => ['studio-mac', 'studio-mac.local'],
+  lookup: async () => { throw new Error('No DNS in tests'); },
+};
 export interface Reply { status: number; headers: IncomingHttpHeaders; text: string; json: <T = Record<string, unknown>>() => T }
 export interface FixtureOptions extends CollectionOptions {
-  remote?: boolean; ui?: string; collector?: ConstructorParameters<typeof AccountingService>[1];
+  remote?: boolean; ui?: string; collector?: ConstructorParameters<typeof AccountingService>[1]; network?: Network;
 }
 // An API on a random loopback port. `peer.remote` makes the server treat the next requests as
 // coming from another device; Host, Origin and Cookie are sent exactly as given.
@@ -34,7 +37,7 @@ export async function apiFixture(t: TestContext, options: FixtureOptions = {}) {
   });
   const collections = new Collections(service, enrolment, { intervalMs: 3_600_000, clock: () => clock.time, inspectRoot: async host => rootFor(host), ...options });
   const sessions = new Sessions(join(dir, 'sessions.json'), () => clock.time);
-  const server = createApi(service, { enrolment, collections, sessions, remote: options.remote, uiDirectory: options.ui, network, isLocal: () => !peer.remote });
+  const server = createApi(service, { enrolment, collections, sessions, remote: options.remote, uiDirectory: options.ui, network: options.network ?? network, isLocal: () => !peer.remote });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   if (!address || typeof address !== 'object') throw new Error('No address');

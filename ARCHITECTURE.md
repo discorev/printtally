@@ -105,10 +105,15 @@ and collection, and quitting it stops the server for every client on the machine
   and, when sent, in `Origin`; that is what stops other web pages in a browser, and
   DNS rebinding, from reaching the API.
 - **Other devices: off by default.** The server listens on 127.0.0.1 unless it was
-  started with `printtally serve --host`, which listens on all interfaces, also
-  accepts this machine's LAN addresses and hostname in `Host`, and prints them with
-  a warning. The server does not terminate HTTPS; the docs recommend a home network
-  or Tailscale.
+  started with `printtally serve --host`, which listens on all interfaces and prints
+  this machine's LAN addresses and hostname with a warning. Connections from the
+  network (never from loopback, whose `Host` check stays as above) may name the
+  server by those addresses and names, or by any DNS name, such as a Tailscale
+  MagicDNS or custom DNS name, whose IPv4 addresses are all this machine's
+  non-internal ones. The name is lower-cased, a trailing dot dropped and the port
+  must match; IP literals are never looked up. Lookups use the system resolver,
+  time out after 2 s, are cached for 60 s (failures too) and fail closed. The
+  server does not terminate HTTPS; the docs recommend a home network or Tailscale.
 - **Pairing.** `printtally pair` asks the running server, over loopback, for a
   single-use code that expires after 5 minutes, and prints a link
   (`http://<host>:<port>/pair#code=…`, and a `printtally://` form for the desktop
@@ -142,7 +147,7 @@ The API stays under `/api`.
 - **Compiled server.** `bun build --compile --target bun-darwin-arm64` makes
   `apps/server/dist/printtally-server`, with the UI copied to `client/` beside it.
 - **Desktop.** electron-builder packages `apps/desktop` as a macOS arm64 `.app` and
-  `.dmg` (`appId` `dev.printtally.app`) and copies the compiled server and its
+  `.dmg` (`appId` `com.olliespage.PrintTally`) and copies the compiled server and its
   `client/` into `Contents/Resources/server/`, where `server-manager.ts` runs it.
   Everything is signed with Developer ID under the hardened runtime. The app has
   `allow-jit` and `allow-unsigned-executable-memory`; so do Electron's helpers and

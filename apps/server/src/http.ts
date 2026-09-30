@@ -6,7 +6,7 @@ import { PrinterEnrolment, EnrolmentError } from './printer-enrolment.ts';
 import { CredentialError } from './credentials.ts';
 import { CollectionError, type Collections } from './collections.ts';
 import type { Sessions } from './sessions.ts';
-import { allowedHosts, checkedHost, isLoopback, pairingLink, sessionCookie, sessionToken, systemNetwork, type Network } from './access.ts';
+import { hostChecker, isLoopback, pairingLink, sessionCookie, sessionToken, systemNetwork, type Network } from './access.ts';
 import { pairPage, staticFile } from './static.ts';
 import { ledgerRoute } from './ledger-routes.ts';
 
@@ -20,7 +20,7 @@ const securityHeaders = { 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options'
 // addresses and passwords; no route accepts file paths.
 export function createApi(service: AccountingService, options: ApiOptions): Server {
   const { enrolment, collections, sessions, remote = false, network = systemNetwork, isLocal = isLoopback } = options;
-  const ledger = new Ledger(service.db);
+  const ledger = new Ledger(service.db), checkHost = hostChecker(remote, network);
   const server = createServer(async (request, response) => {
     const send = (status: number, value: unknown, headers: Record<string, string> = {}): void => {
       response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...securityHeaders, ...headers });
@@ -28,11 +28,10 @@ export function createApi(service: AccountingService, options: ApiOptions): Serv
     };
     try {
       const address = server.address(), port = typeof address === 'object' && address ? address.port : 0;
-      const host = checkedHost(request, allowedHosts(port, remote, network));
+      const local = isLocal(request.socket.remoteAddress), host = await checkHost(request, port, local);
       if (!host) return send(403, { error: 'origin_rejected' });
       const url = new URL(request.url ?? '/', 'http://' + host);
       const path = url.pathname, method = request.method;
-      const local = isLocal(request.socket.remoteAddress);
       if (!path.startsWith('/api/')) return serveUi(response, method, path, options.uiDirectory);
       if (method === 'POST' && path === '/api/v1/pairing') {
         const token = sessions.redeem(pairingRedeemSchema.parse(await jsonBody(request)).code, request.headers['user-agent']);
