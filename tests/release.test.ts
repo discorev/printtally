@@ -17,7 +17,8 @@ interface Released { backend: string; app: string }
 function fakeGitHub(released: Released | undefined, commits: Commit[]): GitHub {
   const versions: Record<string, string | undefined> = { 'package.json': released?.backend, 'apps/server/package.json': released?.backend, 'apps/desktop/package.json': released?.app };
   const contents = (path: string) => {
-    let text = path === MANIFEST && released ? JSON.stringify({ '.': released.backend, 'apps/desktop': released.app }) : read(path);
+    // Before any release the manifest holds 0.0.0 for both, whatever the repo's own manifest says by now.
+    let text = path === MANIFEST ? JSON.stringify({ '.': released?.backend ?? '0.0.0', 'apps/desktop': released?.app ?? '0.0.0' }) : read(path);
     if (versions[path]) text = JSON.stringify({ ...JSON.parse(text), version: versions[path] }, null, 2);
     return { sha: path, content: Buffer.from(text).toString('base64'), parsedContent: text, mode: '100644' };
   };
@@ -105,7 +106,6 @@ test('changes to both land in one release PR', async () => {
 test('the first release of each is 0.1.0', async () => {
   const pullRequests = await releasePullRequests(undefined, [server, desktop]);
   assert.deepEqual(pullRequests.map(pullRequest => pullRequest.versions), [{ backend: '0.1.0', app: '0.1.0' }]);
-  assert.deepEqual(json(MANIFEST), { '.': '0.0.0', 'apps/desktop': '0.0.0' });
 });
 
 test('the app release-please package declares that it embeds the backend', () => {
