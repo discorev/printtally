@@ -94,7 +94,8 @@ jobs:
   npm-publish:
     name: Backend (npm stage)
     needs: npm-prepare
-    if: needs.npm-prepare.outputs.publish == 'true'
+    # !cancelled(): a manual run skips release-please, and a skipped job upstream would otherwise skip this one.
+    if: ${{ !cancelled() && needs.npm-prepare.outputs.publish == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
