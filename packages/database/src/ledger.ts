@@ -27,9 +27,10 @@ function constraint(error: unknown, deleting: boolean): never {
   throw error;
 }
 const flag = (value: boolean | undefined) => value === undefined ? undefined : Number(value);
-const blank = (): CostTotals => ({ jobs: 0, unknown_jobs: 0, unknown_paper_jobs: 0, paper_micros: 0, ink_micros: 0, total_micros: 0, waste_micros: 0, ink_nl: 0 });
+const blank = (): CostTotals => ({ jobs: 0, unknown_jobs: 0, unknown_paper_jobs: 0, unknown_ink_jobs: 0, paper_micros: 0, ink_micros: 0, total_micros: 0, waste_micros: 0, ink_nl: 0 });
 const addJob = (totals: CostTotals, job: LedgerJob) => {
   totals.jobs++; if (job.total_micros === null) totals.unknown_jobs++; if (job.paper_micros === null) totals.unknown_paper_jobs++;
+  if (job.ink.some(line => line.cost_micros === null)) totals.unknown_ink_jobs++;
   totals.paper_micros += job.paper_micros ?? 0; totals.ink_micros += job.ink_micros; totals.total_micros = totals.paper_micros + totals.ink_micros;
   totals.ink_nl += job.ink.reduce((sum, line) => sum + (line.volume_nl ?? 0), 0);
 };

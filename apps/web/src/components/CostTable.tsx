@@ -17,6 +17,7 @@ const rule = <span className="col-span-full border-t border-rule" />;
  *  (e.g. an "Add a purchase" button) beneath. Nothing is recalculated here. */
 export function CostTable({ job, action }: { job: LedgerJob; action?: ReactNode }) {
   const currency = useCurrency(), unknown = job.paper_micros === null;
+  const paperOnly = !unknown && job.ink.some(line => line.cost_micros === null);
   const { paper } = job, cancelled = jobCancelled(job) || paper.quantity === 0;
   const unit = paper.quantity === null ? plural(Number(job.impressions ?? 0), 'sheet')
     : paper.format === 'roll' ? metres(paper.quantity, 2) : plural(paper.quantity, 'sheet');
@@ -43,8 +44,10 @@ export function CostTable({ job, action }: { job: LedgerJob; action?: ReactNode 
         <span /><span className="col-span-2 font-medium">Ink subtotal</span><span className="text-right">{ml(inkNl)}</span>
         <span className="text-right font-medium">{money(job.ink_micros, currency)}</span>
       </div>
-      <SummaryLine total what={unknown ? 'Ink so far' : 'This print'} amount={money(unknown ? job.ink_micros : job.total_micros, currency)} />
+      <SummaryLine total what={unknown ? 'Ink so far' : paperOnly ? 'Paper only' : 'This print'}
+        amount={money(unknown ? job.ink_micros : paperOnly ? job.paper_micros : job.total_micros, currency)} />
       {unknown && <div className="mt-3 text-[13px] leading-[18px] text-amber">Paper not included — its cost is unknown.</div>}
+      {paperOnly && <div className="mt-3 text-[13px] leading-[18px] text-amber">Ink not included — its cost is unknown.</div>}
       {unknown && action && <div className="mt-2.5 flex flex-wrap gap-2">{action}</div>}
     </>
   );

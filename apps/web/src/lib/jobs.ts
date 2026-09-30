@@ -24,6 +24,11 @@ const SHORT: Record<UnknownReason, string> = {
 };
 /** Why a job's paper cost is unknown, in a few words for a list row; null when it's known. */
 export const unknownShort = (job: LedgerJob): string | null => job.paper.unknown_reason && SHORT[job.paper.unknown_reason];
+/** The known part of a job's cost while its total is unknown: paper plus known ink, never guessed further. */
+export const jobKnownMicros = (job: LedgerJob): number => (job.paper_micros ?? 0) + job.ink_micros;
+/** Why a job's total is unknown, for the list row's amber tag: the paper's reason takes priority over ink's. */
+export const unknownCostReason = (job: LedgerJob): string | null =>
+  unknownShort(job) ?? (job.ink.some(line => line.cost_micros === null) ? 'no ink cost' : null);
 /** The same, as the cost table's paper line says it: "Heavyweight Fine Art Paper — no paper set up". */
 export function unknownLine(job: LedgerJob): string | null {
   const reason = job.paper.unknown_reason, name = jobPaperName(job);

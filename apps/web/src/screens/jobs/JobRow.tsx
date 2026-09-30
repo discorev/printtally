@@ -2,7 +2,7 @@ import type { LedgerJob } from 'print-accounting-contracts';
 import { Chip, InkWedge, ListRow, Money, PaperSwatch } from '../../components/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { dateDay, ml, printerTime } from '../../lib/format.ts';
-import { jobCancelled, jobOnRoll, jobPaperName, jobSize, jobSwatch, unknownShort } from '../../lib/jobs.ts';
+import { jobCancelled, jobKnownMicros, jobOnRoll, jobPaperName, jobSize, jobSwatch, unknownCostReason } from '../../lib/jobs.ts';
 import { sizeCode } from '../../lib/sizes.ts';
 
 // One print on the Jobs list (vRow): when, the paper swatch and name, size, the ink wedge, ml and cost,
@@ -26,7 +26,7 @@ export function JobRow({ job, selected, paper }: { job: LedgerJob; selected: boo
       <span className={cx('min-w-0 truncate phone:col-start-1 phone:row-start-2', cancelled && 'text-muted')}>
         {jobPaperName(job)}
         {paper && <span className={cx(tag, 'text-muted')}>{paper}</span>}
-        {unknown && !cancelled && <span className={cx(tag, 'text-amber')}>{unknownShort(job)}</span>}
+        {unknown && !cancelled && <span className={cx(tag, 'text-amber')}>{unknownCostReason(job)}</span>}
         {cancelled && <> <Chip tone="red">Cancelled</Chip></>}
         {hidden && <Chip size="sm" className="ml-2">hidden</Chip>}
       </span>
@@ -38,7 +38,7 @@ export function JobRow({ job, selected, paper }: { job: LedgerJob; selected: boo
       <InkWedge ink={job.ink} className="@max-[840px]:hidden phone:hidden" />
       <span className="text-right whitespace-nowrap text-muted @max-[640px]:hidden phone:hidden">{ml(volume)}</span>
       <span className="text-right font-medium whitespace-nowrap phone:col-start-2 phone:row-start-1">
-        {unknown ? <Money micros={job.ink_micros} className="text-amber" />
+        {unknown ? <Money micros={jobKnownMicros(job)} className="text-amber" />
           : <><Money micros={job.total_micros} />{cancelled && <small className="block text-[11.5px] leading-[13px] font-normal text-muted">ink only</small>}</>}
       </span>
       {job.notes && (
