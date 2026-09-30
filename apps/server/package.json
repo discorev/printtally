@@ -1,6 +1,6 @@
 {
   "name": "printtally",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "license": "MIT",
   "author": "Ollie Hayman",
   "description": "Per-job print cost accounting for Canon imagePROGRAF printers",
