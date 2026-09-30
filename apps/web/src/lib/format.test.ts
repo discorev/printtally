@@ -8,9 +8,9 @@ test('money is integer micros in the ledger currency; unknown is a dash', () => 
   expect(money(2_500_000, 'EUR')).toBe('€2.50');
 });
 
-test('typed prices parse to micros, refusing anything that is not a positive amount', () => {
+test('typed prices parse to micros, zero included (stock that came with the printer)', () => {
   expect(['37.99', '£37.99', ' 1,200 ', '.5', '0', '-3', 'abc', '1.999'].map(parseMoney))
-    .toEqual([37_990_000, 37_990_000, 1_200_000_000, 500_000, null, null, null, null]);
+    .toEqual([37_990_000, 37_990_000, 1_200_000_000, 500_000, 0, null, null, null]);
 });
 
 test('quantities and dates format to the expected display strings', () => {

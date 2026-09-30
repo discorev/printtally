@@ -12,12 +12,11 @@ export const money = (micros: number | null, currency: string): string => micros
 /** The currency's symbol, e.g. "£" (the cost table's column heading and the price placeholder). */
 export const currencySymbol = (currency: string): string =>
   moneyFormat(currency).formatToParts(0).find(part => part.type === 'currency')?.value ?? currency;
-/** A typed price ("£37.99", "1,200", "37.9") as integer micros; null when it isn't a positive amount. */
+/** A typed price ("£37.99", "1,200", "37.9", or "0" for stock that came free) as integer micros; null when it isn't an amount. */
 export function parseMoney(text: string): number | null {
   const clean = text.replace(/[^\d.,-]/g, '').replace(/,/g, '');
   if (!/^\d+(\.\d{0,2})?$|^\.\d{1,2}$/.test(clean)) return null;
-  const micros = Math.round(Number(clean) * 100) * 10_000;
-  return micros > 0 ? micros : null;
+  return Math.round(Number(clean) * 100) * 10_000;
 }
 /** Micros as the plain number a price field shows, e.g. 37990000 → "37.99". */
 export const moneyInput = (micros: number): string => (micros / 1e6).toFixed(2);
