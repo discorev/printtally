@@ -76,9 +76,13 @@ export function computeLedger(input: LedgerInput): LedgerResult {
       const sized = chosen ? [chosen] : input.stock.filter(item => candidatePapers.some(paper => paper.id === item.paper_id) && fits(item, job.width_um, job.height_um));
       const stocked = sized.filter(item => paperLots.get(item.id)?.some(lot => lot.date <= job.date))
         .sort((a, b) => rank(a) - rank(b) || a.paper_id - b.paper_id || a.id - b.id);
-      // The first with stock left by then; only when none has any does the first go below zero.
+      // The first, unless it's a used-up sheet and the same paper has a deckle sheet of this size with stock left by then.
+      // Otherwise the first goes below zero; the user can correct the job.
       const left = (id: number) => paperLots.get(id)!.some(lot => lot.date <= job.date && lot.left > 0);
-      const item = stocked.find(candidate => left(candidate.id)) ?? stocked[0] ?? null, paper = item ? papers.get(item.paper_id)! : candidatePapers[0] ?? null;
+      const first = stocked[0] ?? null;
+      const deckle = first && !chosen && rank(first) === 0 && !left(first.id)
+        ? stocked.find(candidate => candidate.paper_id === first.paper_id && rank(candidate) === 1 && left(candidate.id)) : undefined;
+      const item = deckle ?? first, paper = item ? papers.get(item.paper_id)! : candidatePapers[0] ?? null;
       const length = item?.format === 'roll' ? (near(item.width_um, job.width_um) || !near(item.width_um, job.height_um) ? job.height_um : job.width_um) : null;
       const quantity = job.impressions === null ? null : item?.format === 'roll' ? (length === null ? null : length * job.impressions) : job.impressions;
       let reason: UnknownReason | null = !candidatePapers.length ? 'no_paper' : !sized.length ? 'no_matching_stock' : !item ? 'no_stock_by_date' : quantity === null ? 'unknown_usage' : null;

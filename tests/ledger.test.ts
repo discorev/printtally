@@ -83,12 +83,15 @@ test('oldest, average and max cost the same usage from the chosen method only', 
   assert.throws(() => ledger.updateSettings({ costing_method: 'newest' }));
 });
 
-test('default allocation moves on to matching stock once the preferred item is used up', t => {
-  const { ledger, sheet, buy, job } = fixture(t, [{ day: '2026-02-01' }, { day: '2026-02-02' }, { day: '2026-02-03' }]);
-  const plain = sheet('A4', 210, 297), deckle = sheet('A4', 210, 297, true);
-  buy(plain, '2026-01-01', 1, 1); buy(deckle, '2026-01-01', 1, 2);
-  assert.deepEqual([1, 2, 3].map(id => job(id).paper.stock_id), [plain, deckle, plain], 'deckle once plain is gone; the preferred item goes below zero only when nothing is left');
-  assert.deepEqual(ledger.papers().papers[0].stock.map(item => item.remaining), [-1, 0]);
+test('a used-up sheet falls back only to a deckle sheet of the same paper and size', t => {
+  const { ledger, sheet, buy, job } = fixture(t, [{ day: '2026-02-01' }, { day: '2026-02-02' }, { day: '2026-02-03' }, { day: '2026-02-04', w: 329, h: 483 }, { day: '2026-02-05', w: 329, h: 483 }]);
+  const plain = sheet('A4', 210, 297), deckle = sheet('A4', 210, 297, true), large = sheet('A3+', 329, 483);
+  buy(plain, '2026-01-01', 1, 1); buy(deckle, '2026-01-01', 1, 2); buy(large, '2026-01-01', 1, 3);
+  const other = ledger.createPaper({ name: 'Photo Rag', media_types: [MEDIA] });
+  buy(ledger.createStock({ paper_id: other, name: 'A3+', format: 'sheet', width_um: 329000, height_um: 483000 }), '2026-01-01', 25, 50);
+  assert.deepEqual([1, 2, 3].map(id => job(id).paper.stock_id), [plain, deckle, plain], 'deckle once plain is gone; plain goes below zero when both are');
+  assert.deepEqual([4, 5].map(id => job(id).paper.stock_id), [large, large], 'never another paper: the preferred item goes below zero');
+  assert.deepEqual(ledger.papers().papers.find(p => p.name === 'Museum Etching')!.stock.map(item => item.remaining), [-1, 0, -1]);
 });
 
 test('writing off all that is left in a cartridge takes the one in use, whichever product it is', t => {
