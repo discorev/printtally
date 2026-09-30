@@ -13,7 +13,10 @@ test('embedded migrations match drizzle/ exactly, so the compiled server migrate
 test('apps/server is the published printtally package; the root is a private workspace', () => {
   const read = (path: string) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
   const server = read('../apps/server/package.json'), root = read('../package.json');
-  assert.deepEqual([server.name, server.version, server.private, server.bin.printtally], ['printtally', '0.1.0', undefined, './dist/cli.js']);
+  assert.deepEqual([server.name, server.private, server.bin.printtally], ['printtally', undefined, './dist/cli.js']);
+  // release-please sets the version; it only has to be a release version that the root package.json shares.
+  assert.match(server.version, /^\d+\.\d+\.\d+$/);
+  assert.equal(server.version, root.version);
   assert.deepEqual(server.files, ['dist/cli.js', 'dist/client']);
   // npm metadata for the unscoped public package. Trusted publishing checks repository against the workflow's repo.
   assert.deepEqual([server.publishConfig, server.author, server.license, server.homepage, server.repository],
