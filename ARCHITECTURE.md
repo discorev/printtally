@@ -146,14 +146,18 @@ The API stays under `/api`.
   Drizzle's migrations are embedded in the code, as for the compiled binary.
 - **Compiled server.** `bun build --compile --target bun-darwin-arm64` makes
   `apps/server/dist/printtally-server`, with the UI copied to `client/` beside it.
-- **Desktop.** electron-builder packages `apps/desktop` as a macOS arm64 `.app` and
-  `.dmg` (`appId` `com.olliespage.PrintTally`) and copies the compiled server and its
+- **Desktop.** electron-builder packages `apps/desktop` as a macOS arm64 `.app`
+  (`appId` `com.olliespage.PrintTally`) and copies the compiled server and its
   `client/` into `Contents/Resources/server/`, where `server-manager.ts` runs it.
-  Everything is signed with Developer ID under the hardened runtime. The app has
+  `scripts/bundle.sh` picks the signing identity and the build kind, and
+  `scripts/make-dmg.sh` makes the `.dmg` (see [docs/build.md](docs/build.md)).
+  Local and release builds share the app id; the build kind, baked into the app
+  as `build-info.json`, keeps a local build on its own port (4319), data folder
+  and settings. Everything is signed with Developer ID; release builds also use the hardened runtime. The app has
   `allow-jit` and `allow-unsigned-executable-memory`; so do Electron's helpers and
   the embedded server, through the inherited entitlements. JavaScriptCore needs
   `allow-jit`: without it the server still runs, but about 9 times slower, because
   it falls back to its interpreter. Electron fuses turn off `ELECTRON_RUN_AS_NODE`,
   `NODE_OPTIONS` and the inspector flags, and the app only loads its own
   integrity-checked `app.asar`. The app registers `printtally://` in its Info.plist.
-  Only the release build is notarized.
+  Only the release workflow notarizes ([docs/release.md](docs/release.md)).

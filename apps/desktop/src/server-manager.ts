@@ -16,6 +16,8 @@ const STABLE_MS = 30_000;
 
 export interface ServerManagerOptions {
   dataDirectory?: string; port?: number;
+  // Added to the bundled server's environment (a local build keeps printer passwords in memory).
+  serverEnv?: Record<string, string>;
   // The packaging seam (plan step 06): dev runs the server from source with Bun, a
   // packaged build runs a compiled binary shipped under process.resourcesPath.
   packaged?: boolean; resourcesPath?: string; repoRoot?: string;
@@ -58,7 +60,8 @@ export class ServerManager {
     this.packaged = options.packaged ?? false;
     this.resourcesPath = options.resourcesPath ?? '';
     this.repoRoot = options.repoRoot ?? resolve(import.meta.dirname, '..', '..', '..');
-    this.spawnFn = options.spawnFn ?? ((command, args) => spawn(command, args, { stdio: 'inherit' }));
+    const env = { ...process.env, ...options.serverEnv };
+    this.spawnFn = options.spawnFn ?? ((command, args) => spawn(command, args, { stdio: 'inherit', env }));
     this.fetchFn = options.fetchFn ?? fetch;
     this.healthTimeoutMs = options.healthTimeoutMs ?? 1500;
     this.startupTimeoutMs = options.startupTimeoutMs ?? 20000;

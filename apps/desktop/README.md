@@ -7,7 +7,7 @@ business rules, printer access or the database itself; the renderer is the same
 On launch it finds a server: the saved remote host if one is configured (kept even
 when it doesn't answer, with a "Can't reach … retrying" page offering this Mac
 instead), else whatever Print Tally answers `GET /api/v1/health` on
-`127.0.0.1:4318`; if nothing does, it starts the bundled server itself (in dev,
+`127.0.0.1:4318` (4319 for a local build); if nothing does, it starts the bundled server itself (in dev,
 `bun apps/server/src/cli.ts serve`; in the packaged app, the compiled server at
 `Contents/Resources/server/printtally-server`, which serves the UI from `client/`
 beside it). It never starts over another app on the port, and it stops (showing a problem page)
@@ -24,7 +24,7 @@ with a pairing link, an address, or nothing for this Mac.
 Closing the window keeps the app in the Dock; only quitting stops a server it
 owns. `contextIsolation` is on, `nodeIntegration` is off, `sandbox` is on; the
 preload script (`src/preload.cts`, CommonJS because a sandboxed preload can't be an
-ES module) exposes only connection info and "switch computer" to the renderer. The
+ES module) exposes only the app's version, connection info and "switch computer" to the renderer. The
 window only navigates within the connected server's origin and opens no new windows.
 
 ## Develop
@@ -40,23 +40,25 @@ To run just this app against an already-running web dev server:
 
 ## Package
 
-`bun run dist:desktop` from the repo root compiles the server
-(`apps/server/dist/printtally-server` and its `client/`), then runs electron-builder
-(`electron-builder.yml`) to make `release/mac-arm64/Print Tally.app` and
-`release/Print Tally-<version>-arm64.dmg` for Apple silicon. The app id is
-`com.olliespage.PrintTally`; the compiled server goes in `Contents/Resources/server/`.
+`bun run dist:desktop` from the repo root builds and signs a local
+`release/mac-arm64/Print Tally.app` and `release/PrintTally-<version>.dmg` for Apple
+silicon; `PRINTTALLY_RELEASE=1 bun run dist:desktop` a release build. See
+[docs/build.md](../../docs/build.md) for signing and [docs/release.md](../../docs/release.md)
+for notarized releases. The app id is `com.olliespage.PrintTally` for both; the compiled
+server goes in `Contents/Resources/server/`.
 
-It signs with the Developer ID Application identity in your keychain (set
-`CSC_NAME` to choose one) under the hardened runtime. `build/entitlements.mac.plist`
-is the app's; `build/entitlements.mac.inherit.plist` covers Electron's helpers and
-the embedded Bun server, which needs `allow-jit` to run at full speed. Local builds
-are never notarized; `bun run release:desktop` is (see the root README).
+The build kind is baked in at build time (`dist/build-info.json`, read by
+`src/build.ts`), not taken from `app.isPackaged`:
 
-A packaged build always uses port 4318 and the default data folder, so opening it
-uses your real ledger. `PRINTTALLY_PORT` and `PRINTTALLY_DATA_DIR` work only in
-development (`bun run dev:desktop`), where they keep you off the real ledger and port;
-a packaged app ignores them so it can never start a second ledger by accident.
+- A **release** build always uses port 4318 and the default data folder, so it
+  uses your real ledger, and ignores `PRINTTALLY_PORT` and `PRINTTALLY_DATA_DIR` so
+  it can never start a second ledger by accident. Its settings (the saved remote
+  host) live in `~/Library/Application Support/Print Tally`, apart from the ledger.
+- A **local** build defaults to port 4319 and `~/Library/Application Support/printtally-dev`,
+  honours both variables, keeps its settings in `printtally-dev/desktop` and runs
+  its server with printer passwords in memory, so it never touches the real ledger,
+  the release server or Keychain.
+- **From source** (`bun run dev:desktop`) it uses 4318 and the default data folder
+  unless you set the variables.
 
-Quitting the app stops the server it started. The app's own settings (the saved
-remote host) live in `~/Library/Application Support/Print Tally`, apart from the
-ledger's data folder.
+Quitting the app stops the server it started.

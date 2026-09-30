@@ -5,7 +5,7 @@ import { api } from '../../api/endpoints.ts';
 import { describeError } from '../../api/client.ts';
 import { keys, useEdit, useKnownPrinters, useSettings, useTotals } from '../../api/queries.ts';
 import { onServerMachine, useCanEdit, useHealth, useServerName } from '../../connection/index.ts';
-import { desktop, useDesktopConnection } from '../../desktop.ts';
+import { desktop, useDesktopConnection, useDesktopVersion } from '../../desktop.ts';
 import {
   Button, ButtonLink, Fingerprint, KV, LinkButton, Mono, Money, Pad, PadBody, PadHead, RowActions, SectionLabel, StatusLine, Sub, TextLink, useLoadingText,
 } from '../../components/index.ts';
@@ -136,14 +136,20 @@ function ChangePassword({ printer, onDone }: { printer: KnownPrinter; onDone: (s
 }
 
 /** Which computer this client uses. Only the desktop app can switch (plan decision 4); a browser uses the
- *  computer whose address it opened. */
+ *  computer whose address it opened. Each part shows its own version: the desktop app's, and the server's. */
 function ComputerCard() {
   const name = useServerName(), connection = useDesktopConnection();
   const local = onServerMachine();
+  const appVersion = useDesktopVersion(), backendVersion = useHealth()?.version;
+  const versions = <KV className="mt-2.5" rows={[
+    !!desktop && !!appVersion && ['App version', <Mono>{appVersion}</Mono>],
+    !!backendVersion && ['Backend version', <Mono>{backendVersion}</Mono>],
+  ]} />;
   if (desktop) return (
     <Card label="Computer">
       <div>Connected to <b>{name}</b> {connection && <Mono>({connection.host}:{connection.port})</Mono>}</div>
       <Sub>{connection?.remote ? 'The ledger lives there, next to the printer.' : 'The ledger lives on this Mac.'}</Sub>
+      {versions}
       <RowActions>
         <ButtonLink size="sm" to="/connect">Switch computer</ButtonLink>
         {connection?.remote && <Button variant="text" size="sm" onClick={() => void desktop?.switchComputer()}>Use this Mac instead</Button>}
@@ -156,6 +162,7 @@ function ComputerCard() {
       <Sub>{local
         ? <>Other devices join with a link from <Mono>printtally pair</Mono> on this computer.</>
         : <>This device was paired with a link from <Mono>printtally pair</Mono> on that computer.</>}</Sub>
+      {versions}
     </Card>
   );
 }

@@ -91,8 +91,9 @@ export interface PrinterStatus { id: string; name: string; host: string; state: 
 // printerId and printerName are the known printer's (health.printers[].id); null id when it is no longer set up.
 export interface MissedJobs { printerId: string | null; printerName: string; fromRecord: number; toRecord: number; detectedAt: string }
 // hostName: the server machine's name (without .local), which clients show as the computer they're using.
+// version: the printtally package's version (the backend version in Settings).
 export interface HealthResponse {
-  service: 'printtally'; apiVersion: number; hostName: string; collecting: boolean; state: ServerState;
+  service: 'printtally'; apiVersion: number; version: string; hostName: string; collecting: boolean; state: ServerState;
   printers: PrinterStatus[]; missedJobs: MissedJobs[]; lastCollection: CollectionStatus | null; nextCollectionAt: string | null;
 }
 

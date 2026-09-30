@@ -5,7 +5,7 @@ import { ConnectionMonitor } from './monitor.ts';
 import { backoffMs, canEdit, gateRedirect, serverName } from './state.ts';
 
 const health: HealthResponse = {
-  service: 'printtally', apiVersion: 1, hostName: 'studio-mac', collecting: false, state: 'ready',
+  service: 'printtally', apiVersion: 1, version: '0.1.0', hostName: 'studio-mac', collecting: false, state: 'ready',
   printers: [], missedJobs: [], lastCollection: null, nextCollectionAt: null,
 };
 // A monitor on a fake clock whose health check answers from `server`.

@@ -1,5 +1,6 @@
-# macOS arm64 .app and .dmg. Build from the repo root with `bun run dist:desktop`, which compiles
-# the server first (apps/server/dist/printtally-server, with the UI in client/ beside it).
+# macOS arm64 .app and .dmg. Build from the repo root with `bun run dist:desktop` (docs/build.md):
+# scripts/bundle.sh compiles the server (apps/server/dist/printtally-server, with the UI in client/ beside
+# it), writes dist/build-info.json and builds the signed .app; scripts/make-dmg.sh then makes the .dmg.
 appId: com.olliespage.PrintTally
 productName: Print Tally
 directories:
@@ -24,14 +25,23 @@ protocols:
 mac:
   target: [{ target: dmg, arch: arm64 }]
   category: public.app-category.productivity
-  # Signs with the Developer ID Application identity found in the keychain; CSC_NAME picks one. With
-  # no identity, `-c.mac.identity=- -c.mac.hardenedRuntime=false` signs ad hoc for local use.
-  # Hardened runtime covers every executable, the server included.
+  # scripts/bundle.sh picks the identity, and turns on the hardened runtime and a secure timestamp for
+  # release builds (PRINTTALLY_RELEASE=1). The entitlements cover every executable, the server included.
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.inherit.plist
-  # Only `bun run release:desktop` notarizes (with APPLE_KEYCHAIN_PROFILE); local builds never do.
+  # The release workflow notarizes with notarytool (.github/workflows/release.yml); local builds never are.
   notarize: false
-# Signed too, so the .dmg itself can be notarized and stapled (see the README's release steps).
+# Built by scripts/make-dmg.sh from the signed app, which signs the .dmg itself. It passes the background,
+# assets/dmg/background.svg rendered to background.png with background@2x.png beside it; the 660x400 window
+# takes its size from the image.
 dmg:
-  sign: true
+  title: ${productName}
+  artifactName: PrintTally-${version}.${ext}
+  iconSize: 128
+  iconTextSize: 13
+  contents:
+    - { x: 165, y: 190 }
+    - { x: 495, y: 190, type: link, path: /Applications }
+  sign: false
+  writeUpdateInfo: false

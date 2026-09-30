@@ -1,0 +1,255 @@
+name: Release
+
+# Trunk-based releases (docs/release.md). Every push to main updates a release PR for each component with
+# releasable commits; merging one tags that component and creates its GitHub release, then the jobs below
+# build and publish it. The app (apps/desktop, app-vX.Y.Z) and the backend (the printtally npm package in
+# apps/server, backend-vX.Y.Z) have their own versions, tags and changelogs.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: Release PRs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      app_release: ${{ steps.app.outputs.release_created }}
+      app_tag: ${{ steps.app.outputs.tag_name }}
+      app_version: ${{ steps.app.outputs.version }}
+      backend_release: ${{ steps.backend.outputs.release_created }}
+      backend_tag: ${{ steps.backend.outputs.tag_name }}
+      backend_version: ${{ steps.backend.outputs.version }}
+    steps:
+      # One run per component, each over the whole repository minus the other app, so commits to
+      # packages/* and apps/web (in both artefacts) count towards both.
+      - name: App
+        id: app
+        uses: googleapis/release-please-action@v4
+        with:
+          # A token other than GITHUB_TOKEN lets the release PR trigger CI (docs/release.md).
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          config-file: .github/release-please/app.json
+          manifest-file: .github/release-please/app.manifest.json
+      - name: Backend
+        id: backend
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          config-file: .github/release-please/backend.json
+          manifest-file: .github/release-please/backend.manifest.json
+
+  app:
+    name: App version (macOS)
+    needs: release-please
+    if: needs.release-please.outputs.app_release == 'true'
+    runs-on: macos-26
+    environment: release
+    permissions:
+      contents: write
+    env:
+      APPLE_TEAM_ID: D6AAJCLH87
+      TAG: ${{ needs.release-please.outputs.app_tag }}
+      VERSION: ${{ needs.release-please.outputs.app_version }}
+      APP: apps/desktop/release/mac-arm64/Print Tally.app
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release-please.outputs.app_tag }}
+
+      - name: Import signing identity
+        shell: bash
+        env:
+          DEVID_P12_BASE64: ${{ secrets.DEVID_P12_BASE64 }}
+          DEVID_P12_PASSWORD: ${{ secrets.DEVID_P12_PASSWORD }}
+        run: |
+          set -euo pipefail
+          P12_PATH=$(mktemp "$RUNNER_TEMP/developer-id.XXXXXX")
+          G2_CERT_PATH=$(mktemp "$RUNNER_TEMP/developer-id-g2.XXXXXX")
+          KEYCHAIN_PATH="$RUNNER_TEMP/printtally-signing-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 32)
+          trap 'rm -f "$P12_PATH" "$G2_CERT_PATH"' EXIT
+          printf '%s' "$DEVID_P12_BASE64" | base64 --decode > "$P12_PATH"
+          printf 'KEYCHAIN_PATH=%s\n' "$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$P12_PATH" -k "$KEYCHAIN_PATH" -f pkcs12 -P "$DEVID_P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain
+          curl --fail --silent --show-error --location https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer -o "$G2_CERT_PATH"
+          security import "$G2_CERT_PATH" -k "$KEYCHAIN_PATH" -f x509 || echo "Developer ID G2 intermediate already present"
+          IDENTITIES=$(security find-identity -v -p codesigning)
+          printf '%s\n' "$IDENTITIES"
+          printf '%s\n' "$IDENTITIES" | grep -q "Developer ID Application:.*(${APPLE_TEAM_ID})" || { echo "No Developer ID Application identity for team $APPLE_TEAM_ID" >&2; exit 1; }
+          rm -f "$P12_PATH" "$G2_CERT_PATH"
+          trap - EXIT
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Test
+        run: bun run typecheck && bun test
+
+      - name: Build signed app
+        shell: bash
+        run: |
+          set -euo pipefail
+          PRINTTALLY_RELEASE=1 PRINTTALLY_VERSION="$VERSION" scripts/bundle.sh
+          codesign --verify --deep --strict --verbose=2 "$APP"
+
+      - name: Notarize and staple app
+        shell: bash
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          NOTARY_TEMP_DIR=$(mktemp -d "$RUNNER_TEMP/printtally-notary.XXXXXX")
+          ASC_KEY_PATH="$NOTARY_TEMP_DIR/AuthKey_${ASC_KEY_ID}.p8"
+          SUBMISSION_RESULT="$NOTARY_TEMP_DIR/submission.json"
+          trap 'rm -rf "$NOTARY_TEMP_DIR"' EXIT
+          printf '%s\n' "$ASC_KEY_P8" > "$ASC_KEY_PATH"
+          chmod 600 "$ASC_KEY_PATH"
+          ditto -c -k --keepParent "$APP" "$NOTARY_TEMP_DIR/notarize.zip"
+          SUBMIT_EXIT=0
+          xcrun notarytool submit "$NOTARY_TEMP_DIR/notarize.zip" --key "$ASC_KEY_PATH" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" --wait --timeout 30m --output-format json > "$SUBMISSION_RESULT" || SUBMIT_EXIT=$?
+          cat "$SUBMISSION_RESULT"
+          SUBMISSION_ID=$(plutil -extract id raw -o - "$SUBMISSION_RESULT" 2>/dev/null || true)
+          SUBMISSION_STATUS=$(plutil -extract status raw -o - "$SUBMISSION_RESULT" 2>/dev/null || true)
+          if [ "$SUBMIT_EXIT" -ne 0 ] || [ "$SUBMISSION_STATUS" != "Accepted" ]; then
+            if [ -n "$SUBMISSION_ID" ]; then
+              xcrun notarytool log "$SUBMISSION_ID" --key "$ASC_KEY_PATH" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" || true
+            fi
+            exit 1
+          fi
+          xcrun stapler staple "$APP"
+          spctl --assess --type execute --verbose=4 "$APP"
+
+      - name: Build, notarize, and verify disk image
+        shell: bash
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          DMG="apps/desktop/release/PrintTally-$VERSION.dmg"
+          PRINTTALLY_RELEASE=1 scripts/make-dmg.sh
+          NOTARY_TEMP_DIR=$(mktemp -d "$RUNNER_TEMP/printtally-dmg-notary.XXXXXX")
+          ASC_KEY_PATH="$NOTARY_TEMP_DIR/AuthKey_${ASC_KEY_ID}.p8"
+          SUBMISSION_RESULT="$NOTARY_TEMP_DIR/submission.json"
+          trap 'rm -rf "$NOTARY_TEMP_DIR"' EXIT
+          printf '%s\n' "$ASC_KEY_P8" > "$ASC_KEY_PATH"
+          chmod 600 "$ASC_KEY_PATH"
+          SUBMIT_EXIT=0
+          xcrun notarytool submit "$DMG" --key "$ASC_KEY_PATH" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" --wait --timeout 30m --output-format json > "$SUBMISSION_RESULT" || SUBMIT_EXIT=$?
+          cat "$SUBMISSION_RESULT"
+          SUBMISSION_ID=$(plutil -extract id raw -o - "$SUBMISSION_RESULT" 2>/dev/null || true)
+          SUBMISSION_STATUS=$(plutil -extract status raw -o - "$SUBMISSION_RESULT" 2>/dev/null || true)
+          if [ "$SUBMIT_EXIT" -ne 0 ] || [ "$SUBMISSION_STATUS" != "Accepted" ]; then
+            if [ -n "$SUBMISSION_ID" ]; then
+              xcrun notarytool log "$SUBMISSION_ID" --key "$ASC_KEY_PATH" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" || true
+            fi
+            exit 1
+          fi
+          xcrun stapler staple "$DMG"
+          spctl --assess --type open --context context:primary-signature -v "$DMG"
+
+      - name: Upload to the GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ditto -c -k --keepParent "$APP" "apps/desktop/release/PrintTally-$VERSION.zip"
+          gh release upload "$TAG" "apps/desktop/release/PrintTally-$VERSION.dmg" "apps/desktop/release/PrintTally-$VERSION.zip" --clobber
+
+      - name: Delete temporary keychain
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${KEYCHAIN_PATH:-}" ] && [ -e "$KEYCHAIN_PATH" ]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi
+
+  backend-pack:
+    name: Backend version (npm pack)
+    needs: release-please
+    if: needs.release-please.outputs.backend_release == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.version.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release-please.outputs.backend_tag }}
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck && bun test
+      - name: Skip if this version is already on npm
+        id: version
+        env:
+          VERSION: ${{ needs.release-please.outputs.backend_version }}
+        run: |
+          local_version=$(jq -r .version apps/server/package.json)
+          if [ "$local_version" != "$VERSION" ]; then
+            echo "apps/server/package.json is $local_version, but the release is $VERSION" >&2
+            exit 1
+          fi
+          published=$(npm view "printtally@$VERSION" version 2>/dev/null || true)
+          echo "local=$local_version published=${published:-none}"
+          echo "publish=$([ -z "$published" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - name: Pack
+        if: steps.version.outputs.publish == 'true'
+        working-directory: apps/server
+        run: bun pm pack
+      - name: Upload package
+        if: steps.version.outputs.publish == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-package
+          path: apps/server/printtally-*.tgz
+          if-no-files-found: error
+
+  backend-publish:
+    name: Backend version (npm publish)
+    needs: backend-pack
+    if: needs.backend-pack.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # npm OIDC trusted publishing requires npm >= 11.5.1. Pin the
+      # installation and disable lifecycle scripts in this privileged job.
+      - run: npm install -g npm@11.5.1 --ignore-scripts
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-package
+      - name: Publish
+        # The package was packed with bun in the unprivileged job, which bundles the private
+        # workspace packages and rewrites their workspace:* devDependencies.
+        run: npm publish printtally-*.tgz --ignore-scripts

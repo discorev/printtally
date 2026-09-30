@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Print Tally disk image background, 660x400 points, in the Docket design (apps/web/src/styles.css): a paper
+     docket lying on the green cutting mat. scripts/make-dmg.sh renders it at 1x and 2x. Finder draws the app at
+     (165,190) and the Applications link at (495,190) with 128pt icons (apps/desktop/electron-builder.yml), so the
+     art only supplies the mat, the paper under the icons and their dark labels, the arrow and the hint. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 400" width="660" height="400">
+  <!-- The cutting mat: 20pt minor and 100pt major grid lines. -->
+  <rect width="660" height="400" fill="#37665A"/>
+  <path d="M20 0V400M40 0V400M60 0V400M80 0V400M120 0V400M140 0V400M160 0V400M180 0V400M220 0V400M240 0V400M260 0V400M280 0V400M320 0V400M340 0V400M360 0V400M380 0V400M420 0V400M440 0V400M460 0V400M480 0V400M520 0V400M540 0V400M560 0V400M580 0V400M620 0V400M640 0V400M0 20H660M0 40H660M0 60H660M0 80H660M0 120H660M0 140H660M0 160H660M0 180H660M0 220H660M0 240H660M0 260H660M0 280H660M0 320H660M0 340H660M0 360H660M0 380H660" fill="none" stroke="#FFFFFF" stroke-opacity="0.075" stroke-width="1"/>
+  <path d="M100 0V400M200 0V400M300 0V400M400 0V400M500 0V400M600 0V400M0 100H660M0 200H660M0 300H660" fill="none" stroke="#FFFFFF" stroke-opacity="0.14" stroke-width="1"/>
+
+  <!-- The docket, with a soft shadow on the mat. -->
+  <rect x="44" y="43" width="572" height="320" rx="3" fill="#111A17" fill-opacity="0.28"/>
+  <rect x="44" y="40" width="572" height="320" rx="3" fill="#FAF9F6" stroke="#B8B5AC" stroke-width="1"/>
+  <text x="68" y="74" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif" font-size="11" font-weight="600" letter-spacing="1.1" fill="#5E6561">PRINT TALLY</text>
+  <path d="M68 86H592" stroke="#DCD9D1" stroke-width="1"/>
+
+  <!-- Arrow from the app to Applications. -->
+  <path d="M258 190 C 300 190, 360 190, 402 190" fill="none" stroke="#2E6654" stroke-width="3" stroke-linecap="round"/>
+  <path d="M388 176 L 404 190 L 388 204" fill="none" stroke="#2E6654" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Hint under the icons' labels. -->
+  <text x="330" y="326" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif" font-size="14" fill="#5E6561">Drag Print Tally into Applications, then open it from there.</text>
+</svg>

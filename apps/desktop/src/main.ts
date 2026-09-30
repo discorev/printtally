@@ -1,18 +1,22 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { fileURLToPath } from 'node:url';
+import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { ServerManager, type Connection } from './server-manager.ts';
 import { loadRemote, parseTarget, saveRemote } from './config.ts';
+import { readBuildInfo, runtimeSettings } from './build.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const devWebUrl = process.env.PRINTTALLY_WEB_URL ?? 'http://127.0.0.1:5173';
-// Development only: a packaged app ignores these and always uses the fixed port and default data
-// folder (plan decisions 5 and 13), so it can't start a second ledger and paired devices keep one address.
-const devPort = !app.isPackaged && process.env.PRINTTALLY_PORT ? Number(process.env.PRINTTALLY_PORT) : undefined;
-const devDataDirectory = !app.isPackaged ? process.env.PRINTTALLY_DATA_DIR : undefined;
+// Release, local or dev (src/build.ts): a release build always uses the fixed port and default data folder
+// (plan decisions 5 and 13), a local build its own, and dev honours PRINTTALLY_PORT and PRINTTALLY_DATA_DIR.
+const build = readBuildInfo(join(__dirname, 'build-info.json'), app.isPackaged, app.getVersion());
+const packaged = build.kind !== 'dev';
+const settings = runtimeSettings(build.kind, process.env, homedir());
+if (settings.userData) app.setPath('userData', settings.userData);
 
 const manager = new ServerManager({
-  packaged: app.isPackaged, resourcesPath: process.resourcesPath, port: devPort, dataDirectory: devDataDirectory,
+  packaged, resourcesPath: process.resourcesPath, port: settings.port, dataDirectory: settings.dataDirectory, serverEnv: settings.serverEnv,
 });
 let window: BrowserWindow | undefined;
 let quitting = false;
@@ -23,7 +27,7 @@ let pendingPair: string | undefined; // A pairing page to open once the host ans
 // host always serves its own UI, so the UI and the API it calls come from the same server.
 function targetUrl(): string {
   const { host, port, remote } = manager.connection;
-  return remote || app.isPackaged ? `http://${host}:${port}` : devWebUrl;
+  return remote || packaged ? `http://${host}:${port}` : devWebUrl;
 }
 
 const escapeHtml = (text: string): string => text.replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
@@ -90,6 +94,7 @@ app.on('before-quit', () => { quitting = true; manager.stop(); });
 app.on('activate', () => { window ? window.show() : void createWindow(); });
 
 ipcMain.handle('connection:get', () => manager.connection);
+ipcMain.handle('app:version', () => build.version);
 ipcMain.handle('connection:switch-computer', (_event, target: unknown) => {
   if (target !== undefined && typeof target !== 'string') throw new Error('not_a_print_tally_address');
   return useComputer(target || undefined);

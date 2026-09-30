@@ -1,9 +1,24 @@
 {
-  "name": "printtally", "version": "0.1.0", "license": "MIT",
+  "name": "printtally",
+  "version": "0.1.0",
+  "license": "MIT",
+  "author": "Ollie Hayman",
   "description": "Per-job print cost accounting for Canon imagePROGRAF printers",
-  "type": "module", "engines": {"bun": ">=1.3.9"},
-  "bin": {"printtally": "./dist/cli.js"},
-  "files": ["dist/cli.js", "dist/client"],
+  "homepage": "https://printtally.ink",
+  "type": "module",
+  "engines": {
+    "bun": ">=1.3.9"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "printtally": "./dist/cli.js"
+  },
+  "files": [
+    "dist/cli.js",
+    "dist/client"
+  ],
   "scripts": {
     "build:client": "bun run --cwd ../web build && rm -rf dist/client && mkdir -p dist && cp -R ../web/dist dist/client",
     "build": "bun run build:client && bun build src/cli.ts --target bun --outfile dist/cli.js",

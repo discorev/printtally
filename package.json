@@ -11,8 +11,8 @@
     "build:web": "bun run --cwd apps/web build",
     "build:server": "bun run --cwd apps/server build:binary",
     "pack:server": "mkdir -p release && cd apps/server && bun pm pack --destination ../../release",
-    "dist:desktop": "bun run build:server && bun run --cwd apps/desktop dist",
-    "release:desktop": "bun run build:server && bun run --cwd apps/desktop release",
+    "test:packed": "bun scripts/test-packed.ts",
+    "dist:desktop": "sh scripts/bundle.sh && sh scripts/make-dmg.sh",
     "seed:dev": "bun scripts/dev-seed.ts"
   },
   "devDependencies": {"@peculiar/x509": "^2.1.0", "@types/bun": "^1.3.0", "drizzle-orm": "^0.45.3", "reflect-metadata": "^0.2.0", "typescript": "^5.9.0", "print-accounting-contracts": "workspace:*", "print-accounting-core": "workspace:*", "print-accounting-database": "workspace:*", "print-accounting-ivec": "workspace:*"}

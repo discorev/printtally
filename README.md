@@ -129,41 +129,9 @@ use it only for development.
 `bun run build:web` builds the UI into `apps/web/dist`, which the server serves
 when run from source.
 
-### Packaging
-
-| Command | Builds |
-|---|---|
-| `bun run pack:server` | The `printtally` package, `release/printtally-<version>.tgz`: the CLI bundled into one file (`dist/cli.js`, workspace packages included) and the UI in `dist/client` |
-| `bun run build:server` | The server compiled for macOS arm64, `apps/server/dist/printtally-server`, with the UI in `client/` beside it |
-| `bun run dist:desktop` | `build:server`, then the desktop app: `apps/desktop/release/mac-arm64/Print Tally.app` and `Print Tally-<version>-arm64.dmg`, signed with the Developer ID Application certificate in your keychain and not notarized |
-
-Try the package before publishing it: `bun add <path to the .tgz>` in an empty
-folder, then run `bunx printtally serve --port 4401 --data-dir <temp folder>`.
-
-### Releasing
-
-Notarization sends the app to Apple, so it only happens when you run the release
-command. Once per Mac, save an app-specific password for notarytool in the keychain:
-
-```sh
-xcrun notarytool store-credentials printtally-notary --apple-id <your Apple ID> --team-id D6AAJCLH87
-```
-
-Then build, sign, notarize and staple the app:
-
-```sh
-APPLE_KEYCHAIN_PROFILE=printtally-notary bun run release:desktop
-```
-
-The `.dmg` is signed but not notarized by that step; notarize and staple it too:
-
-```sh
-xcrun notarytool submit "apps/desktop/release/Print Tally-0.1.0-arm64.dmg" --keychain-profile printtally-notary --wait
-xcrun stapler staple "apps/desktop/release/Print Tally-0.1.0-arm64.dmg"
-spctl -a -vv -t open --context context:primary-signature "apps/desktop/release/Print Tally-0.1.0-arm64.dmg"
-```
-
-Publish the package with `bun publish` in `apps/server` (it builds first).
+[docs/build.md](docs/build.md) covers building the npm package and the desktop
+app, signing, and local builds, which keep to their own data folder and port.
+[docs/release.md](docs/release.md) covers releases.
 
 ## Licence and disclaimer
 

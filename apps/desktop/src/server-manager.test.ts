@@ -139,6 +139,18 @@ describe('ServerManager', () => {
     expect(manager.connection.owns).toBe(true);
   });
 
+  test("a local build's port and data folder reach the probe, the takeover and the compiled server", async () => {
+    const spawnFn = mock((_command: string, _args: string[]) => fakeChild().child);
+    const fetchFn = answering('printtally');
+    const manager = new ServerManager({ ...options, spawnFn, fetchFn, packaged: true, resourcesPath: '/App/Contents/Resources', port: 4319, dataDirectory: '/tmp/seeded' });
+    await manager.connect();
+    fetchFn.answers = ['down', 'printtally'];
+    await manager.ensureAlive();
+    const urls = (fetchFn as unknown as { mock: { calls: [string][] } }).mock.calls.map(([url]) => url);
+    expect(new Set(urls)).toEqual(new Set(['http://127.0.0.1:4319/api/v1/health']));
+    expect(spawnFn.mock.calls).toEqual([['/App/Contents/Resources/server/printtally-server', ['serve', '--port', '4319', '--data-dir', '/tmp/seeded']]]);
+  });
+
   test('does not start a server once quitting', async () => {
     const spawnFn = mock(() => fakeChild().child);
     const fetchFn = answering('printtally');
