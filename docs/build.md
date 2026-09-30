@@ -78,6 +78,8 @@ PRINTTALLY_MEMORY_SECRETS=1 bun apps/server/src/cli.ts serve --port 4400 --data-
 PRINTTALLY_API=http://127.0.0.1:4400 bun run dev:web
 ```
 
+Open the UI from the Vite dev server (http://127.0.0.1:5173), not from port 4400. The server itself serves a built UI, and it prefers `apps/server/dist/client` (left behind by `build:server` or `pack:server`) over `apps/web/dist`. So after a local pack it serves that old copy until you run `bun run --cwd apps/server build:client` again.
+
 ### App icon
 
 `apps/desktop/assets/icon/PrintTally.icns` and `Assets.car` are committed, so the build doesn't depend on regenerating them. To change the icon, edit `apps/desktop/assets/icon/print-tally.svg` and run `bun run make:icon`, which needs Xcode (it renders the SVG with AppKit and compiles the asset catalog with `actool`). Commit the regenerated `.icns` and `Assets.car` alongside the SVG.
