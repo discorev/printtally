@@ -8,7 +8,7 @@ import { useCurrency } from '../../api/queries.ts';
 import { api } from '../../api/endpoints.ts';
 import { dateShort, ml, mlValue, money, plural } from '../../lib/format.ts';
 import { fittedPurchase, productName, type InkChannelView } from './channels.ts';
-import { InkPurchaseForm } from './InkPurchaseForm.tsx';
+import { InkPurchaseForm, useShowAdded } from './InkPurchaseForm.tsx';
 import { InkWriteOffForm } from './InkWriteOffForm.tsx';
 
 // A cartridge's docket (vInkDocket): what's in the printer, what prints used, purchases and write-offs.
@@ -19,7 +19,7 @@ const CLOSE = { to: { to: '/ink' }, label: 'Ink' } as const;
 export function CartridgeDocket({ channel, channels, settings, form }: {
   channel: InkChannelView; channels: InkChannelView[]; settings: Settings | undefined; form?: CartridgeForm;
 }) {
-  const navigate = useNavigate(), currency = useCurrency();
+  const navigate = useNavigate(), currency = useCurrency(), showAdded = useShowAdded();
   const show = (next?: CartridgeForm) => void navigate({ to: '/ink/$channel', params: { channel: channel.code }, search: { form: next } });
   // Escape leaves a form before it closes the docket (the Docket's own handler checks defaultPrevented).
   useEffect(() => {
@@ -38,8 +38,7 @@ export function CartridgeDocket({ channel, channels, settings, form }: {
     <Docket label="Cartridge" close={CLOSE}>
       <DocketHead when="Cartridge" title={<>{channel.code} · {channel.name}</>}
         subtitle={product ? `${productName(product)} · ${mlValue(product.capacity_nl, 0)} ml` : 'No cartridge set up yet'} />
-      {form === 'purchase' ? <InkPurchaseForm channels={channels} initial={channel.code} onSaved={code =>
-          void navigate({ to: '/ink/$channel', params: { channel: code }, search: { form: 'added' } })} onCancel={() => show()} />
+      {form === 'purchase' ? <InkPurchaseForm channels={channels} initial={channel.code} onSaved={showAdded} onCancel={() => show()} />
         : form === 'writeoff' ? <InkWriteOffForm channel={channel} onSaved={() => show('written-off')} onCancel={() => show()} />
         : form === 'added' ? <SavedNotice label="Stock" onDone={() => show()}>Added.</SavedNotice>
         : form === 'written-off' ? <SavedNotice label="Write-off" onDone={() => show()}>Saved. It shows as waste in totals.</SavedNotice>

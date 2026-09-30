@@ -39,7 +39,8 @@ export const paperPurchaseSetupSchema = z.object({
 }).strict().refine(v => v.stock ? v.paper_stock_id === undefined && (v.paper === undefined) !== (v.paper_id === undefined)
   : v.paper === undefined && v.paper_id === undefined && v.paper_stock_id !== undefined, 'Give a stock item, or a new one and its paper');
 
-const cartridgeFields = { name, channel: z.string().regex(/^[A-Za-z0-9_]{1,16}$/), capacity_nl: count, product_code: z.string().trim().min(1).max(100).nullable() };
+const channel = z.string().regex(/^[A-Za-z0-9_]{1,16}$/);
+const cartridgeFields = { name, channel, capacity_nl: count, product_code: z.string().trim().min(1).max(100).nullable() };
 export const cartridgeSchema = z.object(cartridgeFields).partial({ product_code: true }).strict();
 export const cartridgePatchSchema = someFields(cartridgeFields);
 
@@ -50,6 +51,15 @@ export const inkPurchasePatchSchema = someFields(inkPurchaseFields);
 export const inkPurchaseSetupSchema = z.object({
   cartridge: cartridgeSchema.optional(), ink_product_id: id.optional(), purchase: inkPurchaseSchema.omit({ ink_product_id: true }),
 }).strict().refine(v => (v.cartridge === undefined) !== (v.ink_product_id === undefined), 'Give a cartridge or a new one');
+// A whole set bought together: one purchase of `sets` cartridges for each product, created together or not at all.
+// The server splits the price across them by capacity, so every ml costs the same. Channels with no product yet
+// get one, named "<series> <channel>" (e.g. "PFI-1100 PM").
+const unique = (list: unknown[]) => new Set(list).size === list.length;
+export const inkSetPurchaseSchema = z.object({
+  ink_product_ids: z.array(id).max(32).refine(unique, 'Duplicate cartridge'),
+  new_cartridges: z.object({ series: z.string().trim().min(1).max(100), capacity_nl: count, channels: z.array(channel).min(1).max(32).refine(unique, 'Duplicate channel') }).strict().optional(),
+  purchased_on: day, sets: count, price_micros: micros,
+}).strict().refine(v => v.ink_product_ids.length + (v.new_cartridges?.channels.length ?? 0) > 0, 'Give the cartridges in the set');
 
 // A write-off names a stock item or a cartridge, and a quantity or all that's left of the open pack, roll or cartridge.
 const writeOffFields = { paper_stock_id: id.nullable(), ink_product_id: id.nullable(), written_off_on: day, quantity: count.nullable(), all_remaining: z.boolean(), reason: z.string().trim().min(1).max(1000).nullable() };
@@ -66,8 +76,11 @@ export type InkPurchaseInput = z.infer<typeof inkPurchaseSchema>;
 export type WriteOffInput = z.infer<typeof writeOffSchema>;
 export type PaperPurchaseSetup = z.infer<typeof paperPurchaseSetupSchema>;
 export type InkPurchaseSetup = z.infer<typeof inkPurchaseSetupSchema>;
+export type InkSetPurchase = z.infer<typeof inkSetPurchaseSchema>;
 export interface PaperPurchaseSetupResult { paper_id: number; paper_stock_id: number; id: number }
 export interface InkPurchaseSetupResult { ink_product_id: number; id: number }
+/** The set's purchases (id), one per cartridge product, each with its share of the price. */
+export interface InkSetPurchaseResult { purchases: { id: number; ink_product_id: number; channel: string; price_micros: number }[] }
 /** What writing off all that's left would take on a day, as the ledger counts it: the rest of the open pack, roll
  *  or cartridge (written_off), its cost, and all that's left of the stock item or cartridge then (remaining). */
 export interface WriteOffPreview { written_off: number; cost_micros: number | null; remaining: number }
