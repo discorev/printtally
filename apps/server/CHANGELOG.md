@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/discorev/printtally/compare/backend-v0.2.1...backend-v0.3.0) (2026-10-01)
+
+
+### Features
+
+* **web:** default a new paper's name to its printer media ([3573c6a](https://github.com/discorev/printtally/commit/3573c6a1d845f68f1917e29ebd8b851483f7ec82))
+* **web:** default a new paper's name to its printer media ([688bfa2](https://github.com/discorev/printtally/commit/688bfa28ed47124687c830f3c418ff734c8997e8))
+
 ## [0.2.1](https://github.com/discorev/printtally/compare/backend-v0.2.0...backend-v0.2.1) (2026-09-30)
 
 
