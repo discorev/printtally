@@ -49,6 +49,8 @@ export function PaperPurchaseForm({ papers, mediaTypes = [], initial = {}, embed
 
   const isNew = paper === 'new', chosen = typeof paper === 'number' ? papers.find(p => p.id === paper) : undefined;
   const newItem = isNew || stock === 'new';
+  // A new paper's name defaults to its media's until typed over.
+  const mediaDefault = (id: string) => { const m = mediaTypes.find(t => t.source_media_id === id); return m ? (m.name ?? m.source_media_id).replace(/Hahnemuehle/g, 'Hahnemühle') : ''; };
   const roll = newItem ? kind === 'roll' : chosen?.stock.find(s => s.id === stock)?.format === 'roll';
   const priceMicros = parseMoney(price), whole = (text: string) => /^\d+$/.test(text) && Number(text) > 0;
   const lengthUm = Math.round(Number(length) * 1e6);
@@ -89,7 +91,7 @@ export function PaperPurchaseForm({ papers, mediaTypes = [], initial = {}, embed
       {isNew && <>
         <Field label="Paper name">{id => <TextInput id={id} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Hahnemühle Museum Etching" />}</Field>
         <Field label="Prints as" hint="Media types as the printer reports them. Several papers can share one, for instance a test pack printed with a stock profile.">{id => (
-          <Select id={id} value={media} onChange={e => setMedia(e.target.value)}>
+          <Select id={id} value={media} onChange={e => { if (!name.trim() || name === mediaDefault(media)) setName(mediaDefault(e.target.value)); setMedia(e.target.value); }}>
             <option value="">Not linked to printer media yet</option>
             {mediaTypes.map(m => <option key={m.source_media_id} value={m.source_media_id}>
               {m.name ?? m.source_media_id}{m.papers.length ? ` · also ${m.papers.map(p => p.name).join(', ')}` : ''}</option>)}
