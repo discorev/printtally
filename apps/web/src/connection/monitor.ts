@@ -51,7 +51,7 @@ export class ConnectionMonitor {
   stop(): void { if (this.timer !== undefined) this.clearTimer(this.timer); this.timer = undefined; }
 
   /** Discard state and scheduled checks between independent component-test renders. */
-  reset(): void { this.stop(); this.state = initialConnection; }
+  reset(): void { this.stop(); this.checking = undefined; this.state = initialConnection; }
 
   private async run(): Promise<void> {
     try { this.dispatch({ type: 'ok', health: await this.fetchHealth() }); }
