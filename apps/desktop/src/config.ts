@@ -4,18 +4,36 @@ import { DEFAULT_PORT } from './paths.ts';
 
 // The paired remote host remembered between launches; none means this Mac.
 export interface Remote { host: string; port: number }
+interface Config { remote?: Remote; autoDownloadUpdates?: boolean }
+
+function loadConfig(userDataDirectory: string): Config {
+  const path = join(userDataDirectory, 'connection.json');
+  if (!existsSync(path)) return {};
+  try {
+    const value: unknown = JSON.parse(readFileSync(path, 'utf8'));
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as Config : {};
+  } catch { return {}; }
+}
+
+function saveConfig(userDataDirectory: string, config: Config): void {
+  writeFileSync(join(userDataDirectory, 'connection.json'), JSON.stringify(config));
+}
 
 export function loadRemote(userDataDirectory: string): Remote | undefined {
-  const path = join(userDataDirectory, 'connection.json');
-  if (!existsSync(path)) return undefined;
-  try {
-    const { remote } = JSON.parse(readFileSync(path, 'utf8')) as { remote?: Partial<Remote> };
-    return typeof remote?.host === 'string' && Number.isInteger(remote.port) ? { host: remote.host, port: remote.port! } : undefined;
-  } catch { return undefined; }
+  const { remote } = loadConfig(userDataDirectory);
+  return typeof remote?.host === 'string' && Number.isInteger(remote.port) ? { host: remote.host, port: remote.port } : undefined;
 }
 
 export function saveRemote(userDataDirectory: string, remote: Remote | undefined): void {
-  writeFileSync(join(userDataDirectory, 'connection.json'), JSON.stringify({ remote }));
+  saveConfig(userDataDirectory, { ...loadConfig(userDataDirectory), remote });
+}
+
+export function loadAutoDownload(userDataDirectory: string): boolean {
+  return loadConfig(userDataDirectory).autoDownloadUpdates === true;
+}
+
+export function saveAutoDownload(userDataDirectory: string, on: boolean): void {
+  saveConfig(userDataDirectory, { ...loadConfig(userDataDirectory), autoDownloadUpdates: on });
 }
 
 // A pairing link from `printtally pair` (printtally:// or http://host:port/pair#code=…), a host's

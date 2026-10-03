@@ -186,7 +186,10 @@ test('an app release waits for its backend, then signs, notarizes and uploads th
   const build = script(app!);
   for (const command of ['security create-keychain', 'PRINTTALLY_RELEASE=1 PRINTTALLY_VERSION="$VERSION" apps/desktop/scripts/bundle.sh', 'codesign --verify --deep --strict',
     'xcrun notarytool submit', 'xcrun stapler staple "$APP"', 'spctl --assess --type execute', 'PRINTTALLY_RELEASE=1 apps/desktop/scripts/make-dmg.sh', 'xcrun stapler staple "$DMG"',
-    'spctl --assess --type open', 'gh release upload "$TAG" "apps/desktop/release/PrintTally-$VERSION.dmg" "apps/desktop/release/PrintTally-$VERSION.zip"'])
+    'spctl --assess --type open', 'gh release view "$TAG" --json body --jq .body',
+    'gh release view "$BACKEND_TAG" --json body --jq .body', 'bun scripts/update-feed.ts "$VERSION" "$ZIP"',
+    'gh release upload "$TAG" "apps/desktop/release/PrintTally-$VERSION.dmg" "$ZIP" "$FEED" --clobber',
+    'gh release edit "$TAG" --latest'])
     assert.ok(build.includes(command), command);
   const cleanup = app!.steps.at(-1)!;
   assert.deepEqual([cleanup.if, cleanup.run?.includes('security delete-keychain "$KEYCHAIN_PATH"')], ['always()', true]);

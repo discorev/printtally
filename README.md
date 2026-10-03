@@ -25,8 +25,9 @@ administrator password. Then either:
 - run `bunx printtally` (needs [Bun](https://bun.sh) 1.3.9 or newer), which starts
   Print Tally and opens it in your browser, or
 - install the Print Tally desktop app for Macs with Apple silicon: open the `.dmg`,
-  drag Print Tally to Applications and open it. It includes everything it needs,
-  so you don't need Bun.
+  drag Print Tally to Applications and open it from there. It includes everything
+  it needs, so you don't need Bun. Keep it in `/Applications` for updates to install;
+  running it from the disk image won't let it replace itself.
 
 Both show the same setup screen:
 
