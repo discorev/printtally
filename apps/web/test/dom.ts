@@ -1,4 +1,6 @@
+import { afterEach } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { runTeardowns } from './cleanup.ts';
 
 // Bun's own HTTP/stream primitives must keep working in server and desktop tests, too.
 // Happy DOM still supplies document, elements, events and the browser location.
@@ -13,3 +15,5 @@ for (const name of [
 ]) {
   if (native[name]) Object.defineProperty(globalThis, name, native[name]);
 }
+
+afterEach(runTeardowns);

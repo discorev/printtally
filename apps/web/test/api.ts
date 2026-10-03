@@ -1,5 +1,5 @@
-import { afterEach } from 'bun:test';
 import { health } from './fixtures.ts';
+import { afterEachTest } from './cleanup.ts';
 
 /** Return a JSON response with a non-200 status (e.g. reply(409, { error: 'in_use' })). */
 export const reply = (status: number, body: unknown): Response =>
@@ -35,7 +35,7 @@ export function fakeApi(routes: Routes): FakeApi {
   return { requests, sent: key => requests.filter(request => `${request.method} ${request.path}` === key && request.body !== undefined).map(request => request.body), fetch: fetchStub };
 }
 
-afterEach(() => {
+afterEachTest(() => {
   globalThis.fetch = nativeFetch;
   const missing = active.flatMap(api => api.unhandled);
   active.length = 0;
