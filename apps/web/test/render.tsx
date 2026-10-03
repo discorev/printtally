@@ -1,0 +1,41 @@
+import { QueryClientProvider } from '@tanstack/react-query';
+import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
+import { cleanup, render as renderUi, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type { ReactElement } from 'react';
+import { routeTree } from '../src/routeTree.gen.ts';
+import { queryClient } from '../src/api/queries.ts';
+import { onRequestOutcome, setEditGate } from '../src/api/client.ts';
+import { connection } from '../src/connection/index.ts';
+import type { FakeApi } from './api.ts';
+import { afterEachTest } from './cleanup.ts';
+
+const providers = (ui: ReactElement) => <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>;
+
+// Other test files (connection.test.ts) install their own monitors on the client's hooks, so point them back at the app's.
+async function connect(api: FakeApi): Promise<void> {
+  globalThis.fetch = api.fetch;
+  onRequestOutcome(outcome => connection.report(outcome));
+  setEditGate(connection.canEdit);
+  await connection.check();
+}
+
+/** Render a leaf with the same connection monitor and query provider as the routed app. */
+export async function render(ui: ReactElement, api: FakeApi) {
+  await connect(api);
+  return { ...renderUi(providers(ui)), screen, user: userEvent.setup() };
+}
+
+/** Render the real route tree, shell and connection gate from a memory URL. */
+export async function renderApp(url: string, api: FakeApi) {
+  await connect(api);
+  const router = createRouter({ routeTree, history: createMemoryHistory({ initialEntries: [url] }), defaultPreload: 'intent', scrollRestoration: false });
+  return { ...renderUi(providers(<RouterProvider router={router} />)), screen, user: userEvent.setup(), router };
+}
+
+afterEachTest(() => {
+  cleanup();
+  connection.reset();
+  queryClient.clear();
+  localStorage.clear();
+});

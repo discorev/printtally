@@ -107,7 +107,8 @@ function FindPrinter({ host, onPreview }: { host?: string; onPreview: (preview: 
     const ip = address.trim();
     if (!IPV4.test(ip)) { setMessage("Enter the printer's IP address, such as 192.168.1.42."); return; }
     if (needsMac && !MAC.test(mac.trim())) { setMessage('Enter the MAC address as six pairs, such as 00:1E:8F:12:34:56.'); return; }
-    void check({ host: ip }, needsMac ? mac.trim() : undefined);
+    // People copy MACs with hyphens too; the API takes colons.
+    void check({ host: ip }, needsMac ? mac.trim().replaceAll('-', ':') : undefined);
   };
 
   // Opened to check a known printer again (?host=…): start straight away. The ref keeps StrictMode from asking twice.

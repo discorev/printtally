@@ -29,6 +29,20 @@ this dev server serves carry the API's own origin, which the API requires
 
 To run just this app: `bun run --cwd apps/web dev`.
 
+## Testing
+
+Run `bun test` from the repo root. `test/api.ts` has `fakeApi(routes)` (route keys are `METHOD /path`, with `api.requests` and `api.sent(key)` for assertions); `test/fixtures.ts` builds contract-shaped responses; `test/render.tsx` has `render(ui, api)` for leaves and `renderApp(url, api)` for the routed shell. For example, alongside a screen:
+
+```tsx
+const api = fakeApi({ 'GET /papers': papers() });
+const { screen } = await renderApp('/papers', api);
+expect(await screen.findByRole('option', { name: /Test paper/ })).toBeTruthy();
+expect(api.requests).toContainEqual({ method: 'GET', path: '/papers', body: undefined });
+expect(api.sent('POST /papers')).toEqual([]);
+```
+
+Find controls by role or label as a user would. Fake only the API, assert both what was sent and what the user sees, and use `findByRole`/`waitFor` instead of sleeps. See `src/screens/papers/WriteOffForm.test.tsx` for an edit with `user` and parsed `api.sent()` bodies.
+
 ## Build
 
 `bun run --cwd apps/web build` produces `dist/`, which `apps/server` serves in
