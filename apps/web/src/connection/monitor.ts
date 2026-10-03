@@ -18,6 +18,7 @@ export class ConnectionMonitor {
   private listeners = new Set<Listener>();
   private timer: unknown;
   private checking: Promise<void> | undefined;
+  private generation = 0; // Bumped by reset(), so a check started before it can't touch what follows.
   private readonly fetchHealth: () => Promise<HealthResponse>;
   private readonly pollMs: number;
   private readonly now: () => number;
@@ -51,11 +52,15 @@ export class ConnectionMonitor {
   stop(): void { if (this.timer !== undefined) this.clearTimer(this.timer); this.timer = undefined; }
 
   /** Discard state and scheduled checks between independent component-test renders. */
-  reset(): void { this.stop(); this.checking = undefined; this.state = initialConnection; }
+  reset(): void { this.stop(); this.generation++; this.checking = undefined; this.state = initialConnection; }
 
   private async run(): Promise<void> {
-    try { this.dispatch({ type: 'ok', health: await this.fetchHealth() }); }
-    catch (error) { this.dispatch({ type: error instanceof ApiError && error.kind === 'unauthorized' ? 'unauthorized' : 'unreachable' }); }
+    const generation = this.generation;
+    let event: ConnectionEvent;
+    try { event = { type: 'ok', health: await this.fetchHealth() }; }
+    catch (error) { event = { type: error instanceof ApiError && error.kind === 'unauthorized' ? 'unauthorized' : 'unreachable' }; }
+    if (generation !== this.generation) return;
+    this.dispatch(event);
     this.schedule();
   }
 
