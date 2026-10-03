@@ -72,9 +72,10 @@ export function useDesktopUpdate(): UpdateState | undefined {
   const [update, setUpdate] = useState<UpdateState>();
   useEffect(() => {
     if (!desktop?.getUpdate || !desktop.onUpdateChange) return;
-    let live = true;
-    void desktop.getUpdate().then(value => { if (live) setUpdate(value); });
-    const off = desktop.onUpdateChange(setUpdate);
+    // Listen before asking, and let a pushed change win over the reply, so a change during load isn't lost.
+    let live = true, pushed = false;
+    const off = desktop.onUpdateChange(value => { pushed = true; setUpdate(value); });
+    void desktop.getUpdate().then(value => { if (live && !pushed) setUpdate(value); });
     return () => { live = false; off(); };
   }, []);
   return update;

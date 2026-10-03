@@ -67,7 +67,9 @@ export class UpdateManager {
     });
     client.on('update-downloaded', info => {
       this.downloading = false;
-      this.setState({ status: 'ready', ...normalise(info) });
+      // The download's event may carry no notes; keep the ones the receipt already showed.
+      const ready = normalise(info), offered = 'notes' in this.state ? this.state.notes : '';
+      this.setState({ status: 'ready', ...ready, notes: ready.notes || offered });
       this.stop();
     });
     client.on('error', error => {

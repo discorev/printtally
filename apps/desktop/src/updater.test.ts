@@ -58,7 +58,7 @@ test('local feed checks, normalises array notes, tracks progress, and stops afte
   fake.emit('download-progress', { percent: 47 });
   expect(manager.getState()).toMatchObject({ status: 'downloading', percent: 47 });
   fake.emit('update-downloaded', { ...info, releaseNotes: null });
-  expect(manager.getState()).toEqual({ status: 'ready', version: '0.3.0', notes: '', date: info.releaseDate });
+  expect(manager.getState()).toEqual({ status: 'ready', version: '0.3.0', notes: '### Features\n\n* **web:** new feature', date: info.releaseDate });
   await manager.check();
   expect(fake.checks).toBe(1);
   let stoppedServer = false;
