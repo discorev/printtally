@@ -7,12 +7,13 @@ import { ApiError } from './client.ts';
 // because the connection monitor retries the server and refetches everything once it's back. What's
 // already loaded stays on screen while it's lost (a failed refetch keeps its data), and is kept for an hour
 // after a screen closes, so going back to it during an outage still shows it.
-export const queryClient = new QueryClient({
+export const createQueryClient = () => new QueryClient({
   defaultOptions: {
     queries: { refetchOnWindowFocus: true, staleTime: 5_000, gcTime: 60 * 60_000, networkMode: 'always', retry: (count, error) => !(error instanceof ApiError) && count < 1 },
     mutations: { networkMode: 'always', retry: false },
   },
 });
+export const queryClient = createQueryClient();
 
 export const keys = {
   jobs: (params: JobsQuery) => ['jobs', params] as const,

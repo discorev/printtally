@@ -50,6 +50,9 @@ export class ConnectionMonitor {
 
   stop(): void { if (this.timer !== undefined) this.clearTimer(this.timer); this.timer = undefined; }
 
+  /** Discard state and scheduled checks between independent component-test renders. */
+  reset(): void { this.stop(); this.state = initialConnection; }
+
   private async run(): Promise<void> {
     try { this.dispatch({ type: 'ok', health: await this.fetchHealth() }); }
     catch (error) { this.dispatch({ type: error instanceof ApiError && error.kind === 'unauthorized' ? 'unauthorized' : 'unreachable' }); }
