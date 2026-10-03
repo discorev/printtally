@@ -1,10 +1,13 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
+// electron-updater is CommonJS without a named autoUpdater export that ES modules can import.
+import electronUpdater from 'electron-updater';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { ServerManager, type Connection } from './server-manager.ts';
-import { loadRemote, parseTarget, saveRemote } from './config.ts';
+import { loadAutoDownload, loadRemote, parseTarget, saveAutoDownload, saveRemote } from './config.ts';
 import { readBuildInfo, runtimeSettings } from './build.ts';
+import { UpdateManager } from './updater.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const devWebUrl = process.env.PRINTTALLY_WEB_URL ?? 'http://127.0.0.1:5173';
@@ -22,6 +25,8 @@ let window: BrowserWindow | undefined;
 let quitting = false;
 let showingProblem = false;
 let pendingPair: string | undefined; // A pairing page to open once the host answers.
+const updater = new UpdateManager(electronUpdater.autoUpdater, build.kind, process.env, loadAutoDownload(app.getPath('userData')),
+  state => window?.webContents.send('update', state));
 
 // This Mac's server serves the built UI; dev loads the Vite dev URL for hot reload instead. A remote
 // host always serves its own UI, so the UI and the API it calls come from the same server.
@@ -74,8 +79,15 @@ async function createWindow(): Promise<void> {
     titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 20, y: 19 },
     webPreferences: { preload: join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
-  // The window only shows the connected server's pages; nothing opens new windows.
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  // Only changelog links leave the app; keep every new Electron window denied.
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    try {
+      const target = new URL(url);
+      if (target.protocol === 'https:' && target.hostname === 'github.com' && target.pathname.startsWith('/discorev/printtally/'))
+        void shell.openExternal(target.href).catch(error => console.error('Could not open changelog:', error));
+    } catch { /* ignore invalid links */ }
+    return { action: 'deny' };
+  });
   window.webContents.on('will-navigate', (event, url) => { if (new URL(url).origin !== new URL(targetUrl()).origin) event.preventDefault(); });
   window.on('close', event => {
     // Keep the app in the Dock; only quitting stops a server it owns, so collection continues.
@@ -89,11 +101,20 @@ async function createWindow(): Promise<void> {
 app.setAsDefaultProtocolClient('printtally');
 app.on('open-url', (event, url) => { event.preventDefault(); useComputer(url).catch(() => { /* ignore malformed pairing links */ }); });
 app.on('window-all-closed', () => { /* stay in the Dock; quitting is the only way to stop */ });
-app.on('before-quit', () => { quitting = true; manager.stop(); });
+app.on('before-quit', () => { quitting = true; updater.stop(); manager.stop(); });
 app.on('activate', () => { window ? window.show() : void createWindow(); });
 
 ipcMain.handle('connection:get', () => manager.connection);
 ipcMain.handle('app:version', () => build.version);
+ipcMain.handle('update:get', () => updater.getState());
+ipcMain.handle('update:download', () => updater.download());
+ipcMain.handle('update:install', () => updater.install(() => { quitting = true; manager.stop(); }));
+ipcMain.handle('update:auto-download:get', () => updater.getAutoDownload());
+ipcMain.handle('update:auto-download:set', (_event, on: unknown) => {
+  if (typeof on !== 'boolean') throw new Error('invalid_auto_download_setting');
+  saveAutoDownload(app.getPath('userData'), on);
+  updater.setAutoDownload(on);
+});
 ipcMain.handle('connection:switch-computer', (_event, target: unknown) => {
   if (target !== undefined && typeof target !== 'string') throw new Error('not_a_print_tally_address');
   return useComputer(target || undefined);
@@ -102,6 +123,7 @@ ipcMain.handle('connection:switch-computer', (_event, target: unknown) => {
 app.whenReady().then(async () => {
   await manager.connect(loadRemote(app.getPath('userData')));
   await createWindow();
+  updater.start();
   setInterval(() => {
     void manager.ensureAlive().then(() => {
       const { status } = manager.connection;
