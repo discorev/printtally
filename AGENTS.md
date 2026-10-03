@@ -24,6 +24,8 @@ The desktop can either connect to a local backend that starts when you run it, o
 
 ## Definition of done
 
+Changes to `apps/web` include or update a `*.test.tsx` component test next to the screen (helpers in `apps/web/test/`).
+
 A change is done only when all of these are true:
 
 1. `bun run typecheck` and `bun test` pass.

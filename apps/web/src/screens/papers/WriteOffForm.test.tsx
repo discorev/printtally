@@ -37,11 +37,7 @@ test('writing off the open pack waits for the ledger and only confirms after a s
 
   await user.click(save);
   expect(await screen.findByText(/Saved\. It shows as waste in totals/)).toBeTruthy();
-  const posts = api.requests.filter(request => request.method === 'POST');
-  expect(posts).toHaveLength(2);
-  for (const request of posts) {
-    expect(await request.clone().json()).toEqual({
-      paper_stock_id: 10, written_off_on: date, reason: 'Damaged', all_remaining: true,
-    });
-  }
+  expect(api.sent('POST /write-offs')).toEqual(Array(2).fill({
+    paper_stock_id: 10, written_off_on: date, reason: 'Damaged', all_remaining: true,
+  }));
 });
