@@ -20,7 +20,7 @@ export function fakeApi(routes: Routes): FakeApi {
     const request = new Request(new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, location.href), init);
     const path = new URL(request.url).pathname + new URL(request.url).search;
     const apiPath = path.replace(/^\/api\/v1(?=\/)/, '');
-    requests.push({ method: request.method, path: apiPath, body: request.body === null ? undefined : await request.clone().json() });
+    requests.push({ method: request.method, path: apiPath, body: typeof init?.body === 'string' ? JSON.parse(init.body) as unknown : undefined });
     const key = `${request.method} ${apiPath}`;
     const handler = Object.hasOwn(routes, key) ? routes[key] : key === 'GET /health' ? health() : undefined;
     if (!path.startsWith('/api/v1/') || handler === undefined) {

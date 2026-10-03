@@ -1,4 +1,5 @@
-import type { CostTotals, HealthResponse, PaperView, PapersResponse, Settings, StockView, WriteOffPreview } from 'print-accounting-contracts';
+import type { CostTotals, HealthResponse, JobsResponse, KnownPrinterListing, LedgerJob, MediaTypeView, PaperPurchaseView, PaperView, PapersResponse, PrinterStatus, Settings, StockView, TotalsResponse, WriteOffPreview } from 'print-accounting-contracts';
+import type { Routes } from './api.ts';
 
 export const settings = (overrides: Partial<Settings> = {}): Settings => ({
   costing_method: 'oldest', currency: 'GBP', ...overrides,
@@ -25,4 +26,41 @@ export const papers = (items: PaperView[] = [paper()], overrides: Partial<Papers
 });
 export const writeOffPreview = (overrides: Partial<WriteOffPreview> = {}): WriteOffPreview => ({
   written_off: 75, remaining: 75, cost_micros: 150_000, ...overrides,
+});
+
+/** Shared API shapes and reads used by routed component tests. */
+export const fingerprint = Array(32).fill('AB').join(':');
+export const jobsResponse = (items: LedgerJob[] = [], overrides: Partial<JobsResponse> = {}): JobsResponse => ({
+  jobs: items, total: items.length, limit: 1000, offset: 0, settings: settings(), ...overrides,
+});
+export const totalsResponse = (overall: CostTotals = totals(), days: TotalsResponse['days'] = []): TotalsResponse => ({
+  settings: settings(), overall, days, papers: [],
+});
+export const mediaType = (overrides: Partial<MediaTypeView> = {}): MediaTypeView => ({
+  source_media_id: 'media-1', name: 'Hahnemuehle Photo Rag', present_on_printer: true, jobs: 0,
+  papers: [], last_seen_at: '2026-09-30T10:00:00Z', first_job_on: null, last_job_on: null, totals: totals(), ...overrides,
+});
+export const paperPurchase = (overrides: Partial<PaperPurchaseView> = {}): PaperPurchaseView => ({
+  id: 31, paper_stock_id: 10, purchased_on: '2026-09-28', packs: 2, sheets_per_pack: 25,
+  length_um: null, price_micros: 37_990_000, quantity: 50, remaining: 25, ...overrides,
+});
+export const printerStatus = (overrides: Partial<PrinterStatus> = {}): PrinterStatus => ({
+  id: 'printer-1', name: 'Studio printer', host: '192.168.1.42', state: 'ready', lastCollection: null, ...overrides,
+});
+export const knownPrinter = (overrides: Partial<KnownPrinterListing> = {}): KnownPrinterListing => ({
+  id: 'printer-1', host: '192.168.1.42', name: 'Studio printer', mac: '00:1E:8F:12:34:56',
+  fingerprintSha256: fingerprint, validFrom: '2025-01-01T00:00:00Z', validTo: '2035-01-01T00:00:00Z',
+  confirmedAt: '2026-10-03T12:00:00Z', lastVerifiedAt: '2026-10-03T12:00:00Z', hasPassword: false, ...overrides,
+});
+export const jobsScreenReads = (items: LedgerJob[] = [], additional: Routes = {}): Routes => ({
+  'GET /jobs?includeHidden=false&limit=1000': jobsResponse(items),
+  'GET /totals': totalsResponse(),
+  'GET /papers': papers(),
+  'GET /media-types': { media_types: [] },
+  'GET /settings': settings(),
+  ...additional,
+});
+export const ledgerSpanReads = (): Routes => ({
+  'GET /jobs?includeHidden=true&limit=1': jobsResponse([], { limit: 1 }),
+  'GET /jobs?limit=1': jobsResponse([], { limit: 1 }),
 });
