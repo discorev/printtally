@@ -1,5 +1,6 @@
-import { expect, test } from 'bun:test';
-import { waitFor, within } from '@testing-library/react';
+import { afterEach, expect, mock, test } from 'bun:test';
+import type { PrintTallyBridge, UpdateState } from '../../desktop.ts';
+import { screen, waitFor, within } from '@testing-library/react';
 import type { KnownPrinterListing } from 'print-accounting-contracts';
 import { fakeApi, reply } from '../../../test/api.ts';
 import { health, knownPrinter, ledgerSpanReads, printerStatus, settings, totalsResponse } from '../../../test/fixtures.ts';
@@ -13,6 +14,33 @@ const settingsReads = (printers: KnownPrinterListing[] = [printer]) => ({
   'GET /totals': totalsResponse(),
   'GET /known-printers': { printers },
   ...ledgerSpanReads(),
+});
+
+// Desktop availability is captured at module load, so keep separate bridge-backed and browser copies.
+const browser = await import('../../desktop.ts' + '?settings-browser-test') as typeof import('../../desktop.ts');
+let update: UpdateState = { status: 'idle' };
+const setAutoDownload = mock(async (_on: boolean) => {});
+const bridge: PrintTallyBridge = {
+  getVersion: async () => '0.2.0',
+  getConnection: async () => ({ host: 'localhost', port: 3000, owns: true, remote: false, ownership: 'owned', status: 'ready' }),
+  switchComputer: async () => {}, onConnectionChange: () => () => {},
+  getUpdate: async () => update, onUpdateChange: () => () => {},
+  getAutoDownload: async () => false, setAutoDownload,
+};
+window.printtally = bridge;
+const app = await import('../../desktop.ts' + '?settings-desktop-test') as typeof import('../../desktop.ts');
+delete window.printtally;
+
+const renderDesktopSettings = async () => {
+  window.printtally = bridge;
+  mock.module('../../desktop.ts', () => ({ ...app }));
+  return renderApp('/settings', fakeApi(settingsReads()));
+};
+
+afterEach(() => {
+  mock.module('../../desktop.ts', () => ({ ...browser }));
+  delete window.printtally;
+  setAutoDownload.mockClear();
 });
 
 test('costing method stays on server choice during save and rejection, then changes only after confirmation', async () => {
@@ -82,4 +110,28 @@ test('settings shows an empty printer state linking to setup', async () => {
   await user.click(screen.getByRole('link', { name: 'Set up your printer' }));
   await waitFor(() => expect(router.state.location.pathname).toBe('/setup'));
   expect(screen.getByRole('button', { name: 'Find my printer' })).toBeTruthy();
+});
+
+test('the automatic download toggle is absent in a browser and when updates are disabled', async () => {
+  mock.module('../../desktop.ts', () => ({ ...browser }));
+  const api = fakeApi(settingsReads());
+  const browserView = await renderApp('/settings', api);
+  expect(await screen.findByRole('radiogroup', { name: 'Costing method' })).toBeTruthy();
+  expect(screen.queryByRole('checkbox', { name: 'Download updates automatically' })).toBeNull();
+  browserView.unmount();
+
+  update = { status: 'disabled' };
+  await renderDesktopSettings();
+  expect(await screen.findByText('App version')).toBeTruthy();
+  expect(screen.queryByRole('checkbox', { name: 'Download updates automatically' })).toBeNull();
+});
+
+test('an idle desktop app can opt in to automatic downloads', async () => {
+  update = { status: 'idle' };
+  const { screen, user } = await renderDesktopSettings();
+  const toggle = await screen.findByRole('checkbox', { name: 'Download updates automatically' }) as HTMLInputElement;
+  expect(toggle.checked).toBe(false);
+  await user.click(toggle);
+  expect(toggle.checked).toBe(true);
+  expect(setAutoDownload).toHaveBeenCalledWith(true);
 });

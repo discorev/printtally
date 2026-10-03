@@ -5,9 +5,9 @@ import { api } from '../../api/endpoints.ts';
 import { describeError, LOCAL_NETWORK_BLOCKED } from '../../api/client.ts';
 import { keys, useEdit, useKnownPrinters, useSettings, useTotals } from '../../api/queries.ts';
 import { onServerMachine, useCanEdit, useHealth, useServerName } from '../../connection/index.ts';
-import { desktop, useDesktopConnection, useDesktopVersion } from '../../desktop.ts';
+import { desktop, useAutoDownload, useDesktopConnection, useDesktopUpdate, useDesktopVersion } from '../../desktop.ts';
 import {
-  Button, ButtonLink, Fingerprint, KV, LinkButton, Mono, Money, Pad, PadBody, PadHead, RowActions, SectionLabel, StatusLine, Sub, TextLink, useLoadingText,
+  Button, ButtonLink, Fingerprint, KV, LinkButton, Mono, Money, Pad, PadBody, PadHead, RowActions, SectionLabel, StatusLine, Sub, TextLink, Toggle, useLoadingText,
 } from '../../components/index.ts';
 import { clock, dateShort, plural } from '../../lib/format.ts';
 import { cx } from '../../lib/cx.ts';
@@ -137,13 +137,17 @@ function ChangePassword({ printer, onDone }: { printer: KnownPrinter; onDone: (s
 }
 
 /** Which computer this client uses. Only the desktop app can switch; a browser uses the
- *  computer whose address it opened. Each part shows its own version: the desktop app's, and the server's. */
+ *  computer whose address it opened. Each part shows its own version: the desktop app's, and the server's.
+ *  Under the app's version, whether this Mac downloads updates without asking (when the app can update itself). */
 function ComputerCard() {
   const name = useServerName(), connection = useDesktopConnection();
   const local = onServerMachine();
   const appVersion = useDesktopVersion(), backendVersion = useHealth()?.version;
+  const update = useDesktopUpdate(), [autoDownload, setAutoDownload] = useAutoDownload();
   const versions = <KV className="mt-2.5" rows={[
     !!desktop && !!appVersion && ['App version', <Mono>{appVersion}</Mono>],
+    !!desktop && !!update && update.status !== 'disabled' && autoDownload !== undefined
+      && ['', <Toggle label="Download updates automatically" checked={autoDownload} onChange={event => setAutoDownload(event.target.checked)} />],
     !!backendVersion && ['Backend version', <Mono>{backendVersion}</Mono>],
   ]} />;
   if (desktop) return (
