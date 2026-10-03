@@ -145,5 +145,18 @@ test('failed first collection offers password correction instead of claiming job
   expect(api.sent('POST /known-printers/printer-1/collect')).toEqual([{}]);
 });
 
-// UI accepts hyphenated MACs, but the request schema currently rejects them before sending.
-test.todo('hyphenated MAC 00-1E-8F-12-34-56 enrols without a schema error', () => {});
+test('a MAC typed with hyphens is sent in the colon form the server accepts', async () => {
+  const api = fakeApi({
+    'GET /health': noPrinter,
+    'POST /printer-enrolments': (request: Request) => request.clone().json().then((body: { mac?: string }) => preview({ mac: body.mac ?? null })),
+    'DELETE /printer-enrolments/preview-1': { cancelled: true },
+  });
+  const { screen, user } = await renderApp('/setup', api);
+  await user.click(await screen.findByRole('button', { name: 'Enter an address instead' }));
+  await user.type(screen.getByRole('textbox', { name: 'Printer address' }), discovered.host);
+  await user.click(screen.getByRole('button', { name: 'Find my printer' }));
+  await user.type(await screen.findByRole('textbox', { name: 'MAC address' }), '00-1E-8F-12-34-56');
+  await user.click(screen.getByRole('button', { name: 'Find my printer' }));
+  expect(await screen.findByRole('button', { name: 'Confirm fingerprint' })).toBeTruthy();
+  expect(api.sent('POST /printer-enrolments')).toEqual([{ host: discovered.host }, { host: discovered.host, mac: '00:1E:8F:12:34:56' }]);
+});
