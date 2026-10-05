@@ -61,7 +61,7 @@ try {
   packs('platinum-a4', '2025-12-10', 1, 20, 24.99);
 
   const channels = ['PM', 'R', 'C', 'PGY', 'MBK', 'PBK', 'B', 'CO', 'GY', 'Y', 'M', 'PC'];
-  const cartridge = Object.fromEntries(channels.map(channel => [channel, ledger.createCartridge({ name: 'PFI-1100 ' + channel, channel, capacity_nl: 80_000_000 })]));
+  const cartridge = Object.fromEntries(channels.map(channel => [channel, ledger.createCartridge({ name: 'PFI-4100 ' + channel, channel, capacity_nl: 80_000_000 })]));
   const ink = (channel: string, date: string, price: number) => ledger.createInkPurchase({ ink_product_id: cartridge[channel], purchased_on: date, cartridges: 1, price_micros: money(price) });
   for (const channel of channels) ink(channel, '2025-10-15', 38.9);
   ink('MBK', '2026-05-05', 42.5); ink('PBK', '2026-05-05', 42.5); ink('M', '2026-08-12', 42.5); ink('CO', '2026-08-20', 41); ink('GY', '2026-09-02', 43);

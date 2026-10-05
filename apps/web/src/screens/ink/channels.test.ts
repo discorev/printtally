@@ -3,7 +3,7 @@ import type { CartridgeView, InkResponse } from 'print-accounting-contracts';
 import { commonCapacity, inkChannels, inkSet } from './channels.ts';
 
 const cartridge = (id: number, channel: string, capacity_nl: number): CartridgeView =>
-  ({ id, name: `PFI-1100 ${channel}`, channel, capacity_nl, open_remaining_nl: null, purchases: [], write_offs: [], spares: 0, used: 0, jobs: 0, used_micros: 0, waste_micros: 0 }) as unknown as CartridgeView;
+  ({ id, name: `PFI-4100 ${channel}`, channel, capacity_nl, open_remaining_nl: null, purchases: [], write_offs: [], spares: 0, used: 0, jobs: 0, used_micros: 0, waste_micros: 0 }) as unknown as CartridgeView;
 const channels = (codes: string[], cartridges: CartridgeView[]) => inkChannels({ channels: codes, cartridges } as unknown as InkResponse);
 
 test('a whole set is every channel in the list: its product, or a new one where it has none', () => {

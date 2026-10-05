@@ -11,7 +11,7 @@ const purchase = (overrides: Partial<InkPurchaseView> = {}): InkPurchaseView => 
   remaining_nl: 140_000_000, ...overrides,
 });
 const cartridge = (overrides: Partial<CartridgeView> = {}): CartridgeView => ({
-  id: 1, name: 'PFI-1100 C', channel: 'C', capacity_nl: 80_000_000, product_code: null,
+  id: 1, name: 'PFI-4100 C', channel: 'C', capacity_nl: 80_000_000, product_code: null,
   open_remaining_nl: 60_000_000, open_purchase_id: 21, spares: 1,
   bought: 160_000_000, used: 20_000_000, wasted: 0, remaining: 140_000_000,
   used_micros: 9_000_000, waste_micros: 0, jobs: 3,
@@ -92,14 +92,14 @@ test('buying a previously unseen channel creates its product and purchase togeth
   const api = fakeApi({ ...routes(), 'POST /ink-purchases/setup': { ink_product_id: 2, id: 23 } });
   const { screen, user, router } = await renderApp('/ink/PM?form=purchase', api);
   expect(await screen.findByRole('textbox', { name: 'Product' })).toBeTruthy();
-  expect((screen.getByRole('textbox', { name: 'Product' }) as HTMLInputElement).value).toBe('PFI-1100 PM');
+  expect((screen.getByRole('textbox', { name: 'Product' }) as HTMLInputElement).value).toBe('PFI-4100 PM');
   expect((screen.getByRole('spinbutton', { name: 'Size (ml)' }) as HTMLInputElement).value).toBe('80');
   await user.type(screen.getByRole('textbox', { name: 'Price paid' }), '42');
   await user.click(screen.getByRole('button', { name: 'Add stock' }));
   expect(await screen.findByText('Added.')).toBeTruthy();
   expect(router.state.location.pathname).toBe('/ink/PM');
   expect(api.sent('POST /ink-purchases/setup')).toEqual([{
-    cartridge: { name: 'PFI-1100 PM', channel: 'PM', capacity_nl: 80_000_000 },
+    cartridge: { name: 'PFI-4100 PM', channel: 'PM', capacity_nl: 80_000_000 },
     purchase: { purchased_on: today(), cartridges: 1, price_micros: 42_000_000 },
   }]);
 });
@@ -114,7 +114,7 @@ test('buying a whole set includes existing products and sets up missing channels
   await user.type(screen.getByRole('textbox', { name: 'Price paid' }), '95.25');
   const save = screen.getByRole('button', { name: 'Add stock' }) as HTMLButtonElement;
   expect(save.disabled).toBe(true);
-  await user.type(screen.getByRole('textbox', { name: 'Series' }), ' PFI-1100 ');
+  await user.type(screen.getByRole('textbox', { name: 'Series' }), ' PFI-4100 ');
   await user.clear(screen.getByRole('spinbutton', { name: 'Sets' }));
   await user.type(screen.getByRole('spinbutton', { name: 'Sets' }), '2');
   await user.click(save);
@@ -122,7 +122,7 @@ test('buying a whole set includes existing products and sets up missing channels
   expect(router.state.location.pathname).toBe('/ink/new');
   expect(router.state.location.search.form).toBe('added');
   expect(api.sent('POST /ink-purchases/set')).toEqual([{
-    ink_product_ids: [1], new_cartridges: { series: 'PFI-1100', capacity_nl: 80_000_000, channels: ['PM'] },
+    ink_product_ids: [1], new_cartridges: { series: 'PFI-4100', capacity_nl: 80_000_000, channels: ['PM'] },
     purchased_on: today(), sets: 2, price_micros: 95_250_000,
   }]);
 });

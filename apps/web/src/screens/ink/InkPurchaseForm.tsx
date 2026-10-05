@@ -23,7 +23,7 @@ export function InkPurchaseForm({ channels, initial, onSaved, onCancel }: {
   const [date, setDate] = useState(today());
   const [count, setCount] = useState('1');
   const [price, setPrice] = useState('');
-  // A new product is named after an existing one ("PFI-1100 PM") and assumed the size most are.
+  // A new product is named after an existing one ("PFI-4100 PM") and assumed the size most are.
   const model = channels.find(c => c.product)?.product, capacity = commonCapacity(channels);
   const [name, setName] = useState<string | null>(null);
   const [series, setSeries] = useState(model ? productName(model) : '');
@@ -65,7 +65,7 @@ export function InkPurchaseForm({ channels, initial, onSaved, onCancel }: {
         {code && !set && !product && (
           <FieldPair>
             <Field label="Product" hint="Not set up yet; it's added with this purchase.">{id => (
-              <TextInput id={id} value={newName} onChange={e => setName(e.target.value)} placeholder={`e.g. PFI-1100 ${code}`} />
+              <TextInput id={id} value={newName} onChange={e => setName(e.target.value)} placeholder={`e.g. PFI-4100 ${code}`} />
             )}</Field>
             <Field label="Size (ml)">{id => <NumberInput id={id} min={1} step="any" value={size} onChange={e => setSize(e.target.value)} />}</Field>
           </FieldPair>
@@ -73,7 +73,7 @@ export function InkPurchaseForm({ channels, initial, onSaved, onCancel }: {
         {set && missing.length > 0 && (
           <FieldPair>
             <Field label="Series" hint={`${missing.join(', ')} ${missing.length === 1 ? "isn't set up yet; it's" : "aren't set up yet; they're"} added with this purchase.`}>{id => (
-              <TextInput id={id} value={series} onChange={e => setSeries(e.target.value)} placeholder="e.g. PFI-1100" />
+              <TextInput id={id} value={series} onChange={e => setSeries(e.target.value)} placeholder="e.g. PFI-4100" />
             )}</Field>
             <Field label="Size (ml)">{id => <NumberInput id={id} min={1} step="any" value={size} onChange={e => setSize(e.target.value)} />}</Field>
           </FieldPair>
