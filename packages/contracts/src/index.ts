@@ -44,7 +44,8 @@ export const snapshotSchema = z.object({
   schema: z.array(fieldSchema).min(1), records: z.array(recordSchema),
   media_catalogue: catalogueSchema.optional(), protocol: z.string().optional(),
   retention: uint.optional(), notes: z.array(z.string()).optional(),
-  device_model: z.string().nullable().optional(), firmware: z.string().nullable().optional(), inks: z.array(inkReadingSchema).optional(),
+  device_model: z.string().nullable().optional(), firmware: z.string().nullable().optional(),
+  inks: z.array(inkReadingSchema).refine(readings => new Set(readings.map(ink => ink.channel)).size === readings.length, 'Duplicate channel').optional(),
 });
 // paper_stock_id and paper_id each correct a job's default stock allocation; setting one clears the other.
 export const annotationSchema = z.object({

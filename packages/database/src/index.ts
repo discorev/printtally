@@ -118,20 +118,23 @@ export class AccountingDatabase {
           last_host: sql`CASE WHEN excluded.last_seen_at>=${printers.last_seen_at} THEN excluded.last_host ELSE ${printers.last_host} END`,
           first_seen_at: sql`min(${printers.first_seen_at},excluded.first_seen_at)`, last_seen_at: sql`max(${printers.last_seen_at},excluded.last_seen_at)` } })
         .returning({ id: printers.id }).get().id;
-      if (snapshot.device_model !== undefined || snapshot.firmware !== undefined) {
-        // Older imported snapshots cannot erase a newer device identification.
-        if (!priorPrinter || observedAt >= priorPrinter.last_seen_at) this.orm.update(printers).set({
-          ...(snapshot.device_model ? { model: snapshot.device_model } : {}),
-          ...(snapshot.firmware ? { firmware: snapshot.firmware } : {}),
-        }).where(eq(printers.id, printerId)).run();
-      }
+      const identification = {
+        ...(snapshot.device_model ? { model: snapshot.device_model } : {}),
+        ...(snapshot.firmware ? { firmware: snapshot.firmware } : {}),
+      };
+      // Older imported snapshots cannot erase a newer device identification.
+      if (Object.keys(identification).length && (!priorPrinter || observedAt >= priorPrinter.last_seen_at))
+        this.orm.update(printers).set(identification).where(eq(printers.id, printerId)).run();
       for (const ink of snapshot.inks ?? []) {
         const rows = this.orm.select().from(printer_ink_readings)
           .where(and(eq(printer_ink_readings.printer_id, printerId), eq(printer_ink_readings.channel, ink.channel)))
           .orderBy(printer_ink_readings.first_seen_at, printer_ink_readings.id).all();
         const previous = rows.filter(row => row.first_seen_at <= observedAt).at(-1);
         let next = rows.find(row => row.first_seen_at > observedAt);
-        const same = (row: typeof rows[number]) => row.series === ink.series && row.level === ink.level && row.replacement_count === ink.replacement_count;
+        // A partial status read cannot erase the last known value for this channel.
+        const reading = { ...ink, series: ink.series ?? previous?.series ?? null, level: ink.level ?? previous?.level ?? null,
+          replacement_count: ink.replacement_count ?? previous?.replacement_count ?? null };
+        const same = (row: typeof rows[number]) => row.series === reading.series && row.level === reading.level && row.replacement_count === reading.replacement_count;
         if (previous && same(previous)) {
           this.orm.update(printer_ink_readings).set({ last_seen_at: sql`max(${printer_ink_readings.last_seen_at},${observedAt})` })
             .where(eq(printer_ink_readings.id, previous.id)).run();
@@ -149,7 +152,7 @@ export class AccountingDatabase {
           if (next && same(next)) {
             this.orm.update(printer_ink_readings).set({ first_seen_at: observedAt }).where(eq(printer_ink_readings.id, next.id)).run();
           } else {
-            this.orm.insert(printer_ink_readings).values({ printer_id: printerId, ...ink, first_seen_at: observedAt, last_seen_at: observedAt }).run();
+            this.orm.insert(printer_ink_readings).values({ printer_id: printerId, ...reading, first_seen_at: observedAt, last_seen_at: observedAt }).run();
           }
         }
       }

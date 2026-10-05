@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { snapshotSchema } from 'print-accounting-contracts';
 import { cartridgeSize, cartridgeTypes } from 'print-accounting-core';
 import { AccountingDatabase, KnownPrinters } from 'print-accounting-database';
 import { Ivec, parseInkModel, parseInkStatus, parseDeviceCapability, readInkStatus } from 'print-accounting-ivec';
@@ -55,6 +56,24 @@ test('known models have only their documented cartridge types and channel counte
   assert.equal(cartridgeSize('PFI-9999'), null);
 });
 
+test('missing device identification does not prevent importing jobs', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'printtally-no-device-')), db = new AccountingDatabase(join(dir, 'ink.sqlite3'));
+  t.after(() => { db.close(); rmSync(dir, { recursive: true }); });
+  const input = sample(); input.device_model = null; input.firmware = null;
+  assert.equal(db.importSnapshot(input).new_jobs, 1);
+  assert.equal(db.all('SELECT id FROM print_jobs').length, 1);
+  assert.deepEqual(db.all('SELECT model,firmware FROM printers'), [{ model: null, firmware: null }]);
+});
+
+test('a snapshot rejects duplicate ink channels', () => {
+  const input = sample();
+  input.inks = [{ channel: 'C', series: 'PFI-4100', level: 90, replacement_count: 1 },
+    { channel: 'C', series: 'PFI-4100', level: 80, replacement_count: 2 }];
+  const result = snapshotSchema.safeParse(input);
+  assert.equal(result.success, false);
+  if (!result.success) assert.match(result.error.message, /Duplicate channel/);
+});
+
 test('readings extend unchanged observations, while level or count changes create historical rows', t => {
   const dir = mkdtempSync(join(tmpdir(), 'printtally-ink-')), db = new AccountingDatabase(join(dir, 'ink.sqlite3'));
   t.after(() => { db.close(); rmSync(dir, { recursive: true }); });
@@ -78,6 +97,31 @@ test('readings extend unchanged observations, while level or count changes creat
   invalid.records.push(structuredClone(invalid.records[0]));
   assert.throws(() => db.importSnapshot(invalid));
   assert.equal(db.all('SELECT id FROM printer_ink_readings').length, 2);
+});
+
+test('partial readings carry last known values forward without breaking the replacement history', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'printtally-partial-ink-')), db = new AccountingDatabase(join(dir, 'ink.sqlite3'));
+  t.after(() => { db.close(); rmSync(dir, { recursive: true }); });
+  const first = sample(); first.collected_at = '2026-09-01T00:00:00Z';
+  first.inks = [{ channel: 'C', series: 'PFI-4100', level: 90, replacement_count: 1 }];
+  db.importSnapshot(first);
+  const partial = structuredClone(first); partial.collected_at = '2026-09-02T00:00:00Z';
+  partial.inks![0] = { channel: 'C', series: null, level: null, replacement_count: null };
+  db.importSnapshot(partial);
+  let rows = db.all('SELECT series,level,replacement_count,first_seen_at,last_seen_at FROM printer_ink_readings ORDER BY first_seen_at');
+  assert.deepEqual(rows, [{ series: 'PFI-4100', level: 90, replacement_count: 1,
+    first_seen_at: '2026-09-01T00:00:00.000000+00:00', last_seen_at: '2026-09-02T00:00:00.000000+00:00' }]);
+  const last = structuredClone(first); last.collected_at = '2026-09-03T00:00:00Z'; last.inks![0].replacement_count = 2;
+  db.importSnapshot(last);
+  rows = db.all('SELECT replacement_count FROM printer_ink_readings ORDER BY first_seen_at');
+  assert.deepEqual(rows.map(row => row.replacement_count), [1, 2]);
+  const changedLevel = structuredClone(last); changedLevel.collected_at = '2026-09-04T00:00:00Z';
+  changedLevel.inks![0] = { channel: 'C', series: null, level: 70, replacement_count: null };
+  db.importSnapshot(changedLevel);
+  assert.deepEqual(db.all('SELECT series,level,replacement_count FROM printer_ink_readings ORDER BY first_seen_at'), [
+    { series: 'PFI-4100', level: 90, replacement_count: 1 }, { series: 'PFI-4100', level: 90, replacement_count: 2 },
+    { series: 'PFI-4100', level: 70, replacement_count: 2 },
+  ]);
 });
 
 test('independent status failures keep other available fields and identify the unavailable service', async () => {
