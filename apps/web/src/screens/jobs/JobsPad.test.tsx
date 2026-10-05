@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { waitFor, within } from '@testing-library/react';
 import type { AllocationPreview, JobResponse, LedgerJob, PaperView } from 'print-accounting-contracts';
 import { fakeApi, reply, type Routes } from '../../../test/api.ts';
-import { jobsResponse, jobsScreenReads, mediaType, paper as basePaper, paperPurchase, papers, settings, stock, totals, totalsResponse } from '../../../test/fixtures.ts';
+import { archivedPrinter, jobsResponse, jobsScreenReads, mediaType, paper as basePaper, paperPurchase, papers, settings, stock, totals, totalsResponse } from '../../../test/fixtures.ts';
 import { renderApp } from '../../../test/render.tsx';
 
 const job = (overrides: Omit<Partial<LedgerJob>, 'paper'> & { paper?: Partial<LedgerJob['paper']> } = {}): LedgerJob => ({
@@ -102,7 +102,7 @@ test('typing a search stores it in the URL, queries the server, and explains no 
   expect(await within(list).findByRole('option', { name: /Photo Rag/ })).toBeTruthy();
   await user.type(screen.getByRole('searchbox', { name: 'Search notes, papers and job names' }), 'absent');
   await waitFor(() => expect(router.state.location.search.q).toBe('absent'));
-  expect(await screen.findByText('No prints match. Clear the search or choose another paper.')).toBeTruthy();
+  expect(await screen.findByText('No prints match. Clear the search or choose another paper or printer.')).toBeTruthy();
   expect(api.requests.some(request => request.path === '/jobs?q=absent&includeHidden=false&limit=1000')).toBe(true);
 });
 
@@ -121,6 +121,7 @@ test('a selected print shows ledger costing and printer data, then returns to th
   expect(docket.textContent).toContain('5 min 0 s');
   expect(docket.textContent).toContain('Printer Etching');
   expect(docket.textContent).toContain('From the pack bought 10 Jan 2026');
+  expect(docket.textContent).not.toContain('Studio printer');
   await user.click(within(docket).getByRole('link', { name: 'Close (Esc)' }));
   await waitFor(() => expect(router.state.location.pathname).toBe('/jobs'));
   expect(router.state.location.search.paper).toBe(1);
@@ -354,4 +355,48 @@ test('j/k navigate the list and h hides the selected print without hijacking a n
   await user.keyboard('h');
   expect((note as HTMLTextAreaElement).value).toBe('h');
   expect(api.sent('PATCH /jobs/1/annotation')).toEqual([{ hidden: 1 }]);
+});
+
+const studio = job(), office = job({ job_id: 2, printer_id: 2, notes: 'Office proof' });
+const twoPrinters = { 'GET /printers': { printers: [archivedPrinter(), archivedPrinter({ id: 2, name: 'Office PRO-1100', host: '192.168.1.43', known_printer_id: 'printer-2' })] } };
+
+test('with one printer there is no printer filter and rows are not tagged', async () => {
+  const api = fakeApi(routes([studio, office]));
+  const { screen } = await renderApp('/jobs', api);
+  const list = await screen.findByRole('listbox', { name: 'Prints' });
+  await waitFor(() => expect(within(list).getAllByRole('option').length).toBe(2));
+  await waitFor(() => expect(api.requests.some(request => request.path === '/printers')).toBe(true));
+  expect(screen.queryByRole('combobox', { name: 'Printer' })).toBeNull();
+  expect(list.textContent).not.toContain('Studio printer');
+});
+
+test('with several printers, rows name their printer until one is chosen, which filters the list and goes in the URL', async () => {
+  const api = fakeApi(routes([studio, office], twoPrinters));
+  const { screen, user, router } = await renderApp('/jobs', api);
+  const list = await screen.findByRole('listbox', { name: 'Prints' });
+  const printer = await screen.findByRole('combobox', { name: 'Printer' }) as HTMLSelectElement;
+  expect([...printer.options].map(option => option.text)).toEqual(['All printers', 'Studio printer', 'Office PRO-1100']);
+  await waitFor(() => expect(within(list).getAllByRole('option').length).toBe(2));
+  const [newest, older] = within(list).getAllByRole('option');
+  expect(newest.textContent).toContain('Office PRO-1100');
+  expect(older.textContent).toContain('Studio printer');
+
+  await user.selectOptions(printer, '2');
+  await waitFor(() => expect(within(list).getAllByRole('option').length).toBe(1));
+  expect(router.state.location.search.printer).toBe(2);
+  expect(list.textContent).toContain('Office proof');
+  expect(list.textContent).not.toContain('Office PRO-1100');
+
+  await user.selectOptions(printer, '');
+  await waitFor(() => expect(within(list).getAllByRole('option').length).toBe(2));
+  expect(router.state.location.search.printer).toBeUndefined();
+});
+
+test('with several printers, the docket says which printer a print came from', async () => {
+  const api = fakeApi(routes([studio, office], { ...twoPrinters, 'GET /jobs/2': jobResponse(office) }));
+  const { screen } = await renderApp('/jobs/2?printer=2', api);
+  // The docket is replaced once the print loads, so find it by its heading.
+  const heading = await screen.findByRole('heading', { name: /On Office PRO-1100 · 0.50 ml of ink/ });
+  const docket = heading.closest('aside')!;
+  expect(docket.textContent).toContain('PrinterOffice PRO-1100 · 192.168.1.43');
 });

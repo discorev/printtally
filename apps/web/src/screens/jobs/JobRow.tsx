@@ -12,8 +12,9 @@ const GRID = 'grid-cols-[116px_30px_minmax(160px,1fr)_96px_130px_64px_72px] gap-
   + 'phone:grid-cols-[1fr_auto]! phone:gap-y-0.5 phone:py-2';
 const tag = 'ml-1.5 text-[12px]';
 
-/** `paper`: whether the paper was corrected, or assumed among several that print as this media (paperState). */
-export function JobRow({ job, selected, paper }: { job: LedgerJob; selected: boolean; paper: 'corrected' | 'assumed' | null }) {
+/** `paper`: whether the paper was corrected, or assumed among several that print as this media (paperState).
+ *  `printer`: the printer's name, shown when the list mixes printers. */
+export function JobRow({ job, selected, paper, printer }: { job: LedgerJob; selected: boolean; paper: 'corrected' | 'assumed' | null; printer?: string }) {
   const cancelled = jobCancelled(job), unknown = job.total_micros === null, hidden = job.hidden === 1;
   const volume = job.ink.reduce((sum, line) => sum + (line.volume_nl ?? 0), 0);
   return (
@@ -27,6 +28,7 @@ export function JobRow({ job, selected, paper }: { job: LedgerJob; selected: boo
         {jobPaperName(job)}
         {paper && <span className={cx(tag, 'text-muted')}>{paper}</span>}
         {unknown && !cancelled && <span className={cx(tag, 'text-amber')}>{unknownCostReason(job)}</span>}
+        {printer && <Chip size="sm" className="ml-2">{printer}</Chip>}
         {cancelled && <> <Chip tone="red">Cancelled</Chip></>}
         {hidden && <Chip size="sm" className="ml-2">hidden</Chip>}
       </span>
