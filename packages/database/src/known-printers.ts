@@ -29,13 +29,15 @@ export class KnownPrinters {
   /** Every printer the archive holds, with its job count, named as the known printer with its MAC.
    *  Both tables hold MACs as 12 lower-case hex digits (their CHECK constraints), so they compare as they are. */
   archived(): ArchivedPrinter[] {
-    const known = new Map(this.list().map(printer => [printer.mac, printer]));
+    // The last confirmation for a MAC wins, even if an older enrolment sorts later by name.
+    const known = new Map(this.db.orm.select().from(known_printers).orderBy(known_printers.confirmed_at, known_printers.id).all()
+      .map(row => [row.mac, record(row)]));
     const jobs = this.db.orm.select({ printer: print_jobs.printer_id, jobs: count() }).from(print_jobs).groupBy(print_jobs.printer_id).all();
-    return this.db.orm.select().from(printers).orderBy(printers.id).all().map(row => {
+    return this.db.orm.select().from(printers).all().map(row => {
       const match = known.get(row.mac);
       return { id: row.id, name: match?.name ?? row.display_name ?? row.mac.match(/../g)!.join(':'), host: match?.host ?? row.last_host,
         known_printer_id: match?.id ?? null, jobs: jobs.find(item => item.printer === row.id)?.jobs ?? 0 };
-    });
+    }).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0) || a.id - b.id);
   }
   save(printer: StoredPrinter, expected: StoredPrinter | undefined): void {
     this.db.transaction(() => {

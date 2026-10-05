@@ -47,7 +47,7 @@ export function JobsPad() {
   const search = useSearch({ from: '/_app/jobs' }), navigate = useNavigate({ from: '/jobs' });
   const selected = Number(useParams({ strict: false }).jobId ?? NaN);
   const q = useSettled(search.q ?? '');
-  const jobs = useJobs({ q: q || undefined, includeHidden: !!search.hidden, limit: LIMIT });
+  const jobs = useJobs({ q: q || undefined, printer: search.printer, includeHidden: !!search.hidden, limit: LIMIT });
   const totals = useTotals().data, papers = usePapers().data?.papers ?? [], mediaTypes = useMediaTypes().data?.media_types ?? [];
   const method = useSettings().data?.costing_method ?? totals?.settings.costing_method ?? 'oldest';
   // With more than one printer, the list can be filtered by printer, and each row names its printer until it is.
@@ -105,7 +105,7 @@ export function JobsPad() {
       <PadHead title="Jobs" meta={meta ?? ''}>
         <SearchInput placeholder="Search notes, papers and job names" aria-label="Search notes, papers and job names" value={search.q ?? ''}
           onChange={event => setSearch({ q: event.target.value || undefined })} className="max-w-[360px] phone:max-w-none phone:basis-full" />
-        {several && (
+        {(several || search.printer !== undefined) && (
           <Select aria-label="Printer" value={search.printer ?? ''} onChange={event => setSearch({ printer: Number(event.target.value) || undefined })} className="w-auto! max-w-[260px]">
             <option value="">All printers</option>
             {printers.map(printer => <option key={printer.id} value={printer.id}>{printer.name}</option>)}

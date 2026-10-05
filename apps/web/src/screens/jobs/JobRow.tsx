@@ -28,7 +28,7 @@ export function JobRow({ job, selected, paper, printer }: { job: LedgerJob; sele
         {jobPaperName(job)}
         {paper && <span className={cx(tag, 'text-muted')}>{paper}</span>}
         {unknown && !cancelled && <span className={cx(tag, 'text-amber')}>{unknownCostReason(job)}</span>}
-        {printer && <Chip size="sm" className="ml-2">{printer}</Chip>}
+        {printer && <span className="ml-2 rounded-[2px] border border-rule px-1 text-[12px] text-muted">{printer}</span>}
         {cancelled && <> <Chip tone="red">Cancelled</Chip></>}
         {hidden && <Chip size="sm" className="ml-2">hidden</Chip>}
       </span>

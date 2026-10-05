@@ -358,7 +358,10 @@ test('j/k navigate the list and h hides the selected print without hijacking a n
 });
 
 const studio = job(), office = job({ job_id: 2, printer_id: 2, notes: 'Office proof' });
-const twoPrinters = { 'GET /printers': { printers: [archivedPrinter(), archivedPrinter({ id: 2, name: 'Office PRO-1100', host: '192.168.1.43', known_printer_id: 'printer-2' })] } };
+const twoPrinters = {
+  'GET /printers': { printers: [archivedPrinter(), archivedPrinter({ id: 2, name: 'Office PRO-1100 (dev seed)', host: '192.168.1.43', known_printer_id: 'printer-2' })] },
+  'GET /jobs?printer=2&includeHidden=false&limit=1000': jobsResponse([office]),
+};
 
 test('with one printer there is no printer filter and rows are not tagged', async () => {
   const api = fakeApi(routes([studio, office]));
@@ -375,10 +378,16 @@ test('with several printers, rows name their printer until one is chosen, which 
   const { screen, user, router } = await renderApp('/jobs', api);
   const list = await screen.findByRole('listbox', { name: 'Prints' });
   const printer = await screen.findByRole('combobox', { name: 'Printer' }) as HTMLSelectElement;
-  expect([...printer.options].map(option => option.text)).toEqual(['All printers', 'Studio printer', 'Office PRO-1100']);
+  expect([...printer.options].map(option => option.text)).toEqual(['All printers', 'Studio printer', 'Office PRO-1100 (dev seed)']);
   await waitFor(() => expect(within(list).getAllByRole('option').length).toBe(2));
   const [newest, older] = within(list).getAllByRole('option');
-  expect(newest.textContent).toContain('Office PRO-1100');
+  const tag = within(newest).getByText('Office PRO-1100 (dev seed)');
+  expect(tag.tagName).toBe('SPAN');
+  expect(tag.className).toContain('border-rule');
+  expect(tag.className).toContain('rounded-[2px]');
+  expect(tag.className).toContain('text-[12px]');
+  expect(tag.className).toContain('text-muted');
+  expect(tag.className).not.toContain('uppercase');
   expect(older.textContent).toContain('Studio printer');
 
   await user.selectOptions(printer, '2');
@@ -386,17 +395,38 @@ test('with several printers, rows name their printer until one is chosen, which 
   expect(router.state.location.search.printer).toBe(2);
   expect(list.textContent).toContain('Office proof');
   expect(list.textContent).not.toContain('Office PRO-1100');
+  expect(api.requests.some(request => request.path === '/jobs?printer=2&includeHidden=false&limit=1000')).toBe(true);
 
   await user.selectOptions(printer, '');
   await waitFor(() => expect(within(list).getAllByRole('option').length).toBe(2));
   expect(router.state.location.search.printer).toBeUndefined();
 });
 
+test('a stale printer filter stays visible and filtered while printers load, then can be cleared', async () => {
+  let resolvePrinters!: (value: { printers: ReturnType<typeof archivedPrinter>[] }) => void;
+  const pendingPrinters = new Promise<{ printers: ReturnType<typeof archivedPrinter>[] }>(resolve => { resolvePrinters = resolve; });
+  const api = fakeApi(routes([studio], {
+    'GET /printers': () => pendingPrinters,
+    'GET /jobs?printer=999&includeHidden=false&limit=1000': jobsResponse([]),
+  }));
+  const { screen, user, router } = await renderApp('/jobs?printer=999', api);
+  const list = await screen.findByRole('listbox', { name: 'Prints' });
+  const printer = screen.getByRole('combobox', { name: 'Printer' });
+  expect(await screen.findByText('No prints match. Clear the search or choose another paper or printer.')).toBeTruthy();
+  expect(within(list).queryAllByRole('option')).toEqual([]);
+  expect(api.requests.some(request => request.path === '/jobs?printer=999&includeHidden=false&limit=1000')).toBe(true);
+  resolvePrinters({ printers: [archivedPrinter()] });
+  await user.selectOptions(printer, '');
+  await waitFor(() => expect(router.state.location.search.printer).toBeUndefined());
+  expect(await within(list).findByRole('option', { name: /Photo Rag/ })).toBeTruthy();
+  await waitFor(() => expect(screen.queryByRole('combobox', { name: 'Printer' })).toBeNull());
+});
+
 test('with several printers, the docket says which printer a print came from', async () => {
   const api = fakeApi(routes([studio, office], { ...twoPrinters, 'GET /jobs/2': jobResponse(office) }));
   const { screen } = await renderApp('/jobs/2?printer=2', api);
   // The docket is replaced once the print loads, so find it by its heading.
-  const heading = await screen.findByRole('heading', { name: /On Office PRO-1100 · 0.50 ml of ink/ });
+  const heading = await screen.findByRole('heading', { name: /On Office PRO-1100 \(dev seed\) · 0.50 ml of ink/ });
   const docket = heading.closest('aside')!;
-  expect(docket.textContent).toContain('PrinterOffice PRO-1100 · 192.168.1.43');
+  expect(docket.textContent).toContain('PrinterOffice PRO-1100 (dev seed) · 192.168.1.43');
 });

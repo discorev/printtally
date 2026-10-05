@@ -244,11 +244,12 @@ export class Ledger {
   }
 
   allJobs(): LedgerJob[] { return this.load().jobs; }
-  jobs(options: { q?: string; includeHidden?: boolean; limit?: number; offset?: number } = {}): JobsResponse {
+  jobs(options: { q?: string; printer?: number; includeHidden?: boolean; limit?: number; offset?: number } = {}): JobsResponse {
     const { jobs, settings } = this.load(), limit = options.limit ?? 100, offset = options.offset ?? 0;
     const q = options.q?.trim().toLowerCase();
-    const matches = jobs.filter(job => (options.includeHidden || !job.hidden) && (!q || [job.job_name, job.display_paper_name, job.configured_paper_name,
-      job.paper_name_at_import, job.paper.paper_name, job.paper.stock_name, job.notes].some(text => text?.toLowerCase().includes(q))));
+    const matches = jobs.filter(job => (options.includeHidden || !job.hidden) && (options.printer === undefined || job.printer_id === options.printer)
+      && (!q || [job.job_name, job.display_paper_name, job.configured_paper_name,
+        job.paper_name_at_import, job.paper.paper_name, job.paper.stock_name, job.notes].some(text => text?.toLowerCase().includes(q))));
     return { jobs: matches.slice(offset, offset + limit), total: matches.length, limit, offset, settings };
   }
   job(id: number): { job: LedgerJob; settings: Settings } | undefined {

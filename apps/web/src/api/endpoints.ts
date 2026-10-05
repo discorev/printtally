@@ -14,7 +14,7 @@ import { request } from './client.ts';
 // schema before sending. Creates return the new id; read models are refetched rather than patched locally.
 type Created = { id: number };
 type Patch<T> = Partial<T>;
-export interface JobsQuery { q?: string; includeHidden?: boolean; limit?: number; offset?: number }
+export interface JobsQuery { q?: string; printer?: number; includeHidden?: boolean; limit?: number; offset?: number }
 const query = (params: Record<string, string | number | boolean | undefined>): string => {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) if (value !== undefined && value !== '') search.set(key, String(value));

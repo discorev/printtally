@@ -26,8 +26,24 @@ test('GET /printers lists each archived printer, named by the known printer with
   f.known.save({ ...stored, name: 'Studio', mac: '020000000001' }, stored);
   f.db.run("UPDATE printers SET display_name='Office' WHERE id=2");
   assert.deepEqual(await printers(), [
-    { id: 1, name: 'Studio', host: '10.23.45.67', known_printer_id: added.id, jobs: 1 },
     { id: 2, name: 'Office', host: '192.0.2.11', known_printer_id: null, jobs: 1 },
+    { id: 1, name: 'Studio', host: '10.23.45.67', known_printer_id: added.id, jobs: 1 },
+  ]);
+  // Equal names are ordered by archived id, not by enrolment.
+  f.db.run("UPDATE printers SET display_name='Studio' WHERE id=2");
+  assert.deepEqual((await printers()).map(printer => printer.id), [1, 2]);
+});
+
+test('the newest confirmed printer names an archived MAC when it has been re-enrolled', async t => {
+  const f = await apiFixture(t);
+  f.db.importSnapshot(sample());
+  const old = await f.addPrinter('10.23.45.67');
+  const current = await f.addPrinter('10.23.45.68');
+  const before = f.known.get(old.id)!, after = f.known.get(current.id)!;
+  f.known.save({ ...before, name: 'Zebra old', mac: '020000000001', confirmedAt: '2026-01-01T00:00:00.000Z' }, before);
+  f.known.save({ ...after, name: 'Alpha current', mac: '020000000001', confirmedAt: '2026-02-01T00:00:00.000Z' }, after);
+  assert.deepEqual((await f.request('/api/v1/printers')).json<PrintersResponse>().printers, [
+    { id: 1, name: 'Alpha current', host: '10.23.45.68', known_printer_id: current.id, jobs: 1 },
   ]);
 });
 
