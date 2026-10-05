@@ -53,7 +53,7 @@ export const inkPurchaseSetupSchema = z.object({
 }).strict().refine(v => (v.cartridge === undefined) !== (v.ink_product_id === undefined), 'Give a cartridge or a new one');
 // A whole set bought together: one purchase of `sets` cartridges for each product, created together or not at all.
 // The server splits the price across them by capacity, so every ml costs the same. Channels with no product yet
-// get one, named "<series> <channel>" (e.g. "PFI-1100 PM").
+// get one, named "<series> <channel>" (e.g. "PFI-4100 PM").
 const unique = (list: unknown[]) => new Set(list).size === list.length;
 export const inkSetPurchaseSchema = z.object({
   ink_product_ids: z.array(id).max(32).refine(unique, 'Duplicate cartridge'),

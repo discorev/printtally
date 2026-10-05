@@ -224,14 +224,14 @@ test('a set price splits by capacity in exact micros: floor shares, then the rem
 
 test('a whole ink set is a purchase per cartridge at its share of the price, with missing products created alongside', t => {
   const { ledger, cyan, db } = fixture(t, []);
-  const big = ledger.createCartridge({ name: 'PFI-1100 PBK', channel: 'PBK', capacity_nl: 160_000_000 });
-  const set = ledger.purchaseInkSet({ ink_product_ids: [cyan, big], new_cartridges: { series: 'PFI-1100', capacity_nl: 80_000_000, channels: ['PM', 'Y'] },
+  const big = ledger.createCartridge({ name: 'PFI-3100 PBK', channel: 'PBK', capacity_nl: 160_000_000 });
+  const set = ledger.purchaseInkSet({ ink_product_ids: [cyan, big], new_cartridges: { series: 'PFI-4100', capacity_nl: 80_000_000, channels: ['PM', 'Y'] },
     purchased_on: '2026-03-01', sets: 2, price_micros: 100 * GBP + 1 });
   assert.deepEqual(set.purchases.map(p => [p.channel, p.price_micros]), [['C', 20 * GBP], ['PBK', 40 * GBP + 1], ['PM', 20 * GBP], ['Y', 20 * GBP]],
     'by capacity (80 + 160 + 80 + 80 ml), the odd micro to the largest fraction');
   assert.equal(set.purchases.reduce((sum, p) => sum + p.price_micros, 0), 100 * GBP + 1);
   const cartridges = ledger.ink().cartridges;
-  assert.deepEqual(cartridges.filter(c => ['PM', 'Y'].includes(c.channel)).map(c => [c.name, c.capacity_nl]), [['PFI-1100 PM', 80_000_000], ['PFI-1100 Y', 80_000_000]]);
+  assert.deepEqual(cartridges.filter(c => ['PM', 'Y'].includes(c.channel)).map(c => [c.name, c.capacity_nl]), [['PFI-4100 PM', 80_000_000], ['PFI-4100 Y', 80_000_000]]);
   for (const p of set.purchases) {
     const cartridge = cartridges.find(c => c.id === p.ink_product_id)!, bought = cartridge.purchases.find(b => b.id === p.id)!;
     assert.deepEqual([bought.purchased_on, bought.cartridges, bought.price_micros], ['2026-03-01', 2, p.price_micros], 'several sets: each purchase is that many cartridges');
@@ -244,7 +244,7 @@ test('a whole ink set is all or nothing, and validated', t => {
   const counts = () => [db.all('SELECT * FROM ink_products').length, db.all('SELECT * FROM ink_purchases').length];
   const before = counts(), buy = (input: Record<string, unknown>) => ledger.purchaseInkSet({ purchased_on: '2026-03-01', sets: 1, price_micros: 60 * GBP, ink_product_ids: [cyan], ...input });
   const code = (action: () => unknown) => { try { action(); } catch (error) { return error instanceof LedgerError ? error.message : 'invalid'; } return 'ok'; };
-  const newOnes = { series: 'PFI-1100', capacity_nl: 80_000_000, channels: ['PM', 'R'] };
+  const newOnes = { series: 'PFI-4100', capacity_nl: 80_000_000, channels: ['PM', 'R'] };
   assert.equal(code(() => buy({ ink_product_ids: [cyan, 999], new_cartridges: newOnes })), 'unknown_reference', 'fails after the new products are inserted');
   assert.equal(code(() => buy({ new_cartridges: { ...newOnes, channels: ['PM', 'C'] } })), 'duplicate_channel', 'one cartridge per channel');
   // A failure part-way through (the third purchase) leaves neither the new products nor the purchases before it.

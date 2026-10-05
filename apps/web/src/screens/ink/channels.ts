@@ -42,7 +42,7 @@ export const unseenChannel = (code: string): InkChannelView | undefined => INK_C
 export const purchasableChannels = (channels: InkChannelView[]): { code: string; name: string }[] =>
   byChannelOrder([...channels, ...INK_CHANNELS.filter(ink => !channels.some(c => c.code === ink.code))], c => c.code).map(({ code, name }) => ({ code, name }));
 
-/** "PFI-1100" from the product "PFI-1100 MBK": the channel is already in the title. */
+/** "PFI-4100" from the product "PFI-4100 MBK": the channel is already in the title. */
 export const productName = (c: Pick<CartridgeView, 'name' | 'channel'>): string => c.name.replace(new RegExp(`\\s+${c.channel}$`), '') || c.name;
 /** The cartridge in the printer's purchase, when the ledger knows it. */
 export const fittedPurchase = (channel: InkChannelView): InkPurchaseView | undefined => {
