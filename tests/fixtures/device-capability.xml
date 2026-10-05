@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<cmd xmlns:ivec="http://www.canon.com/ns/cmd/2008/07/common/" xmlns:vcn="http://www.canon.com/ns/cmd/2008/07/canon/">
+<ivec:contents>
+<ivec:operation>GetCapabilityResponse</ivec:operation>
+<ivec:param_set servicetype="device">
+<ivec:response>OK</ivec:response>
+<ivec:response_detail/>
+<ivec:manufacturer>CANON</ivec:manufacturer>
+<ivec:model>PRO-1100 series</ivec:model>
+
+<ivec:service>print,maintenance,joblog,media,pli,counter</ivec:service>
+
+<ivec:firmver>2.050</ivec:firmver>
+<vcn:pdr>C</vcn:pdr>
+<vcn:hri>1C</vcn:hri>
+<ivec:function_info>
+<vcn:remote_ui>
+<vcn:backtoapplication/>
+<vcn:guide>
+<vcn:item>certification</vcn:item>
+</vcn:guide>
+<vcn:pagelink page="maintenance"><![CDATA[index.html?page=PAGE_UTIL]]></vcn:pagelink>
+<vcn:pagelink page="joblog"><![CDATA[index.html?page=PAGE_JOBLOG]]></vcn:pagelink>
+<vcn:pagelink page="ijcpcregistration"><![CDATA[index.html?page=PAGE_IJCPC]]></vcn:pagelink>
+<vcn:pagelink page="downloadcertificate"><![CDATA[index.html?page=PAGE_CERT]]></vcn:pagelink>
+<vcn:pagelink page="printerstatus"><![CDATA[index.html?page=PAGE_INFO]]></vcn:pagelink>
+<vcn:pagelink page="inkinfo_smartpc"><![CDATA[inkinfo.html]]></vcn:pagelink>
+<vcn:showable_webview/>
+</vcn:remote_ui>
+<vcn:bininfo_settable/>
+<vcn:wireless_connect_button/>
+</ivec:function_info>
+<ivec:datetime/>
+<ivec:autopoweron>ON,OFF</ivec:autopoweron>
+<ivec:autopoweroff>
+<ivec:mode>ON,OFF</ivec:mode>
+<ivec:time>15,30,60,120,240</ivec:time>
+</ivec:autopoweroff>
+<ivec:silentmode>
+<ivec:mode>ON,OFF,time</ivec:mode>
+<ivec:starttime/>
+<ivec:endtime/>
+</ivec:silentmode>
+<ivec:papergap>auto,wide</ivec:papergap>
+<vcn:questionnaire_state>notanswer,answer,reject</vcn:questionnaire_state>
+<vcn:mqtt_connection>ON,OFF</vcn:mqtt_connection>
+<vcn:host_application_id>0000:9999</vcn:host_application_id>
+<vcn:printer_setup_on_printer/>
+<vcn:auto_printer_rom_update>ON,OFF</vcn:auto_printer_rom_update>
+<ivec:head_height>1,3,4,5</ivec:head_height>
+<ivec:head_height_name head_height="1">s_lower_2</ivec:head_height_name>
+<ivec:head_height_name head_height="3">s_0</ivec:head_height_name>
+<ivec:head_height_name head_height="4">s_higher_1</ivec:head_height_name>
+<ivec:head_height_name head_height="5">s_higher_2</ivec:head_height_name>
+<vcn:purpose_agreement_service>unknown,agree,disagree</vcn:purpose_agreement_service>
+<vcn:purpose_agreement_analysis>unknown,agree,disagree</vcn:purpose_agreement_analysis>
+<vcn:purpose_agreement_version>000:255</vcn:purpose_agreement_version>
+<vcn:SetConfigurationWithoutStartJob>
+<vcn:host_application_id>0000:9999</vcn:host_application_id>
+<vcn:purpose_agreement_service>unknown,agree,disagree</vcn:purpose_agreement_service>
+<vcn:purpose_agreement_analysis>unknown,agree,disagree</vcn:purpose_agreement_analysis>
+<vcn:purpose_agreement_version>000:255</vcn:purpose_agreement_version>
+</vcn:SetConfigurationWithoutStartJob>
+</ivec:param_set>
+</ivec:contents>
+</cmd>

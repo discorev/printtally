@@ -57,7 +57,8 @@ export const inkPurchaseSetupSchema = z.object({
 const unique = (list: unknown[]) => new Set(list).size === list.length;
 export const inkSetPurchaseSchema = z.object({
   ink_product_ids: z.array(id).max(32).refine(unique, 'Duplicate cartridge'),
-  new_cartridges: z.object({ series: z.string().trim().min(1).max(100), capacity_nl: count, channels: z.array(channel).min(1).max(32).refine(unique, 'Duplicate channel') }).strict().optional(),
+  new_cartridges: z.object({ series: z.string().trim().min(1).max(100), capacity_nl: count, channels: z.array(channel).min(1).max(32).refine(unique, 'Duplicate channel'),
+    names: z.record(channel, name).optional() }).strict().optional(),
   purchased_on: day, sets: count, price_micros: micros,
 }).strict().refine(v => v.ink_product_ids.length + (v.new_cartridges?.channels.length ?? 0) > 0, 'Give the cartridges in the set');
 

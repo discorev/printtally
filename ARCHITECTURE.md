@@ -67,7 +67,9 @@ and collection, and quitting it stops the server for every client on the machine
   on request. Collections run one at a time; a request for a printer that is
   already queued or collecting shares that collection.
 - A collection reads everything from the printer first, then writes it to the
-  archive in a single transaction. No network I/O happens inside a transaction.
+  archive in a single transaction. Collection also reads ink status and the device
+  model over unauthenticated, read-only IVEC; failure of those reads does not fail
+  collection. No network I/O happens inside a transaction.
 - Live collection and snapshot import share one write path (`persistSnapshot`).
   New ways of triggering a collection wrap the existing service rather than adding
   another path into the database.

@@ -21,12 +21,25 @@ export const printers = sqliteTable('printers', {
   mac: text().notNull().unique(),
   display_name: text(),
   model: text(), // Unknown until actually identified.
+  firmware: text(),
   timezone: text(), // Unknown until confirmed by the user/device.
   last_host: text().notNull(),
   first_seen_at: text().notNull(),
   last_seen_at: text().notNull(),
   media_observed_at: text(),
 }, () => [check('printers_mac_check', mac('mac'))]);
+
+export const printer_ink_readings = sqliteTable('printer_ink_readings', {
+  id: integer().primaryKey(),
+  printer_id: integer().notNull().references(() => printers.id),
+  channel: text().notNull(), series: text(), level: integer(), replacement_count: integer(),
+  first_seen_at: text().notNull(), last_seen_at: text().notNull(),
+}, table => [
+  index('printer_ink_readings_latest_idx').on(table.printer_id, table.channel, table.first_seen_at),
+  check('printer_ink_readings_channel_check', sql`length(channel) BETWEEN 1 AND 16 AND channel NOT GLOB '*[^A-Za-z0-9_]*'`),
+  check('printer_ink_readings_level_check', sql`level IS NULL OR level BETWEEN 0 AND 100`),
+  check('printer_ink_readings_count_check', sql`replacement_count IS NULL OR replacement_count >= 0`),
+]);
 
 export const import_runs = sqliteTable('import_runs', {
   id: integer().primaryKey(),

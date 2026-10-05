@@ -33,12 +33,18 @@ export const recordSchema = z.object({
   ink_ml: z.record(z.string(), z.string()).optional(), total_ink_ml: z.string().nullable().optional(),
   accounting: z.record(z.string(), z.union([z.string(), z.number(), z.null()])).optional(),
 });
+export const inkReadingSchema = z.object({
+  channel: z.string().regex(/^[A-Za-z0-9_]{1,16}$/), series: z.string().nullable(),
+  level: z.number().int().min(0).max(100).nullable(), replacement_count: uint.nullable(),
+});
+export type InkReading = z.infer<typeof inkReadingSchema>;
 export const snapshotSchema = z.object({
   printer: z.object({ host: z.string().min(1), mac: z.string().regex(/^[0-9a-f]{12}$/) }),
   collected_at: z.string(), requested_range: z.tuple([uint, uint]),
   schema: z.array(fieldSchema).min(1), records: z.array(recordSchema),
   media_catalogue: catalogueSchema.optional(), protocol: z.string().optional(),
   retention: uint.optional(), notes: z.array(z.string()).optional(),
+  device_model: z.string().nullable().optional(), firmware: z.string().nullable().optional(), inks: z.array(inkReadingSchema).optional(),
 });
 // paper_stock_id and paper_id each correct a job's default stock allocation; setting one clears the other.
 export const annotationSchema = z.object({
@@ -143,7 +149,8 @@ export interface PrinterTrustPreview {
 export const renamePrinterSchema = z.object({ name: z.string().trim().min(1).max(120) }).strict();
 // GET /printers: one entry per printer the archive holds (by MAC), whether or not it is still set up.
 // name and host are its known printer's when one has the same MAC (known_printer_id), else the archive's.
-export interface ArchivedPrinter { id: number; name: string; host: string; known_printer_id: string | null; jobs: number }
+export interface ArchivedPrinter { id: number; name: string; host: string; known_printer_id: string | null; jobs: number;
+  model: string | null; firmware: string | null; inks: (InkReading & { observed_at: string })[] }
 export interface PrintersResponse { printers: ArchivedPrinter[] }
 export type EnrolmentRequest = z.infer<typeof enrolmentRequestSchema>;
 export type ConfirmPrinterRequest = z.infer<typeof confirmPrinterSchema>;

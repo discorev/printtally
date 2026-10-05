@@ -24,6 +24,14 @@ const later = (stamp: unknown, days: number) => {
 };
 const OFFICE_MAC = snapshot.printer.mac === '0200000000ff' ? '0200000000fe' : '0200000000ff';
 const office = structuredClone(snapshot), recent = snapshot.records.slice(-3);
+const seedChannels = ['PM', 'R', 'C', 'PGY', 'MBK', 'PBK', 'B', 'CO', 'GY', 'Y', 'M', 'PC'];
+snapshot.device_model = 'PRO-1100 series'; snapshot.firmware = '2.050';
+snapshot.inks = seedChannels.map((channel, index) => ({ channel, series: 'PFI-4100', level: index < 4 ? 10 : 90 - index * 5, replacement_count: index < 4 ? 0 : 1 }));
+office.device_model = 'PRO-2600 series'; office.firmware = '1.000';
+office.inks = seedChannels.map((channel, index) => ({ channel,
+  series: channel === 'MBK' ? 'PFI-2300' : channel === 'PM' ? 'PFI-3100' : channel === 'PBK' ? 'PFI-3700' : 'PFI-3300',
+  level: [20, 80, 50, 10, 70, 90, 30, 60, 40, 80, 50, 20][index], replacement_count: index % 3,
+}));
 office.printer = { host: '192.0.2.11', mac: OFFICE_MAC };
 if (office.media_catalogue) office.media_catalogue.printer_mac = OFFICE_MAC;
 // An empty history gets an Office printer with no jobs.
@@ -43,7 +51,7 @@ try {
       validFrom: root.validFromDate.toISOString(), validTo: root.validToDate.toISOString(), confirmedAt: now, lastVerifiedAt: now }, undefined);
   };
   printer('00000000-0000-4000-8000-00000000d0c7', '192.0.2.10', 'PRO-1100 (dev seed)', snapshot.printer.mac, roots.root);
-  printer('00000000-0000-4000-8000-00000000d0c8', '192.0.2.11', 'Office PRO-1100 (dev seed)', OFFICE_MAC, roots.otherRoot);
+  printer('00000000-0000-4000-8000-00000000d0c8', '192.0.2.11', 'Wide PRO-2600 (dev seed)', OFFICE_MAC, roots.otherRoot);
 
   // Papers list the printer media types they print as, matched by the media's English name.
   const media = Object.entries(snapshot.media_catalogue?.entries ?? {}).map(([id, entry]) => ({ id, name: entry.names.EN }));

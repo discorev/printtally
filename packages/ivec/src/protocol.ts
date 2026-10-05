@@ -15,7 +15,12 @@ const hash = (data: string | Buffer): Buffer => createHash('sha256').update(data
 export class ProtocolError extends Error {}
 export type Xml = Document | Element;
 export type Params = [string, string][];
-export type Service = 'joblog' | 'media';
+export type Service = 'joblog' | 'media' | 'print' | 'device';
+const RESOURCE_READS = ['GetCapability', 'GetStatus', 'StartResource', 'ReceiveData', 'EndResource'];
+const READ_ONLY: Record<Service, readonly string[]> = {
+  joblog: RESOURCE_READS, media: RESOURCE_READS,
+  print: ['GetStatus'], device: ['GetStatus', 'GetCapability'],
+};
 export interface Transport {
   request(operation: string, params?: Params, service?: Service): Promise<Buffer>;
 }
@@ -201,7 +206,7 @@ export class Ivec implements Transport {
   }
   close(): void { this.reader?.socket.destroy(); this.reader = undefined; this.endpoint = undefined; }
   async request(operation: string, params: Params = [], service: Service = 'joblog'): Promise<Buffer> {
-    if (!['joblog', 'media'].includes(service) || !['GetCapability', 'GetStatus', 'StartResource', 'ReceiveData', 'EndResource'].includes(operation)) throw new ProtocolError('Request outside read-only allowlist');
+    if (!READ_ONLY[service]?.includes(operation)) throw new ProtocolError('Request outside read-only allowlist');
     if (this.busy) throw new ProtocolError('Concurrent IVEC requests are unsupported');
     this.busy = true;
     try {

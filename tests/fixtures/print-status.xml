@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<cmd xmlns:ivec="http://www.canon.com/ns/cmd/2008/07/common/" xmlns:vcn="http://www.canon.com/ns/cmd/2008/07/canon/">
+<ivec:contents>
+<ivec:operation>GetStatusResponse</ivec:operation>
+<ivec:param_set servicetype="print">
+<ivec:response>OK</ivec:response>
+<ivec:response_detail/>
+<ivec:status>idle</ivec:status>
+<ivec:status_detail>MarkerSupplyAttention</ivec:status_detail>
+<ivec:current_support_code/>
+<vcn:eid>
+<vcn:url_id>00</vcn:url_id>
+</vcn:eid>
+<ivec:currentpapertype physicalinputbin="inputbin_p1">custom-media-type-canon-custom</ivec:currentpapertype>
+<ivec:current_custom_papertype physicalinputbin="inputbin_p1">custom-media-type-canon-F15EA8DE-9387-42D2-8CF7-6494FF40DC8E</ivec:current_custom_papertype>
+<ivec:currentpapersize physicalinputbin="inputbin_p1">iso_a4_210x297mm</ivec:currentpapersize>
+<ivec:current_papersize_width physicalinputbin="inputbin_p1">21000</ivec:current_papersize_width>
+<ivec:current_papersize_height physicalinputbin="inputbin_p1">29700</ivec:current_papersize_height>
+<ivec:marker_info>
+<ivec:ink>
+<ivec:model><![CDATA[PFI-4100<PM>SETUP]]></ivec:model>
+<ivec:color>PM</ivec:color>
+<ivec:icon>warning</ivec:icon>
+<ivec:level>10</ivec:level>
+<vcn:tca>UD</vcn:tca>
+<ivec:order>1</ivec:order>
+</ivec:ink>
+<ivec:ink>
+<ivec:model><![CDATA[PFI-4100<R>SETUP]]></ivec:model>
+<ivec:color>R</ivec:color>
+<ivec:icon>warning</ivec:icon>
+<ivec:level>10</ivec:level>
+<vcn:tca>UD</vcn:tca>
+<ivec:order>2</ivec:order>
+</ivec:ink>
+<ivec:ink>
+<ivec:model><![CDATA[PFI-4100<C>SETUP]]></ivec:model>
+<ivec:color>C</ivec:color>
+<ivec:icon>warning</ivec:icon>
+<ivec:level>10</ivec:level>
+<vcn:tca>UD</vcn:tca>
+<ivec:order>3</ivec:order>
+</ivec:ink>
+<ivec:ink>
+<ivec:model><![CDATA[PFI-4100<PGY>SETUP]]></ivec:model>
+<ivec:color>PGY</ivec:color>
+<ivec:icon>warning</ivec:icon>
+<ivec:level>10</ivec:level>
+<vcn:tca>UD</vcn:tca>
+<ivec:order>4</ivec:order>
+</ivec:ink>
+<ivec:ink>
+<ivec:model><![CDATA[PFI-4100<MBK>]]></ivec:model>
+<ivec:color>MBK</ivec:color>
+<ivec:icon>none</ivec:icon>
+<ivec:level>90</ivec:level>
+<vcn:tca>UD</vcn:tca>
+<ivec:order>5</ivec:order>
+</ivec:ink>
+<ivec:ink>
+<ivec:model><![CDATA[PFI-4100<PBK>]]></ivec:model>
+<ivec:color>PBK</ivec:color>
+<ivec:icon>none</ivec:icon>
+<ivec:level>90</ivec:level>
+<vcn:tca>UD</vcn:tca>
+<ivec:order>6</ivec:order>
+</ivec:ink>
+<ivec:ink>
+<ivec:model><![CDATA[PFI-4100<B>SETUP]]></ivec:model>
+<ivec:color>B</ivec:color>
+<ivec:icon>warning</ivec:icon>
+<ivec:level>10</ivec:level>
+<vcn:tca>UD</vcn:tca>
+<ivec:order>7</ivec:order>
+</ivec:ink>
+<ivec:ink>
+<ivec:model><![CDATA[PFI-4100<CO>]]></ivec:model>
+<ivec:color>CO</ivec:color>
+<ivec:icon>none</ivec:icon>
+<ivec:level>90</ivec:level>
+<vcn:tca>UD</vcn:tca>
+<ivec:order>8</ivec:order>
+</ivec:ink>
+<ivec:ink>
+<ivec:model><![CDATA[PFI-4100<GY>]]></ivec:model>
+<ivec:color>GY</ivec:color>
+<ivec:icon>none</ivec:icon>
+<ivec:level>90</ivec:level>
+<vcn:tca>UD</vcn:tca>
+<ivec:order>9</ivec:order>
+</ivec:ink>
+<ivec:ink>
+<ivec:model><![CDATA[PFI-4100<Y>]]></ivec:model>
+<ivec:color>Y</ivec:color>
+<ivec:icon>none</ivec:icon>
+<ivec:level>90</ivec:level>
+<vcn:tca>UD</vcn:tca>
+<ivec:order>10</ivec:order>
+</ivec:ink>
+<ivec:ink>
+<ivec:model><![CDATA[PFI-4100<M>SETUP]]></ivec:model>
+<ivec:color>M</ivec:color>
+<ivec:icon>warning</ivec:icon>
+<ivec:level>10</ivec:level>
+<vcn:tca>UD</vcn:tca>
+<ivec:order>11</ivec:order>
+</ivec:ink>
+<ivec:ink>
+<ivec:model><![CDATA[PFI-4100<PC>SETUP]]></ivec:model>
+<ivec:color>PC</ivec:color>
+<ivec:icon>warning</ivec:icon>
+<ivec:level>10</ivec:level>
+<vcn:tca>UD</vcn:tca>
+<ivec:order>12</ivec:order>
+</ivec:ink>
+</ivec:marker_info>
+<ivec:wasteink>
+<ivec:item>
+<ivec:icon>none</ivec:icon>
+<ivec:model><![CDATA[MC-20]]></ivec:model>
+<ivec:level>30</ivec:level>
+</ivec:item>
+</ivec:wasteink>
+<ivec:status_detail_list>
+<ivec:item id="1004">
+<ivec:severity>30</ivec:severity>
+<ivec:summary>InkLow</ivec:summary>
+<ivec:error_code>1500</ivec:error_code>
+<ivec:suffix_code/>
+<ivec:additional_info>
+<ivec:color>PM</ivec:color>
+<ivec:color>R</ivec:color>
+<ivec:color>C</ivec:color>
+<ivec:color>PGY</ivec:color>
+<ivec:color>B</ivec:color>
+<ivec:color>M</ivec:color>
+<ivec:color>PC</ivec:color>
+</ivec:additional_info>
+</ivec:item>
+</ivec:status_detail_list>
+<vcn:hri>1C</vcn:hri>
+<vcn:pdr>C</vcn:pdr>
+<vcn:isu>0</vcn:isu>
+<vcn:msi>
+<vcn:item type="A">OFF</vcn:item>
+<vcn:item type="B">OFF</vcn:item>
+<vcn:item type="D">auto</vcn:item>
+<vcn:item type="J">OFF</vcn:item>
+<vcn:item type="K">21000700</vcn:item>
+</vcn:msi>
+<ivec:jobinfo/>
+</ivec:param_set>
+</ivec:contents>
+</cmd>
