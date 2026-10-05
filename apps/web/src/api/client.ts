@@ -97,6 +97,7 @@ const MESSAGES: Record<string, string> = {
   too_many_previews: 'Too many printers are being checked at once. Try again in a moment.',
   invalid_password: 'Enter the password.',
   known_printer_not_found: 'That printer is no longer set up.',
+  invalid_printer_name: 'Enter a name of up to 120 characters.',
 };
 export const errorMessage = (code: string, edit = true): string =>
   (edit ? 'Not saved. ' : '') + (MESSAGES[code] ?? `The server refused it (${code.replace(/_/g, ' ')}).`);

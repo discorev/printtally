@@ -107,9 +107,41 @@ test('settings shows an empty printer state linking to setup', async () => {
   const api = fakeApi({ ...settingsReads([]), 'GET /health': health() });
   const { screen, user, router } = await renderApp('/settings', api);
   expect(await screen.findByText('No printer is set up yet.')).toBeTruthy();
-  await user.click(screen.getByRole('link', { name: 'Set up your printer' }));
+  await user.click(screen.getByRole('link', { name: 'Set up a printer' }));
   await waitFor(() => expect(router.state.location.pathname).toBe('/setup'));
   expect(screen.getByRole('button', { name: 'Find my printer' })).toBeTruthy();
+});
+
+test('settings lists every printer, renames one in place and links to adding another', async () => {
+  let office = knownPrinter({ id: 'printer-2', name: 'Canon PRO-1100 series', host: '192.168.1.43', hasPassword: true });
+  const api = fakeApi({
+    ...settingsReads([printer, office]),
+    'GET /known-printers': () => ({ printers: [printer, office] }),
+    'PATCH /known-printers/printer-2': (request: Request) => request.clone().json().then((body: { name: string }) => (office = { ...office, name: body.name })),
+  });
+  const { screen, user, router } = await renderApp('/settings', api);
+  const card = (await screen.findByText('Printers')).closest('section')!;
+  expect(await within(card).findByRole('heading', { name: /Studio printer/ })).toBeTruthy();
+  expect(within(card).getByRole('heading', { name: /Canon PRO-1100 series/ })).toBeTruthy();
+  expect(card.textContent).toContain('192.168.1.43');
+  expect(within(card).queryByText('Printer')).toBeNull();
+
+  const rename = within(within(card).getByRole('heading', { name: /Canon PRO-1100 series/ })).getByRole('button', { name: 'Rename' });
+  await user.click(rename);
+  await user.keyboard('{Escape}');
+  expect(within(card).queryByRole('textbox', { name: 'Printer name' })).toBeNull();
+  expect(api.sent('PATCH /known-printers/printer-2')).toEqual([]);
+
+  await user.click(within(within(card).getByRole('heading', { name: /Canon PRO-1100 series/ })).getByRole('button', { name: 'Rename' }));
+  const name = within(card).getByRole('textbox', { name: 'Printer name' });
+  await user.clear(name);
+  await user.type(name, ' Office PRO-1100 {Enter}');
+  expect(await within(card).findByRole('heading', { name: /Office PRO-1100/ })).toBeTruthy();
+  expect(api.sent('PATCH /known-printers/printer-2')).toEqual([{ name: 'Office PRO-1100' }]);
+  expect(api.requests.filter(request => request.path === '/health').length).toBeGreaterThan(1);
+
+  await user.click(within(card).getByRole('link', { name: 'Add a printer' }));
+  await waitFor(() => expect(router.state.location.pathname).toBe('/setup'));
 });
 
 test('the automatic download toggle is absent in a browser and when updates are disabled', async () => {

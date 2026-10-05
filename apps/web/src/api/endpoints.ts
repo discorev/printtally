@@ -1,10 +1,10 @@
 import {
   annotationSchema, cartridgePatchSchema, cartridgeSchema, confirmPrinterSchema, enrolmentRequestSchema, inkPurchasePatchSchema,
   inkPurchaseSchema, inkPurchaseSetupSchema, inkSetPurchaseSchema, paperPatchSchema, paperPurchaseSetupSchema, paperPurchasePatchSchema, paperPurchaseSchema, paperSchema, printerPasswordSchema,
-  settingsSchema, stockPatchSchema, stockSchema, writeOffPatchSchema, writeOffSchema,
+  renamePrinterSchema, settingsSchema, stockPatchSchema, stockSchema, writeOffPatchSchema, writeOffSchema,
   type AllocationPreview, type AllocationPreviewQuery, type Annotation, type CartridgeInput, type DiscoveredPrinter, type EnrolmentRequest, type HealthResponse, type ImportResult, type ImportsResponse,
   type InkPurchaseInput, type InkPurchaseSetup, type InkPurchaseSetupResult, type InkResponse, type InkSetPurchase, type InkSetPurchaseResult, type JobResponse, type JobsResponse, type KnownPrinter, type KnownPrinterListing,
-  type MediaTypesResponse, type PaperInput, type PaperPurchaseInput, type PaperPurchaseSetup, type PaperPurchaseSetupResult, type PapersResponse, type PrinterTrustPreview, type Settings,
+  type MediaTypesResponse, type PaperInput, type PaperPurchaseInput, type PaperPurchaseSetup, type PaperPurchaseSetupResult, type PapersResponse, type PrintersResponse, type PrinterTrustPreview, type Settings,
   type StockInput, type TotalsResponse, type WriteOffInput, type WriteOffPreview,
 } from 'print-accounting-contracts';
 import type { ZodType } from 'zod';
@@ -72,6 +72,10 @@ export const api = {
     request('POST', `/printer-enrolments/${previewId}/confirm`, { body: { fingerprintSha256, confirmed: true }, schema: confirmPrinterSchema, timeoutMs: 30_000 }),
   cancelPreview: (previewId: string): Promise<{ cancelled: true }> => request('DELETE', `/printer-enrolments/${previewId}`),
   knownPrinters: (): Promise<{ printers: KnownPrinterListing[] }> => request('GET', '/known-printers'),
+  renamePrinter: (printerId: string, name: string): Promise<KnownPrinter> =>
+    request('PATCH', `/known-printers/${printerId}`, { body: { name }, schema: renamePrinterSchema }),
+  /** Every printer the ledger has jobs from, by name. */
+  printers: (): Promise<PrintersResponse> => request('GET', '/printers'),
   savePrinterPassword: (printerId: string, password: string): Promise<{ saved: true }> =>
     request('PUT', `/known-printers/${printerId}/password`, { body: { password }, schema: printerPasswordSchema }),
   /** The import history, newest first (the printer's log range each collection read). */
