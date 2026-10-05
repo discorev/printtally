@@ -139,6 +139,12 @@ export interface PrinterTrustPreview {
   existingPrinterId: string | null; previousFingerprintSha256: string | null;
   change: 'new' | 'unchanged' | 'address_changed' | 'root_changed';
 }
+// PATCH /known-printers/:id
+export const renamePrinterSchema = z.object({ name: z.string().trim().min(1).max(120) }).strict();
+// GET /printers: one entry per printer the archive holds (by MAC), whether or not it is still set up.
+// name and host are its known printer's when one has the same MAC (known_printer_id), else the archive's.
+export interface ArchivedPrinter { id: number; name: string; host: string; known_printer_id: string | null; jobs: number }
+export interface PrintersResponse { printers: ArchivedPrinter[] }
 export type EnrolmentRequest = z.infer<typeof enrolmentRequestSchema>;
 export type ConfirmPrinterRequest = z.infer<typeof confirmPrinterSchema>;
 
