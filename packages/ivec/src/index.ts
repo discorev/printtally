@@ -3,6 +3,8 @@ import { fieldSchema, snapshotSchema, type CollectOptions, type Field, type JobR
 import { normalized, now } from 'print-accounting-core';
 import { Ivec, ProtocolError, checked, elements, value, authenticated, canonicalMac, resolveMac, readBatch } from './protocol.ts';
 import { collectCatalog, resolveMedia } from './media.ts';
+import { readInkStatus } from './ink-status.ts';
+export { readInkStatus, parseInkModel, parseInkStatus, parseDeviceCapability } from './ink-status.ts';
 export { Ivec, ProtocolError } from './protocol.ts';
 export function validateOptions(options: CollectOptions): void {
   const batch = options.batchSize ?? 20;
@@ -64,6 +66,10 @@ export async function collectSnapshot(options: CollectOptions, getPassword: () =
     const records = [...jobs.entries()].sort(([a], [b]) => a - b).map(([, record]) => record);
     for (const record of records) record.media = resolveMedia(typeof record.raw.job_media_type_name === 'string' ? record.raw.job_media_type_name : null, catalogue, options.mediaLanguage);
     progress(`Resolved media names for ${records.filter(record => record.media?.name).length}/${records.length} jobs`);
-    return snapshotSchema.parse({ printer: { host: options.host, mac }, protocol: 'Canon IVEC joblog', collected_at: now(), requested_range: [first, last], retention, schema, records, media_catalogue: catalogue, notes: ['Raw integer quantities use schema factors.', 'Printer timestamps have no confirmed timezone.', 'Media names are current or last-observed configuration, not verified job-time names.'] });
+    // Optional status cannot prevent job collection; all I/O finishes before persistence.
+    const notes = ['Raw integer quantities use schema factors.', 'Printer timestamps have no confirmed timezone.', 'Media names are current or last-observed configuration, not verified job-time names.'];
+    let device: Awaited<ReturnType<typeof readInkStatus>> | undefined;
+    try { device = await readInkStatus(client); notes.push(...device.failures); } catch { notes.push('Printer ink status unavailable.'); }
+    return snapshotSchema.parse({ printer: { host: options.host, mac }, protocol: 'Canon IVEC joblog', collected_at: now(), requested_range: [first, last], retention, schema, records, media_catalogue: catalogue, ...device, notes });
   } finally { client.close(); }
 }

@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { waitFor, within } from '@testing-library/react';
 import type { CartridgeView, InkPurchaseView, InkResponse, WriteOffPreview, WriteOffView } from 'print-accounting-contracts';
 import { fakeApi, reply } from '../../../test/api.ts';
-import { settings, totals } from '../../../test/fixtures.ts';
+import { archivedPrinter, settings, totals } from '../../../test/fixtures.ts';
 import { renderApp } from '../../../test/render.tsx';
 import { today } from '../../lib/format.ts';
 
@@ -24,7 +24,11 @@ const ink = (overrides: Partial<InkResponse> = {}): InkResponse => ({
 const preview = (overrides: Partial<WriteOffPreview> = {}): WriteOffPreview => ({
   written_off: 60_000_000, remaining: 140_000_000, cost_micros: 27_000_000, ...overrides,
 });
-const routes = (data: InkResponse = ink()) => ({ 'GET /ink': data, 'GET /settings': data.settings });
+const routes = (data: InkResponse = ink()) => ({ 'GET /ink': data, 'GET /settings': data.settings,
+  'GET /printers': { printers: [archivedPrinter({ model: 'PRO-1100 series', inks: [
+    { channel: 'C', series: 'PFI-4100', level: 70, replacement_count: 1, observed_at: '2026-09-01T00:00:00Z' },
+    { channel: 'PM', series: 'PFI-4100', level: 10, replacement_count: 0, observed_at: '2026-09-01T00:00:00Z' },
+  ] })] } });
 
 test('the ink list shows ledger totals, fitted levels, and a selected channel docket', async () => {
   const data = ink({ totals: totals({ jobs: 3, ink_micros: 9_000_000, unknown_jobs: 2, unknown_ink_jobs: 2 }) });
@@ -32,14 +36,23 @@ test('the ink list shows ledger totals, fitted levels, and a selected channel do
   const { screen, user, router } = await renderApp('/ink', api);
   const row = await screen.findByRole('option', { name: /C Cyan/ });
   expect(row.textContent).toContain('~60.0 ml');
-  expect(row.textContent).toContain('1 spare cartridge');
+  expect(row.textContent).toContain('1 spare');
+  expect(row.textContent).not.toContain('spare cartridge');
   expect(screen.getByText('2 without an ink cost')).toBeTruthy();
   await user.click(row);
   const docket = await screen.findByRole('complementary', { name: 'Cartridge' });
   expect(within(docket).getByText('C · Cyan')).toBeTruthy();
   expect(within(docket).getByText('Bought 1 Sep 2026')).toBeTruthy();
+  expect(within(docket).getByText(/A rough guide: the printer's job log doesn't count ink used for cleaning, so the real level is lower\. 1 spare cartridge on the shelf\./)).toBeTruthy();
   expect(within(docket).queryByText('No purchases yet.')).toBeNull();
   expect(router.state.location.pathname).toBe('/ink/C');
+});
+
+test('a cartridge with no spare keeps the shelf wording in its docket', async () => {
+  const { screen } = await renderApp('/ink/C', fakeApi(routes(ink({ cartridges: [cartridge({ spares: 0 })] }))));
+  await screen.findByRole('option', { name: /C Cyan/ });
+  const docket = await screen.findByRole('complementary', { name: 'Cartridge' });
+  expect(await within(docket).findByText(/No spare on the shelf\./)).toBeTruthy();
 });
 
 test('no collected channels shows an empty state but still offers adding stock', async () => {
@@ -91,9 +104,7 @@ test('buying an existing cartridge requires a valid price and sends the chosen q
 test('buying a previously unseen channel creates its product and purchase together', async () => {
   const api = fakeApi({ ...routes(), 'POST /ink-purchases/setup': { ink_product_id: 2, id: 23 } });
   const { screen, user, router } = await renderApp('/ink/PM?form=purchase', api);
-  expect(await screen.findByRole('textbox', { name: 'Product' })).toBeTruthy();
-  expect((screen.getByRole('textbox', { name: 'Product' }) as HTMLInputElement).value).toBe('PFI-4100 PM');
-  expect((screen.getByRole('spinbutton', { name: 'Size (ml)' }) as HTMLInputElement).value).toBe('80');
+  expect((await screen.findByRole('combobox', { name: 'Type' }) as HTMLSelectElement).value).toBe('PFI-4100');
   await user.type(screen.getByRole('textbox', { name: 'Price paid' }), '42');
   await user.click(screen.getByRole('button', { name: 'Add stock' }));
   expect(await screen.findByText('Added.')).toBeTruthy();
@@ -109,12 +120,10 @@ test('buying a whole set includes existing products and sets up missing channels
   const { screen, user, router } = await renderApp('/ink/new', api);
   await screen.findByRole('combobox', { name: 'Cartridge' });
   await user.selectOptions(screen.getByRole('combobox', { name: 'Cartridge' }), '*');
-  expect(screen.getByRole('textbox', { name: 'Series' })).toBeTruthy();
-  await user.clear(screen.getByRole('textbox', { name: 'Series' }));
+  expect((screen.getByRole('combobox', { name: 'Type' }) as HTMLSelectElement).value).toBe('PFI-4100');
   await user.type(screen.getByRole('textbox', { name: 'Price paid' }), '95.25');
   const save = screen.getByRole('button', { name: 'Add stock' }) as HTMLButtonElement;
-  expect(save.disabled).toBe(true);
-  await user.type(screen.getByRole('textbox', { name: 'Series' }), ' PFI-4100 ');
+  expect(save.disabled).toBe(false);
   await user.clear(screen.getByRole('spinbutton', { name: 'Sets' }));
   await user.type(screen.getByRole('spinbutton', { name: 'Sets' }), '2');
   await user.click(save);
@@ -122,7 +131,7 @@ test('buying a whole set includes existing products and sets up missing channels
   expect(router.state.location.pathname).toBe('/ink/new');
   expect(router.state.location.search.form).toBe('added');
   expect(api.sent('POST /ink-purchases/set')).toEqual([{
-    ink_product_ids: [1], new_cartridges: { series: 'PFI-4100', capacity_nl: 80_000_000, channels: ['PM'] },
+    ink_product_ids: [1], new_cartridges: { series: 'PFI-4100', capacity_nl: 80_000_000, channels: ['PM'], names: { PM: 'PFI-4100 PM' } },
     purchased_on: today(), sets: 2, price_micros: 95_250_000,
   }]);
 });

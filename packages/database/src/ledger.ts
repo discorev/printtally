@@ -154,7 +154,7 @@ export class Ledger {
   purchaseInkSet(input: unknown): InkSetPurchaseResult {
     const { ink_product_ids, new_cartridges, purchased_on, sets, price_micros } = inkSetPurchaseSchema.parse(input);
     return this.write(() => {
-      const created = (new_cartridges?.channels ?? []).map(channel => this.insert(ink_products, { name: `${new_cartridges!.series} ${channel}`, channel, capacity_nl: new_cartridges!.capacity_nl }));
+      const created = (new_cartridges?.channels ?? []).map(channel => this.insert(ink_products, { name: new_cartridges!.names?.[channel] ?? `${new_cartridges!.series} ${channel}`, channel, capacity_nl: new_cartridges!.capacity_nl }));
       const ids = [...ink_product_ids, ...created];
       const found = new Map(this.db.orm.select().from(ink_products).where(inArray(ink_products.id, ids)).all().map(row => [row.id, row]));
       if (found.size !== ids.length) throw new LedgerError(400, 'unknown_reference');

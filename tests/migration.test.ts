@@ -48,7 +48,7 @@ test('the ledger migration keeps every job, observation, ink reading and annotat
     firstRelease(path);
     const db = new AccountingDatabase(path);
     try {
-      assert.equal(db.all('SELECT * FROM __drizzle_migrations').length, 2);
+      assert.equal(db.all('SELECT * FROM __drizzle_migrations').length, 3);
       assert.deepEqual([db.summary().print_jobs, db.summary().job_observations, db.summary().job_ink_usage], [76, 76, 76 * 12]);
       assert.deepEqual(db.all('SELECT job_id,custom_paper_name,paper_stock_id,paper_id,hidden,notes FROM job_annotations ORDER BY job_id'), [
         { job_id: 3, custom_paper_name: 'Test pack', paper_stock_id: null, paper_id: null, hidden: 0, notes: 'Edition 1/10' },

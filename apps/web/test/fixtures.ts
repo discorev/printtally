@@ -53,7 +53,7 @@ export const knownPrinter = (overrides: Partial<KnownPrinterListing> = {}): Know
   confirmedAt: '2026-10-03T12:00:00Z', lastVerifiedAt: '2026-10-03T12:00:00Z', hasPassword: false, ...overrides,
 });
 export const archivedPrinter = (overrides: Partial<ArchivedPrinter> = {}): ArchivedPrinter => ({
-  id: 1, name: 'Studio printer', host: '192.168.1.42', known_printer_id: 'printer-1', jobs: 1, ...overrides,
+  id: 1, name: 'Studio printer', host: '192.168.1.42', known_printer_id: 'printer-1', jobs: 1, model: null, firmware: null, inks: [], ...overrides,
 });
 export const jobsScreenReads = (items: LedgerJob[] = [], additional: Routes = {}): Routes => ({
   'GET /jobs?includeHidden=false&limit=1000': jobsResponse(items),

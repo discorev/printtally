@@ -261,3 +261,19 @@ test('a whole ink set is all or nothing, and validated', t => {
   assert.equal(code(() => buy({ new_cartridges: newOnes })), 'ok');
   assert.deepEqual(counts(), [before[0] + 2, before[1] + 3]);
 });
+
+test('a PRO-2600 set creates an MBK counterpart in the same atomic purchase', t => {
+  const { ledger, db } = fixture(t, []);
+  const buy = () => ledger.purchaseInkSet({ ink_product_ids: [], new_cartridges: {
+    series: 'PFI-3300', capacity_nl: 330_000_000, channels: ['C', 'MBK'], names: { C: 'PFI-3300 C', MBK: 'PFI-2300 MBK' },
+  }, purchased_on: '2026-09-01', sets: 1, price_micros: 80 * GBP });
+  const purchases = buy().purchases;
+  assert.deepEqual(purchases.map(item => item.channel), ['C', 'MBK']);
+  assert.deepEqual(ledger.ink().cartridges.filter(item => ['C', 'MBK'].includes(item.channel)).map(item => [item.channel, item.name, item.capacity_nl]),
+    [['C', 'PFI-1000 C', 80_000_000], ['C', 'PFI-3300 C', 330_000_000], ['MBK', 'PFI-2300 MBK', 330_000_000]]);
+  const before = [db.all('SELECT id FROM ink_products').length, db.all('SELECT id FROM ink_purchases').length];
+  assert.throws(() => ledger.purchaseInkSet({ ink_product_ids: [999], new_cartridges: {
+    series: 'PFI-3700', capacity_nl: 700_000_000, channels: ['PM', 'MBK'], names: { PM: 'PFI-3700 PM', MBK: 'PFI-2700 MBK' },
+  }, purchased_on: '2026-09-02', sets: 1, price_micros: 80 * GBP }));
+  assert.deepEqual([db.all('SELECT id FROM ink_products').length, db.all('SELECT id FROM ink_purchases').length], before);
+});

@@ -15,6 +15,13 @@
       "when": 1790716257611,
       "tag": "0001_ledger",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790716257612,
+      "tag": "0002_printer_ink",
+      "breakpoints": true
     }
   ]
 }

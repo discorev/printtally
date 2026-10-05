@@ -120,10 +120,11 @@ export function WriteOffLine(props: { writeOff: WriteOffView; onRemove?: () => P
 }
 
 /** An ink level gauge (Ink list): `value` 0–1 of a cartridge; amber when `low`. */
-export function LevelBar({ value, low, className }: { value: number; low?: boolean; className?: string }) {
+export function LevelBar({ value, low, tick, className }: { value: number; low?: boolean; tick?: number; className?: string }) {
   return (
     <span aria-hidden className={cx('relative block h-1.5 overflow-hidden rounded-[2px] border border-rule-2 bg-paper-2', className)}>
       <i className={cx('absolute inset-y-0 left-0 rounded-[1px]', low ? 'bg-amber' : 'bg-green')} style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%` }} />
+      {tick !== undefined && <i data-printer-level={tick} className="absolute inset-y-0 w-[2px] bg-ink" style={{ left: `calc(${Math.max(0, Math.min(100, tick))}% - 1px)` }} />}
     </span>
   );
 }

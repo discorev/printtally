@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useNavigate } from '@tanstack/react-router';
+import { useNavigate, useSearch } from '@tanstack/react-router';
 import type { Settings } from 'print-accounting-contracts';
 import {
   Button, Docket, DocketHead, DocketSection, ItemLine, LedgerList, Money, PurchaseLine, RowActions, SavedNotice, Sub, SummaryLine, WriteOffLine,
@@ -14,13 +14,13 @@ import { InkWriteOffForm } from './InkWriteOffForm.tsx';
 // A cartridge's docket (vInkDocket): what's in the printer, what prints used, purchases and write-offs.
 // `form` (from the URL) swaps the sections for the Add stock or Write off form, or its confirmation.
 export type CartridgeForm = 'purchase' | 'writeoff' | 'added' | 'written-off';
-const CLOSE = { to: { to: '/ink' }, label: 'Ink' } as const;
 
 export function CartridgeDocket({ channel, channels, settings, form }: {
   channel: InkChannelView; channels: InkChannelView[]; settings: Settings | undefined; form?: CartridgeForm;
 }) {
   const navigate = useNavigate(), currency = useCurrency(), showAdded = useShowAdded();
-  const show = (next?: CartridgeForm) => void navigate({ to: '/ink/$channel', params: { channel: channel.code }, search: { form: next } });
+  const { printer } = useSearch({ from: '/_app/ink' }), close = { to: { to: '/ink', search: { printer } }, label: 'Ink' } as const;
+  const show = (next?: CartridgeForm) => void navigate({ to: '/ink/$channel', params: { channel: channel.code }, search: { printer, form: next } });
   // Escape leaves a form before it closes the docket (the Docket's own handler checks defaultPrevented).
   useEffect(() => {
     if (!form) return;
@@ -35,7 +35,7 @@ export function CartridgeDocket({ channel, channels, settings, form }: {
   const { product, fitted } = channel, bought = fittedPurchase(channel), left = fitted ? product!.open_remaining_nl! : 0;
   const spares = channel.spares ? `${plural(channel.spares, 'spare cartridge')} on the shelf.` : 'No spare on the shelf.';
   return (
-    <Docket label="Cartridge" close={CLOSE}>
+    <Docket label="Cartridge" close={close}>
       <DocketHead when="Cartridge" title={<>{channel.code} · {channel.name}</>}
         subtitle={product ? `${productName(product)} · ${mlValue(product.capacity_nl, 0)} ml` : 'No cartridge set up yet'} />
       {form === 'purchase' ? <InkPurchaseForm channels={channels} initial={channel.code} onSaved={showAdded} onCancel={() => show()} />

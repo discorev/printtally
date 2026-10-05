@@ -8,7 +8,7 @@ import type { TablesRelationalConfig } from 'drizzle-orm/relations';
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core';
 import { snapshotSchema, annotationSchema, jobDetailsSchema, type JobDetails, type Snapshot, type Catalogue, type Names, type ImportResult } from 'print-accounting-contracts';
 import { digest, encoded, now, timestamp, scaled } from 'print-accounting-core';
-import { printers, import_runs, media_configs, media_revisions, print_jobs, job_observations, job_ink_usage, import_job_observations, job_annotations, papers, paper_purchases, ink_purchases, stock_write_offs, job_details } from './schema.ts';
+import { printers, printer_ink_readings, import_runs, media_configs, media_revisions, print_jobs, job_observations, job_ink_usage, import_job_observations, job_annotations, papers, paper_purchases, ink_purchases, stock_write_offs, job_details } from './schema.ts';
 import { Ledger } from './ledger.ts';
 import { migrations } from './migrations.ts';
 
@@ -112,11 +112,52 @@ export class AccountingDatabase {
     if (last < first) throw new Error('Invalid requested range');
     return this.transaction(() => {
       if (this.orm.select({ status: import_runs.status }).from(import_runs).where(eq(import_runs.id, runId)).get()?.status !== 'running') throw new Error('Import is not running');
+      const priorPrinter = this.orm.select({ last_seen_at: printers.last_seen_at, model: printers.model, firmware: printers.firmware })
+        .from(printers).where(eq(printers.mac, mac)).get();
       const printerId = this.orm.insert(printers).values({ mac, last_host: snapshot.printer.host, first_seen_at: observedAt, last_seen_at: observedAt })
         .onConflictDoUpdate({ target: printers.mac, set: {
           last_host: sql`CASE WHEN excluded.last_seen_at>=${printers.last_seen_at} THEN excluded.last_host ELSE ${printers.last_host} END`,
           first_seen_at: sql`min(${printers.first_seen_at},excluded.first_seen_at)`, last_seen_at: sql`max(${printers.last_seen_at},excluded.last_seen_at)` } })
         .returning({ id: printers.id }).get().id;
+      // Older imports can fill missing details, but cannot replace newer identification.
+      const current = !priorPrinter || observedAt >= priorPrinter.last_seen_at;
+      const identification = {
+        ...(snapshot.device_model && (current || priorPrinter?.model === null) ? { model: snapshot.device_model } : {}),
+        ...(snapshot.firmware && (current || priorPrinter?.firmware === null) ? { firmware: snapshot.firmware } : {}),
+      };
+      if (Object.keys(identification).length)
+        this.orm.update(printers).set(identification).where(eq(printers.id, printerId)).run();
+      for (const ink of snapshot.inks ?? []) {
+        const rows = this.orm.select().from(printer_ink_readings)
+          .where(and(eq(printer_ink_readings.printer_id, printerId), eq(printer_ink_readings.channel, ink.channel)))
+          .orderBy(printer_ink_readings.first_seen_at, printer_ink_readings.id).all();
+        const previous = rows.filter(row => row.first_seen_at <= observedAt).at(-1);
+        let next = rows.find(row => row.first_seen_at > observedAt);
+        // A partial status read cannot erase the last known value for this channel.
+        const reading = { ...ink, series: ink.series ?? previous?.series ?? null, level: ink.level ?? previous?.level ?? null,
+          replacement_count: ink.replacement_count ?? previous?.replacement_count ?? null };
+        const same = (row: typeof rows[number]) => row.series === reading.series && row.level === reading.level && row.replacement_count === reading.replacement_count;
+        if (previous && same(previous)) {
+          this.orm.update(printer_ink_readings).set({ last_seen_at: sql`max(${printer_ink_readings.last_seen_at},${observedAt})` })
+            .where(eq(printer_ink_readings.id, previous.id)).run();
+        } else {
+          if (previous && previous.last_seen_at > observedAt) {
+            // A late import lies inside an already observed interval: retain its later endpoint
+            // as another row rather than suggesting the earlier state continued through the swap.
+            const after = this.orm.insert(printer_ink_readings).values({ printer_id: printerId, channel: ink.channel,
+              series: previous.series, level: previous.level, replacement_count: previous.replacement_count,
+              first_seen_at: previous.last_seen_at, last_seen_at: previous.last_seen_at }).returning().get();
+            this.orm.update(printer_ink_readings).set({ last_seen_at: previous.first_seen_at })
+              .where(eq(printer_ink_readings.id, previous.id)).run();
+            next = after;
+          }
+          if (next && same(next)) {
+            this.orm.update(printer_ink_readings).set({ first_seen_at: observedAt }).where(eq(printer_ink_readings.id, next.id)).run();
+          } else {
+            this.orm.insert(printer_ink_readings).values({ printer_id: printerId, ...reading, first_seen_at: observedAt, last_seen_at: observedAt }).run();
+          }
+        }
+      }
       this.importMedia(printerId, snapshot.media_catalogue, observedAt);
       let newJobs = 0, newObservations = 0, collisions = 0;
       const seen = new Set<number>();
