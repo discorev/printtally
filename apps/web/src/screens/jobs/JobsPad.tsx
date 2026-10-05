@@ -51,7 +51,9 @@ export function JobsPad() {
   const totals = useTotals().data, papers = usePapers().data?.papers ?? [], mediaTypes = useMediaTypes().data?.media_types ?? [];
   const method = useSettings().data?.costing_method ?? totals?.settings.costing_method ?? 'oldest';
   // With more than one printer, the list can be filtered by printer, and each row names its printer until it is.
-  const printers = usePrinters().data?.printers ?? [], several = printers.length > 1;
+  const printerList = usePrinters().data?.printers, printers = printerList ?? [], several = printers.length > 1;
+  // A ?printer= that names no printer (an old link, another ledger) stays selected, so choosing "All printers" clears it.
+  const missing = search.printer !== undefined && !printers.some(item => item.id === search.printer);
   const printerName = (job: LedgerJob) => several && search.printer === undefined ? printers.find(item => item.id === job.printer_id)?.name : undefined;
 
   const visible = useMemo(() => (jobs.data?.jobs ?? []).filter(job => matchesFilter(job, search)).sort(byNewest), [jobs.data, search]);
@@ -108,6 +110,7 @@ export function JobsPad() {
         {(several || search.printer !== undefined) && (
           <Select aria-label="Printer" value={search.printer ?? ''} onChange={event => setSearch({ printer: Number(event.target.value) || undefined })} className="w-auto! max-w-[260px]">
             <option value="">All printers</option>
+            {missing && <option value={search.printer}>{printerList ? 'Printer not found' : 'Loading printers…'}</option>}
             {printers.map(printer => <option key={printer.id} value={printer.id}>{printer.name}</option>)}
           </Select>
         )}

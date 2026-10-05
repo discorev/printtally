@@ -26,13 +26,14 @@ const OFFICE_MAC = snapshot.printer.mac === '0200000000ff' ? '0200000000fe' : '0
 const office = structuredClone(snapshot), recent = snapshot.records.slice(-3);
 office.printer = { host: '192.0.2.11', mac: OFFICE_MAC };
 if (office.media_catalogue) office.media_catalogue.printer_mac = OFFICE_MAC;
-office.records = [0, 1, 2].map(index => {
+// An empty history gets an Office printer with no jobs.
+office.records = (recent.length ? [0, 1, 2] : []).map(index => {
   const record = structuredClone(recent[index % recent.length]);
   Object.assign(record.raw, { job_record_number: index + 1, job_time_at_processing: later(record.raw.job_time_at_processing, index + 1),
     job_time_at_completed: later(record.raw.job_time_at_completed, index + 1) });
   return record;
 });
-office.requested_range = [1, office.records.length];
+office.requested_range = office.records.length ? [1, office.records.length] : snapshot.requested_range;
 try {
   const imported = db.importSnapshot(snapshot), second = db.importSnapshot(office);
   const roots = await tlsFixtures(), known = new KnownPrinters(db), now = new Date().toISOString();

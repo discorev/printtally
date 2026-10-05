@@ -415,7 +415,9 @@ test('a stale printer filter stays visible and filtered while printers load, the
   expect(await screen.findByText('No prints match. Clear the search or choose another paper or printer.')).toBeTruthy();
   expect(within(list).queryAllByRole('option')).toEqual([]);
   expect(api.requests.some(request => request.path === '/jobs?printer=999&includeHidden=false&limit=1000')).toBe(true);
+  expect((printer as HTMLSelectElement).value).toBe('999');
   resolvePrinters({ printers: [archivedPrinter()] });
+  expect(await within(printer).findByRole('option', { name: 'Printer not found', selected: true })).toBeTruthy();
   await user.selectOptions(printer, '');
   await waitFor(() => expect(router.state.location.search.printer).toBeUndefined());
   expect(await within(list).findByRole('option', { name: /Photo Rag/ })).toBeTruthy();
