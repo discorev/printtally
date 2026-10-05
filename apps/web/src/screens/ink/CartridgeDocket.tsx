@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useNavigate } from '@tanstack/react-router';
+import { useNavigate, useSearch } from '@tanstack/react-router';
 import type { Settings } from 'print-accounting-contracts';
 import {
   Button, Docket, DocketHead, DocketSection, ItemLine, LedgerList, Money, PurchaseLine, RowActions, SavedNotice, Sub, SummaryLine, WriteOffLine,
@@ -14,13 +14,13 @@ import { InkWriteOffForm } from './InkWriteOffForm.tsx';
 // A cartridge's docket (vInkDocket): what's in the printer, what prints used, purchases and write-offs.
 // `form` (from the URL) swaps the sections for the Add stock or Write off form, or its confirmation.
 export type CartridgeForm = 'purchase' | 'writeoff' | 'added' | 'written-off';
-const CLOSE = { to: { to: '/ink' }, label: 'Ink' } as const;
 
 export function CartridgeDocket({ channel, channels, settings, form }: {
   channel: InkChannelView; channels: InkChannelView[]; settings: Settings | undefined; form?: CartridgeForm;
 }) {
   const navigate = useNavigate(), currency = useCurrency(), showAdded = useShowAdded();
-  const show = (next?: CartridgeForm) => void navigate({ to: '/ink/$channel', params: { channel: channel.code }, search: { form: next } });
+  const { printer } = useSearch({ from: '/_app/ink' }), close = { to: { to: '/ink', search: { printer } }, label: 'Ink' } as const;
+  const show = (next?: CartridgeForm) => void navigate({ to: '/ink/$channel', params: { channel: channel.code }, search: { printer, form: next } });
   // Escape leaves a form before it closes the docket (the Docket's own handler checks defaultPrevented).
   useEffect(() => {
     if (!form) return;
@@ -33,9 +33,9 @@ export function CartridgeDocket({ channel, channels, settings, form }: {
     return () => removeEventListener('keydown', onKey, true);
   });
   const { product, fitted } = channel, bought = fittedPurchase(channel), left = fitted ? product!.open_remaining_nl! : 0;
-  const spares = channel.spares ? `${plural(channel.spares, 'spare cartridge')} on the shelf.` : 'No spare on the shelf.';
+  const spares = channel.spares ? plural(channel.spares, 'spare cartridge') : 'No spare';
   return (
-    <Docket label="Cartridge" close={CLOSE}>
+    <Docket label="Cartridge" close={close}>
       <DocketHead when="Cartridge" title={<>{channel.code} · {channel.name}</>}
         subtitle={product ? `${productName(product)} · ${mlValue(product.capacity_nl, 0)} ml` : 'No cartridge set up yet'} />
       {form === 'purchase' ? <InkPurchaseForm channels={channels} initial={channel.code} onSaved={showAdded} onCancel={() => show()} />
@@ -49,7 +49,7 @@ export function CartridgeDocket({ channel, channels, settings, form }: {
                   sub={bought && <>{money(Math.round(bought.price_micros / bought.cartridges), currency)} · {money(Math.round(bought.price_micros / (bought.cartridges * product!.capacity_nl / 1e6)), currency)} per ml</>}
                   value={<b className="font-medium">~{ml(left, 1)}</b>} caption="about left" />
               : <Sub>None fitted.</Sub>}
-            <Sub className="mt-1.5">A rough guide: the printer's job log doesn't count ink used for cleaning, so the real level is lower. {spares}</Sub>
+            <Sub className="mt-1.5">{spares}</Sub>
             <RowActions>
               <Button variant="primary" size="sm" edit onClick={() => show('purchase')}>Add stock</Button>
               <Button size="sm" edit disabled={!fitted || left <= 0} onClick={() => show('writeoff')}>Write off</Button>
