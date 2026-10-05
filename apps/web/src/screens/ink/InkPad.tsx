@@ -1,5 +1,5 @@
 import type { ArchivedPrinter, CostTotals, Settings } from 'print-accounting-contracts';
-import { cartridgeSize } from 'print-accounting-core/printer-models';
+import { cartridgeSize, cartridgeTypes } from 'print-accounting-core/printer-models';
 import { ButtonLink, Empty, InkSwatch, LevelBar, ListRow, Loading, Money, Pad, PadBody, PadHead, Select } from '../../components/index.ts';
 import { useCanEdit } from '../../connection/index.ts';
 import { count, ml, mlValue, plural } from '../../lib/format.ts';
@@ -33,11 +33,16 @@ export function InkPad({ channels, settings, totals, selected, error }: {
 
 const LOW = 0.15; // Under 15% left: the gauge turns amber.
 function InkRow({ channel, printer, selected }: { channel: InkChannelView; printer?: ArchivedPrinter; selected: boolean }) {
-  const { code, name, product, fitted } = channel, left = fitted ? product!.open_remaining_nl! : 0;
+  const { code, name } = channel;
   const reading = printer?.inks.find(ink => ink.channel === code);
-  const differentSeries = !!(product && reading?.series && reading.series !== productName(product));
+  const matchingProduct = reading?.series ? channel.cartridges.find(item => productName(item) === reading.series) : undefined;
+  const product = reading?.series ? matchingProduct : channel.product;
+  const left = product?.open_remaining_nl ?? 0, fitted = product?.open_remaining_nl != null;
+  const compatible = cartridgeTypes(printer?.model, code).map(type => type.series);
+  const spares = reading ? channel.cartridges.filter(item => compatible.length
+    ? compatible.includes(productName(item)) : productName(item) === reading.series).reduce((total, item) => total + item.spares, 0) : channel.spares;
   const size = reading?.series ? cartridgeSize(reading.series)
-    ?? ((channel.cartridges.find(item => productName(item) === reading.series)?.capacity_nl ?? 0) / 1e6) : null;
+    ?? ((matchingProduct?.capacity_nl ?? 0) / 1e6) : null;
   return (
     <ListRow to={selected ? '/ink' : '/ink/$channel'} params={selected ? undefined : { channel: code }} search={prev => ({ ...prev, form: undefined })} selected={selected}
       className="grid-cols-[22px_44px_minmax(120px,1fr)_220px_120px_120px] gap-x-3 py-[9px] @max-[840px]:grid-cols-[22px_44px_minmax(100px,1fr)_200px_110px] phone:grid-cols-[22px_44px_1fr_104px]!">
@@ -45,14 +50,14 @@ function InkRow({ channel, printer, selected }: { channel: InkChannelView; print
       <span className="font-slab text-[14px] leading-5 font-semibold">{code}</span>
       <span className="min-w-0 truncate text-muted">{name}{reading?.series && <small className="block text-[12px] text-muted">{reading.series}{size ? ` · ${size} ml` : ''}</small>}</span>
       <span className="flex flex-col gap-1 text-[13px]">
-        {differentSeries
-          ? <><span className="text-muted">{reading?.series} not set up</span>{reading?.level != null && <LevelBar value={0} tick={reading.level} />}</>
+        {reading?.series && !matchingProduct
+          ? <><span className="text-muted">{reading.series} not set up</span>{reading.level != null && <LevelBar value={0} tick={reading.level} />}</>
           : product
             ? <><span>{fitted ? <><b className="font-medium">~{ml(left, 1)}</b><span className="phone:hidden"> of {mlValue(product.capacity_nl, 0)}</span></> : <b className="font-medium">None</b>}
                 <span className="phone:hidden"> in the printer</span></span>
                 <LevelBar value={left / product.capacity_nl} low={left / product.capacity_nl < LOW} tick={reading?.level ?? undefined} /></>
             : <><span className="text-muted">No cartridge set up</span>{reading?.level != null && <LevelBar value={0} tick={reading.level} />}</>}
-        <small className="text-[12px] text-muted">{reading?.level != null && <span className={reading.level <= 10 ? 'text-amber' : undefined}>Printer level {reading.level}% · </span>}{channel.spares ? plural(channel.spares, 'spare') : 'no spare'}</small>
+        <small className="text-[12px] text-muted">{reading?.level != null && <span className={reading.level <= 10 ? 'text-amber' : undefined}>Printer level {reading.level}% · </span>}{spares ? plural(spares, 'spare') : 'no spare'}</small>
       </span>
       <span className="text-right text-[13px] whitespace-nowrap text-muted @max-[840px]:hidden phone:hidden">
         <b className="block font-medium text-ink">{ml(channel.used)}</b>used by prints</span>

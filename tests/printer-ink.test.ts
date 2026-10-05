@@ -65,6 +65,31 @@ test('missing device identification does not prevent importing jobs', t => {
   assert.deepEqual(db.all('SELECT model,firmware FROM printers'), [{ model: null, firmware: null }]);
 });
 
+test('older snapshots fill missing model and firmware without replacing newer values', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'printtally-device-backfill-')), db = new AccountingDatabase(join(dir, 'ink.sqlite3'));
+  t.after(() => { db.close(); rmSync(dir, { recursive: true }); });
+  const snapshot = (mac: string, at: string, model: string | null, firmware: string | null) => {
+    const input = sample(); input.printer.mac = mac; input.media_catalogue = undefined;
+    input.collected_at = at; input.device_model = model; input.firmware = firmware;
+    return input;
+  };
+  const newer = '2026-09-03T00:00:00Z', older = '2026-09-02T00:00:00Z';
+  db.importSnapshot(snapshot('020000000001', newer, null, '3.000'));
+  db.importSnapshot(snapshot('020000000001', older, 'PRO-2600 series', '2.050'));
+  assert.deepEqual(db.all('SELECT model,firmware FROM printers WHERE mac=?', '020000000001'),
+    [{ model: 'PRO-2600 series', firmware: '3.000' }]);
+  db.importSnapshot(snapshot('020000000002', newer, 'PRO-2600 series', null));
+  db.importSnapshot(snapshot('020000000002', older, 'PRO-1100 series', '2.050'));
+  assert.deepEqual(db.all('SELECT model,firmware FROM printers WHERE mac=?', '020000000002'),
+    [{ model: 'PRO-2600 series', firmware: '2.050' }]);
+  db.importSnapshot(snapshot('020000000002', '2026-09-01T00:00:00Z', 'PRO-1100 series', '1.000'));
+  db.importSnapshot(snapshot('020000000001', '2026-09-01T00:00:00Z', null, null));
+  assert.deepEqual(db.all('SELECT mac,model,firmware FROM printers ORDER BY mac'), [
+    { mac: '020000000001', model: 'PRO-2600 series', firmware: '3.000' },
+    { mac: '020000000002', model: 'PRO-2600 series', firmware: '2.050' },
+  ]);
+});
+
 test('a snapshot rejects duplicate ink channels', () => {
   const input = sample();
   input.inks = [{ channel: 'C', series: 'PFI-4100', level: 90, replacement_count: 1 },

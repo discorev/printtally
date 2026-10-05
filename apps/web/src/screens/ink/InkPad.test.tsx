@@ -43,7 +43,7 @@ test('a mismatched printer series hides the pooled estimate and fill but retains
   const row = await screen.findByRole('option', { name: /C Cyan/ });
   expect(row.textContent).toContain('PFI-3300 not set up');
   expect(row.textContent).not.toContain('~60.0 ml');
-  expect(row.textContent).toContain('2 spares');
+  expect(row.textContent).toContain('no spare');
   expect(row.querySelector('[data-printer-level="10"]')).toBeTruthy();
   expect(row.querySelector('i[style*="width: 0%"]')).toBeTruthy();
   await user.selectOptions(screen.getByRole('combobox', { name: 'Printer' }), '1');
@@ -51,7 +51,35 @@ test('a mismatched printer series hides the pooled estimate and fill but retains
   expect(row.querySelector('i[style*="width: 75%"]')).toBeTruthy();
   await user.selectOptions(screen.getByRole('combobox', { name: 'Printer' }), '3');
   expect(row.textContent).toContain('~60.0 ml');
+  expect(row.textContent).toContain('2 spares');
   expect(row.querySelector('[data-printer-level]')).toBeNull();
+});
+
+test('the reported product supplies the estimate, and spares depend on the selected printer model', async () => {
+  const pfi4100: CartridgeView = { id: 10, name: 'PFI-4100 C', channel: 'C', capacity_nl: 80_000_000, product_code: null,
+    open_remaining_nl: 60_000_000, open_purchase_id: null, spares: 2, bought: 160_000_000, used: 20_000_000,
+    wasted: 0, remaining: 140_000_000, used_micros: 0, waste_micros: 0, jobs: 1, purchases: [], write_offs: [] };
+  const pfi3300: CartridgeView = { ...pfi4100, id: 11, name: 'PFI-3300 C', capacity_nl: 330_000_000,
+    open_remaining_nl: 200_000_000, spares: 3 };
+  const pfi3100: CartridgeView = { ...pfi4100, id: 12, name: 'PFI-3100 C', capacity_nl: 160_000_000,
+    open_remaining_nl: null, spares: 1 };
+  const unknown = archivedPrinter({ id: 4, name: 'Unlisted', model: 'PRO-4600 series', inks: printers[1].inks });
+  const service = fakeApi({ 'GET /printers': { printers: [...printers, archivedPrinter({ id: 3, name: 'No reading' }), unknown] },
+    'GET /ink': { channels: ['C'], cartridges: [pfi4100, pfi3300, pfi3100], settings: settings(), totals: totals() },
+    'GET /settings': settings() });
+  const { screen, user } = await renderApp('/ink?printer=2', service);
+  const row = await screen.findByRole('option', { name: /C Cyan/ });
+  expect(row.textContent).toContain('~200.0 ml of 330');
+  expect(row.textContent).toContain('4 spares'); // PFI-3100 and PFI-3300 both fit a PRO-2600.
+  expect(row.textContent).not.toContain('PFI-3300 not set up');
+  expect(row.querySelector('i[style*="width: 60.606"]')).toBeTruthy();
+  expect(row.querySelector('[data-printer-level="10"]')).toBeTruthy();
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Printer' }), '4');
+  expect(row.textContent).toContain('~200.0 ml of 330');
+  expect(row.textContent).toContain('3 spares'); // Unknown models only accept the reported series.
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Printer' }), '3');
+  expect(row.textContent).toContain('~60.0 ml of 80');
+  expect(row.textContent).toContain('6 spares'); // No reading keeps the pooled count.
 });
 
 test('an unknown printer ID selects the first archived printer without crashing', async () => {
