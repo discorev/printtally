@@ -3,9 +3,8 @@ import { cartridgeSize } from 'print-accounting-core/printer-models';
 import { ButtonLink, Empty, InkSwatch, LevelBar, ListRow, Loading, Money, Pad, PadBody, PadHead, Select } from '../../components/index.ts';
 import { useCanEdit } from '../../connection/index.ts';
 import { count, ml, mlValue, plural } from '../../lib/format.ts';
-import type { InkChannelView } from './channels.ts';
+import { productName, type InkChannelView } from './channels.ts';
 import { useSelectedInkPrinter } from './useSelectedInkPrinter.ts';
-import { productName } from './channels.ts';
 
 // The cartridges (vInk): one row per channel with its level, spares and the cost of its ink in prints. The head's
 // figures are the ledger's ink totals (visible prints, as Jobs counts them), not sums of the rows.
@@ -16,14 +15,13 @@ export function InkPad({ channels, settings, totals, selected, error }: {
   return (
     <Pad label="Ink">
       <PadHead title="Ink"
-        meta={channels && totals && <><b>{plural(channels.length, 'cartridge')}</b> · <b><Money micros={totals.ink_micros} /></b> of ink in prints at the {settings?.costing_method ?? 'oldest'} price
-          {totals.unknown_jobs > 0 && <> · <span className="text-amber">{count(totals.unknown_jobs)} without an ink cost</span></>}
-          {totals.waste_micros > 0 && <> · <span className="text-red"><Money micros={totals.waste_micros} /> written off</span></>}</>}
-        actions={<ButtonLink to="/ink/new" search={prev => ({ ...prev, form: undefined })} variant="primary" size="sm" disabled={!canEdit}>Add stock</ButtonLink>}>
-        {printers.length > 1 && <Select aria-label="Printer" value={printer?.id ?? ''} onChange={event => select(Number(event.target.value))} className="w-auto! max-w-[260px]">
+        after={printers.length > 1 && <Select aria-label="Printer" value={printer?.id ?? ''} onChange={event => select(Number(event.target.value))} className="w-auto! max-w-[260px]">
           {printers.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
         </Select>}
-      </PadHead>
+        meta={channels && totals && <><b>{plural(channels.length, 'cartridge')}</b> · <b><Money micros={totals.ink_micros} /></b> of ink in prints at the {settings?.costing_method ?? 'oldest'} price
+          {totals.unknown_jobs > 0 && <> · <span className="text-amber">{count(totals.unknown_jobs)} without an ink cost</span></>}
+          {' · '}levels are estimates, cleaning isn't logged{totals.waste_micros > 0 && <> · <span className="text-red"><Money micros={totals.waste_micros} /> written off</span></>}</>}
+        actions={<ButtonLink to="/ink/new" search={prev => ({ ...prev, form: undefined })} variant="primary" size="sm" disabled={!canEdit}>Add stock</ButtonLink>} />
       <PadBody role="listbox" aria-label="Cartridges">
         {channels?.map(channel => <InkRow key={channel.code} channel={channel} printer={printer} selected={channel.code === selected} />)}
         {!channels && <Loading what="ink" error={error} />}
@@ -37,6 +35,7 @@ const LOW = 0.15; // Under 15% left: the gauge turns amber.
 function InkRow({ channel, printer, selected }: { channel: InkChannelView; printer?: ArchivedPrinter; selected: boolean }) {
   const { code, name, product, fitted } = channel, left = fitted ? product!.open_remaining_nl! : 0;
   const reading = printer?.inks.find(ink => ink.channel === code);
+  const differentSeries = !!(product && reading?.series && reading.series !== productName(product));
   const size = reading?.series ? cartridgeSize(reading.series)
     ?? ((channel.cartridges.find(item => productName(item) === reading.series)?.capacity_nl ?? 0) / 1e6) : null;
   return (
@@ -46,12 +45,14 @@ function InkRow({ channel, printer, selected }: { channel: InkChannelView; print
       <span className="font-slab text-[14px] leading-5 font-semibold">{code}</span>
       <span className="min-w-0 truncate text-muted">{name}{reading?.series && <small className="block text-[12px] text-muted">{reading.series}{size ? ` · ${size} ml` : ''}</small>}</span>
       <span className="flex flex-col gap-1 text-[13px]">
-        {product
-          ? <><span>{fitted ? <><b className="font-medium">~{ml(left, 1)}</b><span className="phone:hidden"> of {mlValue(product.capacity_nl, 0)}</span></> : <b className="font-medium">None</b>}
-              <span className="phone:hidden"> in the printer</span></span>
-              <LevelBar value={left / product.capacity_nl} low={left / product.capacity_nl < LOW} tick={reading?.level ?? undefined} /></>
-          : <><span className="text-muted">No cartridge set up</span>{reading?.level != null && <LevelBar value={0} tick={reading.level} />}</>}
-        <small className="text-[12px] text-muted">{reading?.level != null && <span className={reading.level <= 10 ? 'text-amber' : undefined}>Printer level {reading.level}% · </span>}{channel.spares ? plural(channel.spares, 'spare cartridge') : 'no spare'}</small>
+        {differentSeries
+          ? <><span className="text-muted">{reading?.series} not set up</span>{reading?.level != null && <LevelBar value={0} tick={reading.level} />}</>
+          : product
+            ? <><span>{fitted ? <><b className="font-medium">~{ml(left, 1)}</b><span className="phone:hidden"> of {mlValue(product.capacity_nl, 0)}</span></> : <b className="font-medium">None</b>}
+                <span className="phone:hidden"> in the printer</span></span>
+                <LevelBar value={left / product.capacity_nl} low={left / product.capacity_nl < LOW} tick={reading?.level ?? undefined} /></>
+            : <><span className="text-muted">No cartridge set up</span>{reading?.level != null && <LevelBar value={0} tick={reading.level} />}</>}
+        <small className="text-[12px] text-muted">{reading?.level != null && <span className={reading.level <= 10 ? 'text-amber' : undefined}>Printer level {reading.level}% · </span>}{channel.spares ? plural(channel.spares, 'spare') : 'no spare'}</small>
       </span>
       <span className="text-right text-[13px] whitespace-nowrap text-muted @max-[840px]:hidden phone:hidden">
         <b className="block font-medium text-ink">{ml(channel.used)}</b>used by prints</span>

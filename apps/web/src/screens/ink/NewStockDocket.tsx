@@ -10,7 +10,7 @@ export function NewStockDocket({ channels, added }: { channels: InkChannelView[]
   const done = () => void navigate({ to: '/ink', search: { printer } });
   return (
     <Docket label="Add stock" close={{ to: { to: '/ink', search: { printer } }, label: 'Ink' }}>
-      <DocketHead when="Stock" title="Add stock" subtitle="Cartridges and sets" />
+      <DocketHead when="Stock" title="Add stock" subtitle="A cartridge, or a whole set, bought for the shelf." />
       {added
         ? <SavedNotice label="Stock" onDone={done}>Added to all {channels.length} cartridges.</SavedNotice>
         : <InkPurchaseForm channels={channels} onCancel={done} onSaved={showAdded} />}

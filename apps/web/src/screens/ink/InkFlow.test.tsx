@@ -36,14 +36,23 @@ test('the ink list shows ledger totals, fitted levels, and a selected channel do
   const { screen, user, router } = await renderApp('/ink', api);
   const row = await screen.findByRole('option', { name: /C Cyan/ });
   expect(row.textContent).toContain('~60.0 ml');
-  expect(row.textContent).toContain('1 spare cartridge');
+  expect(row.textContent).toContain('1 spare');
+  expect(row.textContent).not.toContain('spare cartridge');
   expect(screen.getByText('2 without an ink cost')).toBeTruthy();
   await user.click(row);
   const docket = await screen.findByRole('complementary', { name: 'Cartridge' });
   expect(within(docket).getByText('C · Cyan')).toBeTruthy();
   expect(within(docket).getByText('Bought 1 Sep 2026')).toBeTruthy();
+  expect(within(docket).getByText(/A rough guide: the printer's job log doesn't count ink used for cleaning, so the real level is lower\. 1 spare cartridge on the shelf\./)).toBeTruthy();
   expect(within(docket).queryByText('No purchases yet.')).toBeNull();
   expect(router.state.location.pathname).toBe('/ink/C');
+});
+
+test('a cartridge with no spare keeps the shelf wording in its docket', async () => {
+  const { screen } = await renderApp('/ink/C', fakeApi(routes(ink({ cartridges: [cartridge({ spares: 0 })] }))));
+  await screen.findByRole('option', { name: /C Cyan/ });
+  const docket = await screen.findByRole('complementary', { name: 'Cartridge' });
+  expect(await within(docket).findByText(/No spare on the shelf\./)).toBeTruthy();
 });
 
 test('no collected channels shows an empty state but still offers adding stock', async () => {

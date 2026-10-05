@@ -54,9 +54,14 @@ export function InkPurchaseForm({ channels, initial, onSaved, onCancel }: {
       .map(item => [item.series, item])).values()]
     : typesFor(selectedCode ?? '', channels, printers);
   const channel = channels.find(c => c.code === code);
-  const recent = channel?.purchases[0] && channel.cartridges.find(p => p.id === channel.purchases[0].purchase.ink_product_id);
+  const recent = (set ? channels : channel ? [channel] : []).flatMap(item => item.purchases.map(({ purchase }) => ({ purchase,
+    product: item.cartridges.find(product => product.id === purchase.ink_product_id) })))
+    .sort((a, b) => b.purchase.purchased_on.localeCompare(a.purchase.purchased_on) || b.purchase.id - a.purchase.id)[0]?.product;
   const reported = printer?.inks.find(ink => ink.channel === selectedCode)?.series;
-  const selectedSeries = choice ?? reported ?? (recent && productName(recent)) ?? types[0]?.series ?? NEW;
+  const latest = recent && productName(recent);
+  const boughtSeries = set && recent?.channel === 'MBK' && latest && cartridgeTypes('PRO-2600 series', 'MBK').some(type => type.series === latest)
+    ? cartridgeTypes('PRO-2600 series', 'C').find(type => type.sizeMl === cartridgeSize(latest))?.series : latest;
+  const selectedSeries = choice ?? reported ?? boughtSeries ?? types[0]?.series ?? NEW;
   const isNew = selectedSeries === NEW;
   const series = isNew ? (set ? name.trim() : name.trim().replace(new RegExp(`\\s+${code}$`), '')) : selectedSeries;
   const typeSize = types.find(type => type.series === selectedSeries)?.sizeMl ?? cartridgeSize(selectedSeries);
@@ -106,12 +111,14 @@ export function InkPurchaseForm({ channels, initial, onSaved, onCancel }: {
           <Field label={set ? 'Sets' : 'Cartridges'}>{id => <NumberInput id={id} min={1} value={count} onChange={e => setCount(e.target.value)} />}</Field>
         </FieldPair>}
         {code && (isNew || (!typeSize && !selectedProduct)) && <FieldPair>
-          {isNew && <Field label={set ? 'Series' : 'Product'}>{id => <TextInput id={id} value={name} onChange={e => setName(e.target.value)} placeholder={set ? 'e.g. PFI-4100' : `e.g. PFI-4100 ${code}`} />}</Field>}
+          {isNew && <Field label={set ? 'Series' : 'Product'} hint={set
+            ? `${missing.map(item => item.code).join(', ')} ${missing.length === 1 ? "isn't set up yet; it's" : "aren't set up yet; they're"} added with this purchase.`
+            : "Not set up yet; it's added with this purchase."}>{id => <TextInput id={id} value={name} onChange={e => setName(e.target.value)} placeholder={set ? 'e.g. PFI-4100' : `e.g. PFI-4100 ${code}`} />}</Field>}
           <Field label="Size (ml)">{id => <NumberInput id={id} min={1} step="any" value={size} onChange={e => setSize(e.target.value)} />}</Field>
         </FieldPair>}
         <FieldPair>
           <Field label="Date">{id => <DateInput id={id} value={date} onChange={e => setDate(e.target.value)} />}</Field>
-          <Field label="Price paid">{id => <MoneyInput id={id} value={price} onChange={e => setPrice(e.target.value)} />}</Field>
+          <Field label="Price paid" hint={set && `For ${sets > 1 ? `the ${sets} sets` : 'the whole set'}, split by cartridge size.`}>{id => <MoneyInput id={id} value={price} onChange={e => setPrice(e.target.value)} />}</Field>
         </FieldPair>
         <RowActions className="mt-0">
           <Button variant="primary" edit disabled={!ready || save.isPending} onClick={() => save.mutate(undefined, { onSuccess: onSaved })}>

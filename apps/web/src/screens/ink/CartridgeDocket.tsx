@@ -33,7 +33,7 @@ export function CartridgeDocket({ channel, channels, settings, form }: {
     return () => removeEventListener('keydown', onKey, true);
   });
   const { product, fitted } = channel, bought = fittedPurchase(channel), left = fitted ? product!.open_remaining_nl! : 0;
-  const spares = channel.spares ? plural(channel.spares, 'spare cartridge') : 'No spare';
+  const spares = channel.spares ? `${plural(channel.spares, 'spare cartridge')} on the shelf.` : 'No spare on the shelf.';
   return (
     <Docket label="Cartridge" close={close}>
       <DocketHead when="Cartridge" title={<>{channel.code} · {channel.name}</>}
@@ -49,7 +49,7 @@ export function CartridgeDocket({ channel, channels, settings, form }: {
                   sub={bought && <>{money(Math.round(bought.price_micros / bought.cartridges), currency)} · {money(Math.round(bought.price_micros / (bought.cartridges * product!.capacity_nl / 1e6)), currency)} per ml</>}
                   value={<b className="font-medium">~{ml(left, 1)}</b>} caption="about left" />
               : <Sub>None fitted.</Sub>}
-            <Sub className="mt-1.5">{spares}</Sub>
+            <Sub className="mt-1.5">A rough guide: the printer's job log doesn't count ink used for cleaning, so the real level is lower. {spares}</Sub>
             <RowActions>
               <Button variant="primary" size="sm" edit onClick={() => show('purchase')}>Add stock</Button>
               <Button size="sm" edit disabled={!fitted || left <= 0} onClick={() => show('writeoff')}>Write off</Button>
