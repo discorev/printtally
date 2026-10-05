@@ -55,6 +55,27 @@ test('API validates annotations, keeps hidden jobs accessible and returns safe c
   assert.ok(!collection.text.includes('secret printer data'));
   assert.equal(f.db.get('SELECT status FROM import_runs ORDER BY id DESC')!.status, 'failed');
 });
+test('GET /jobs filters before pagination and counts only the selected archived printer', async t => {
+  const f = await apiFixture(t);
+  const older = sample();
+  older.printer = { host: '192.0.2.11', mac: '020000000002' };
+  older.media_catalogue!.printer_mac = older.printer.mac;
+  f.db.importSnapshot(older); // Printer B's only job has id 1; A's later jobs occupy the first page.
+  f.db.importSnapshot(batch([{ day: '2026-09-02' }, { day: '2026-09-03' }]));
+  const jobs = async (query: string) => f.request('/api/v1/jobs?' + query);
+  const firstPage = (await jobs('limit=1')).json<JobsResponse>();
+  assert.deepEqual([firstPage.total, firstPage.jobs[0].printer_id], [3, 2]);
+  const selected = (await jobs('printer=1&limit=1')).json<JobsResponse>();
+  assert.deepEqual([selected.total, selected.jobs.length, selected.jobs[0].job_id, selected.jobs[0].printer_id], [1, 1, 1, 1]);
+  assert.deepEqual((await jobs('printer=2&limit=1')).json<JobsResponse>().jobs.map(job => job.job_id), [3]);
+  const missing = (await jobs('printer=999&limit=1')).json<JobsResponse>();
+  assert.deepEqual([missing.jobs, missing.total], [[], 0]);
+  for (const value of ['', '0', '-1', '1.5', '1e2', 'nope', '9007199254740992', '1&printer=2']) {
+    const response = await jobs('printer=' + value);
+    assert.deepEqual([response.status, response.json()], [400, { error: 'invalid_request' }], value);
+  }
+});
+
 test('API manages papers, stock, purchases, ink and write-offs and returns costed, searchable jobs', async t => {
   const f = await apiFixture(t), db = f.db;
   db.importSnapshot(batch([{ day: '2026-02-01' }, { day: '2026-02-02', imp: 2 }]));

@@ -1,4 +1,4 @@
-import type { CostTotals, HealthResponse, JobsResponse, KnownPrinterListing, LedgerJob, MediaTypeView, PaperPurchaseView, PaperView, PapersResponse, PrinterStatus, Settings, StockView, TotalsResponse, WriteOffPreview } from 'print-accounting-contracts';
+import type { ArchivedPrinter, CostTotals, HealthResponse, JobsResponse, KnownPrinterListing, LedgerJob, MediaTypeView, PaperPurchaseView, PaperView, PapersResponse, PrinterStatus, Settings, StockView, TotalsResponse, WriteOffPreview } from 'print-accounting-contracts';
 import type { Routes } from './api.ts';
 
 export const settings = (overrides: Partial<Settings> = {}): Settings => ({
@@ -52,8 +52,12 @@ export const knownPrinter = (overrides: Partial<KnownPrinterListing> = {}): Know
   fingerprintSha256: fingerprint, validFrom: '2025-01-01T00:00:00Z', validTo: '2035-01-01T00:00:00Z',
   confirmedAt: '2026-10-03T12:00:00Z', lastVerifiedAt: '2026-10-03T12:00:00Z', hasPassword: false, ...overrides,
 });
+export const archivedPrinter = (overrides: Partial<ArchivedPrinter> = {}): ArchivedPrinter => ({
+  id: 1, name: 'Studio printer', host: '192.168.1.42', known_printer_id: 'printer-1', jobs: 1, ...overrides,
+});
 export const jobsScreenReads = (items: LedgerJob[] = [], additional: Routes = {}): Routes => ({
   'GET /jobs?includeHidden=false&limit=1000': jobsResponse(items),
+  'GET /printers': { printers: [archivedPrinter()] },
   'GET /totals': totalsResponse(),
   'GET /papers': papers(),
   'GET /media-types': { media_types: [] },

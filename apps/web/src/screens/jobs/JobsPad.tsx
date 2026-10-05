@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import type { LedgerJob } from 'print-accounting-contracts';
-import { Empty, ListHeader, Loading, Money, Pad, PadBody, PadHead, PaperSelect, SearchInput, TextLink, Toggle, type PaperChoice } from '../../components/index.ts';
-import { useJobs, useMediaTypes, usePapers, useSettings, useTotals } from '../../api/queries.ts';
+import { Empty, ListHeader, Loading, Money, Pad, PadBody, PadHead, PaperSelect, SearchInput, Select, TextLink, Toggle, type PaperChoice } from '../../components/index.ts';
+import { useJobs, useMediaTypes, usePapers, usePrinters, useSettings, useTotals } from '../../api/queries.ts';
 import { count, ml, monthLong, monthShort, plural } from '../../lib/format.ts';
 import { jobKnownMicros } from '../../lib/jobs.ts';
 import { byNewest, matchesFilter, type JobsSearch } from './search.ts';
@@ -47,9 +47,14 @@ export function JobsPad() {
   const search = useSearch({ from: '/_app/jobs' }), navigate = useNavigate({ from: '/jobs' });
   const selected = Number(useParams({ strict: false }).jobId ?? NaN);
   const q = useSettled(search.q ?? '');
-  const jobs = useJobs({ q: q || undefined, includeHidden: !!search.hidden, limit: LIMIT });
+  const jobs = useJobs({ q: q || undefined, printer: search.printer, includeHidden: !!search.hidden, limit: LIMIT });
   const totals = useTotals().data, papers = usePapers().data?.papers ?? [], mediaTypes = useMediaTypes().data?.media_types ?? [];
   const method = useSettings().data?.costing_method ?? totals?.settings.costing_method ?? 'oldest';
+  // With more than one printer, the list can be filtered by printer, and each row names its printer until it is.
+  const printerList = usePrinters().data?.printers, printers = printerList ?? [], several = printers.length > 1;
+  // A ?printer= that names no printer (an old link, another ledger) stays selected, so choosing "All printers" clears it.
+  const missing = search.printer !== undefined && !printers.some(item => item.id === search.printer);
+  const printerName = (job: LedgerJob) => several && search.printer === undefined ? printers.find(item => item.id === job.printer_id)?.name : undefined;
 
   const visible = useMemo(() => (jobs.data?.jobs ?? []).filter(job => matchesFilter(job, search)).sort(byNewest), [jobs.data, search]);
   const groups = useMemo(() => groupByMonth(visible), [visible]);
@@ -96,18 +101,25 @@ export function JobsPad() {
     </>
   );
 
-  const filtered = !!(search.q || search.paper || search.media);
+  const filtered = !!(search.q || search.paper || search.media || search.printer);
   return (
     <Pad label="Jobs">
       <PadHead title="Jobs" meta={meta ?? ''}>
         <SearchInput placeholder="Search notes, papers and job names" aria-label="Search notes, papers and job names" value={search.q ?? ''}
           onChange={event => setSearch({ q: event.target.value || undefined })} className="max-w-[360px] phone:max-w-none phone:basis-full" />
+        {(several || search.printer !== undefined) && (
+          <Select aria-label="Printer" value={search.printer ?? ''} onChange={event => setSearch({ printer: Number(event.target.value) || undefined })} className="w-auto! max-w-[260px]">
+            <option value="">All printers</option>
+            {missing && <option value={search.printer}>{printerList ? 'Printer not found' : 'Loading printers…'}</option>}
+            {printers.map(printer => <option key={printer.id} value={printer.id}>{printer.name}</option>)}
+          </Select>
+        )}
         <PaperSelect aria-label="Paper" papers={papers} value={filter} onChange={onFilter} placeholder="All papers" extra={unpapered} className="w-auto! max-w-[260px]" />
         <Toggle label="Show hidden" checked={!!search.hidden} onChange={event => setSearch({ hidden: event.target.checked || undefined })} />
       </PadHead>
       <PadBody role="listbox" aria-label="Prints" tabIndex={0}>
         {!loaded ? <Loading what="prints" error={jobs.error} />
-          : !groups.length ? <Empty>{filtered || loaded.total ? 'No prints match. Clear the search or choose another paper.' : 'No prints yet. Collect from the printer and they appear here.'}</Empty>
+          : !groups.length ? <Empty>{filtered || loaded.total ? 'No prints match. Clear the search or choose another paper or printer.' : 'No prints yet. Collect from the printer and they appear here.'}</Empty>
           : groups.map(group => (
             <div key={group.month} role="presentation">
               <ListHeader label={monthLong(group.month + '-01')} meta={<>
@@ -115,7 +127,7 @@ export function JobsPad() {
                 {unknownParts(group) && <span className="text-amber"> ({unknownParts(group)})</span>}
               </>} />
               {group.jobs.map(job => (
-                <JobRow key={job.job_id} job={job} selected={job.job_id === selected} paper={paperState(job, papers)} />
+                <JobRow key={job.job_id} job={job} selected={job.job_id === selected} paper={paperState(job, papers)} printer={printerName(job)} />
               ))}
             </div>
           ))}

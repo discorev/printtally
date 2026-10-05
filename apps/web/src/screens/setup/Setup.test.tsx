@@ -160,3 +160,17 @@ test('a MAC typed with hyphens is sent in the colon form the server accepts', as
   expect(await screen.findByRole('button', { name: 'Confirm fingerprint' })).toBeTruthy();
   expect(api.sent('POST /printer-enrolments')).toEqual([{ host: discovered.host }, { host: discovered.host, mac: '00:1E:8F:12:34:56' }]);
 });
+
+test('setup opened from Settings adds a printer; a first run or a re-check of a known printer sets one up', async () => {
+  const opened = await renderApp('/setup', fakeApi({ 'GET /health': ready }));
+  expect(await opened.screen.findByRole('heading', { name: /^Add a printer/ })).toBeTruthy();
+  expect(opened.screen.getByRole('complementary', { name: 'Add a printer' })).toBeTruthy();
+  opened.unmount();
+
+  const recheck = await renderApp('/setup?host=192.168.1.42', fakeApi({ 'GET /health': ready, 'POST /printer-enrolments': preview() }));
+  expect(await recheck.screen.findByRole('heading', { name: /^Set up your printer/ })).toBeTruthy();
+  recheck.unmount();
+
+  const first = await renderApp('/setup', fakeApi({ 'GET /health': noPrinter }));
+  expect(await first.screen.findByRole('heading', { name: /^Set up your printer/ })).toBeTruthy();
+});

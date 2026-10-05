@@ -18,9 +18,13 @@ export async function ledgerRoute(ledger: Ledger, method: string | undefined, ur
   const path = url.pathname;
   if (method === 'GET' && path === '/api/v1/jobs') {
     const [limit, offset] = page(), hidden = url.searchParams.get('includeHidden') ?? 'false', q = url.searchParams.get('q') ?? undefined;
+    const printerText = url.searchParams.get('printer'), printer = printerText === null ? undefined : Number(printerText);
     if (!['false', 'true'].includes(hidden)) return [400, { error: 'invalid_visibility' }];
     if (q !== undefined && q.length > 200) return [400, { error: 'invalid_search' }];
-    return [200, ledger.jobs({ q, includeHidden: hidden === 'true', limit, offset })];
+    if (url.searchParams.getAll('printer').length > 1 || (printerText !== null && (!/^\d+$/.test(printerText) || !Number.isSafeInteger(printer) || printer! < 1))) {
+      throw new Error('Invalid printer');
+    }
+    return [200, ledger.jobs({ q, printer, includeHidden: hidden === 'true', limit, offset })];
   }
   const job = /^\/api\/v1\/jobs\/(\d{1,15})$/.exec(path);
   if (method === 'GET' && job) { const found = ledger.job(Number(job[1])); return found ? [200, found] : [404, { error: 'job_not_found' }]; }
