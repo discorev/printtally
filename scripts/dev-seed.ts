@@ -1,7 +1,8 @@
 // A throwaway data folder with a ledger for UI work, seeded with realistic sample data:
 //   bun run seed:dev [snapshot.json]   (default tests/fixtures/reference.json; e.g. a copy of jobs.json)
-// The printer sits at a TEST-NET address (192.0.2.10), so collection fails fast and never reaches a
-// real printer, and no password or Keychain item is created.
+// The printers sit at TEST-NET addresses (192.0.2.10 and .11), so collection fails fast and never reaches a
+// real printer, and no password or Keychain item is created. The second printer has a few of the same jobs
+// again, so the Jobs printer filter shows.
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -15,12 +16,33 @@ const input: { snapshot?: unknown } = JSON.parse(readFileSync(source, 'utf8'));
 const snapshot = snapshotSchema.parse(input.snapshot ?? input);
 const dir = mkdtempSync(join(tmpdir(), 'printtally-dev-')), db = new AccountingDatabase(join(dir, 'accounting.sqlite3'));
 const ledger = new Ledger(db), money = (pounds: number) => Math.round(pounds * 1_000_000), mm = (value: number) => Math.round(value * 1000);
+// A printer's day stamp (YYYYMMDDhhmmss) moved on by some days.
+const later = (stamp: unknown, days: number) => {
+  if (typeof stamp !== 'string' || !/^\d{14}$/.test(stamp)) return stamp;
+  const day = new Date(Date.UTC(Number(stamp.slice(0, 4)), Number(stamp.slice(4, 6)) - 1, Number(stamp.slice(6, 8)) + days));
+  return day.toISOString().slice(0, 10).replaceAll('-', '') + stamp.slice(8);
+};
+const OFFICE_MAC = snapshot.printer.mac === '0200000000ff' ? '0200000000fe' : '0200000000ff';
+const office = structuredClone(snapshot), recent = snapshot.records.slice(-3);
+office.printer = { host: '192.0.2.11', mac: OFFICE_MAC };
+if (office.media_catalogue) office.media_catalogue.printer_mac = OFFICE_MAC;
+office.records = [0, 1, 2].map(index => {
+  const record = structuredClone(recent[index % recent.length]);
+  Object.assign(record.raw, { job_record_number: index + 1, job_time_at_processing: later(record.raw.job_time_at_processing, index + 1),
+    job_time_at_completed: later(record.raw.job_time_at_completed, index + 1) });
+  return record;
+});
+office.requested_range = [1, office.records.length];
 try {
-  const imported = db.importSnapshot(snapshot);
-  const root = new X509Certificate((await tlsFixtures()).root), now = new Date().toISOString();
-  new KnownPrinters(db).save({ id: '00000000-0000-4000-8000-00000000d0c7', host: '192.0.2.10', name: 'PRO-1100 (dev seed)', mac: snapshot.printer.mac,
-    fingerprintSha256: root.fingerprint256, rootCertificatePem: root.toString(), validFrom: root.validFromDate.toISOString(), validTo: root.validToDate.toISOString(),
-    confirmedAt: now, lastVerifiedAt: now }, undefined);
+  const imported = db.importSnapshot(snapshot), second = db.importSnapshot(office);
+  const roots = await tlsFixtures(), known = new KnownPrinters(db), now = new Date().toISOString();
+  const printer = (id: string, host: string, name: string, mac: string, pem: string) => {
+    const root = new X509Certificate(pem);
+    known.save({ id, host, name, mac, fingerprintSha256: root.fingerprint256, rootCertificatePem: root.toString(),
+      validFrom: root.validFromDate.toISOString(), validTo: root.validToDate.toISOString(), confirmedAt: now, lastVerifiedAt: now }, undefined);
+  };
+  printer('00000000-0000-4000-8000-00000000d0c7', '192.0.2.10', 'PRO-1100 (dev seed)', snapshot.printer.mac, roots.root);
+  printer('00000000-0000-4000-8000-00000000d0c8', '192.0.2.11', 'Office PRO-1100 (dev seed)', OFFICE_MAC, roots.otherRoot);
 
   // Papers list the printer media types they print as, matched by the media's English name.
   const media = Object.entries(snapshot.media_catalogue?.entries ?? {}).map(([id, entry]) => ({ id, name: entry.names.EN }));
@@ -70,7 +92,7 @@ try {
   ledger.createWriteOff({ paper_stock_id: stock['pe310-a4'], written_off_on: '2026-07-14', quantity: 2, reason: 'Creased corners — the box was damaged in the post' });
   ledger.createWriteOff({ ink_product_id: cartridge.M, written_off_on: '2026-08-12', all_remaining: true, reason: 'Printer reported it as faulty' });
 
-  console.log(`Seeded ${dir}\n  ${imported.new_jobs} jobs from ${source}; ${papers.length} papers, ${Object.keys(stock).length} stock items, ${channels.length} cartridges, 3 write-offs; a printer at 192.0.2.10 (TEST-NET)`);
+  console.log(`Seeded ${dir}\n  ${imported.new_jobs} jobs from ${source}, and ${second.new_jobs} on a second printer; ${papers.length} papers, ${Object.keys(stock).length} stock items, ${channels.length} cartridges, 3 write-offs; printers at 192.0.2.10 and 192.0.2.11 (TEST-NET)`);
   console.log(`\nRun the server against it (pick a free port; never 4318, which may be your real server):\n  PRINTTALLY_MEMORY_SECRETS=1 bun apps/server/src/cli.ts serve --port 4400 --data-dir ${dir}`);
   console.log(`Then the UI with hot reload:\n  PRINTTALLY_API=http://127.0.0.1:4400 bun run dev:web`);
 } finally { db.close(); }
