@@ -114,8 +114,10 @@ test('keyboard focus opens the grouped receipt; Escape closes it and the changel
   const fixes = within(within(receipt).getByRole('region', { name: 'Fixed' })).getAllByRole('listitem');
   expect(fixes.map(item => item.textContent)).toEqual(['Keep print costs accuratebackend']);
   expect(within(receipt).getByText('3 changes')).toBeTruthy();
-  expect(within(receipt).getByRole('link', { name: 'Full changelog on GitHub' }).getAttribute('href'))
-    .toBe('https://github.com/discorev/printtally/compare/app-v0.2.0...app-v0.3.0');
+  // The installed version comes back asynchronously, after the receipt opens.
+  const changelog = within(receipt).getByRole('link', { name: 'Full changelog on GitHub' });
+  await waitFor(() => expect(changelog.getAttribute('href'))
+    .toBe('https://github.com/discorev/printtally/compare/app-v0.2.0...app-v0.3.0'));
   await user.keyboard('{Escape}');
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   expect(document.activeElement).toBe(chip);
