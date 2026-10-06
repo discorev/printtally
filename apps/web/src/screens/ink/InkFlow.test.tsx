@@ -12,7 +12,7 @@ const purchase = (overrides: Partial<InkPurchaseView> = {}): InkPurchaseView => 
 });
 const cartridge = (overrides: Partial<CartridgeView> = {}): CartridgeView => ({
   id: 1, name: 'PFI-4100 C', channel: 'C', capacity_nl: 80_000_000, product_code: null,
-  open_remaining_nl: 60_000_000, open_purchase_id: 21, spares: 1,
+  open_remaining_nl: 60_000_000, open_purchase_id: 21, open_unit_index: null, spares: 1,
   bought: 160_000_000, used: 20_000_000, wasted: 0, remaining: 140_000_000,
   used_micros: 9_000_000, waste_micros: 0, jobs: 3,
   purchases: [purchase()], write_offs: [], units: [], ...overrides,
@@ -71,8 +71,8 @@ test('an unfitted reading-mode channel still offers a measured write-off, while 
     id: 31, paper_stock_id: null, ink_product_id: 1, printer_id: null, written_off_on: '2026-09-02',
     quantity: null, all_remaining: true, reason: 'Changed early', written_off: 60_000_000, cost_micros: 27_000_000,
   };
-  const api = fakeApi(routes(ink({ cartridges: [cartridge({
-    open_remaining_nl: null, open_purchase_id: null, spares: 1, wasted: 60_000_000, remaining: 80_000_000,
+  const api = fakeApi(routes(ink({ fitted: {}, cartridges: [cartridge({
+    open_remaining_nl: null, open_purchase_id: null, open_unit_index: null, spares: 1, wasted: 60_000_000, remaining: 80_000_000,
     waste_micros: 27_000_000, purchases: [purchase({ remaining_nl: 80_000_000 })], write_offs: [writeOff],
   })] })));
   const { screen } = await renderApp('/ink/C', api);
@@ -194,7 +194,6 @@ test('writing off the fitted cartridge sends all remaining and only confirms aft
   }));
 });
 
-
 test('reading-mode write-off offers only measured quantity and does not request all-remaining preview', async () => {
   const api = fakeApi({ ...routes(), 'POST /write-offs': { id: 42 } });
   const { screen, user } = await renderApp('/ink/C?form=writeoff', api);
@@ -208,7 +207,6 @@ test('reading-mode write-off offers only measured quantity and does not request 
   expect(api.sent('POST /write-offs')).toEqual([{ ink_product_id: 1, written_off_on: today(), quantity: 1_250_000, reason: null }]);
   expect(api.sent(`GET /write-offs/preview?ink_product_id=1&printer_id=1&written_off_on=${today()}`)).toEqual([]);
 });
-
 
 test('reading-mode write-off uses the selected printer’s fitted product, not its reported series', async () => {
   const other = cartridge({ id: 2, name: 'PFI-3300 C', open_remaining_nl: 40_000_000, open_purchase_id: 22 });
@@ -270,4 +268,26 @@ test('reading mode uses the first observation even when the latest reading is in
   const { screen } = await renderApp('/ink/C?form=writeoff', api);
   expect(await screen.findByRole('spinbutton', { name: 'Quantity (ml)' })).toBeTruthy();
   expect(screen.queryByText(/the ledger thinks is left/)).toBeNull();
+});
+
+for (const [label, product, fitted] of [
+  ['shelf preview after write-off', cartridge({ open_remaining_nl: 80_000_000, open_purchase_id: 22, open_unit_index: null,
+    purchases: [purchase({ id: 22, purchased_on: '2026-09-02' }), purchase()] }), {}],
+  ['exhausted fitted unit', cartridge({ open_remaining_nl: null, open_purchase_id: null }),
+    { C: { product_id: 1, purchase_id: 21, index: 1, remaining_nl: 0 } }],
+] satisfies [string, CartridgeView, InkResponse['fitted']][]) test(`capacity-mode ${label} agrees between row and docket`, async () => {
+  const api = fakeApi(routes(ink({ cartridges: [product], fitted })));
+  const { screen, user } = await renderApp('/ink', api);
+  const row = await screen.findByRole('option', { name: /C Cyan/ });
+  await user.click(row);
+  const docket = await screen.findByRole('complementary', { name: 'Cartridge' });
+  if (product.open_remaining_nl === null) {
+    expect(row.textContent).toContain('None in the printer');
+    expect(within(docket).getByText('None fitted.')).toBeTruthy();
+    expect(within(docket).queryByText(/Bought 1 Sep/)).toBeNull();
+  } else {
+    expect(row.textContent).toContain('~80.0 ml');
+    expect(within(docket).getByText('~80.0 ml')).toBeTruthy();
+    expect(within(docket).getByText('Bought 2 Sep 2026')).toBeTruthy();
+  }
 });

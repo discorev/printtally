@@ -239,6 +239,7 @@ export const ink_fittings = sqliteTable('ink_fittings', {
   printer_id: integer().notNull().references(() => printers.id),
   channel: text().notNull(),
   ink_purchase_id: integer().notNull().references(() => ink_purchases.id),
+  unit_index: integer(),
   after_record: integer().notNull(),
   replaced: text({ enum: ['shelf', 'used'] }).notNull(),
   created_at: text().notNull(),

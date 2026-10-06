@@ -29,6 +29,13 @@
       "when": 1791246291112,
       "tag": "0003_cartridge_allocation",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1791253478372,
+      "tag": "0004_fitting_unit",
+      "breakpoints": true
     }
   ]
 }

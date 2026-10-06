@@ -1,0 +1,1 @@
+ALTER TABLE `ink_fittings` ADD `unit_index` integer;

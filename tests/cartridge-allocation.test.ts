@@ -366,3 +366,33 @@ test('a capacity write-off leaves the next shelf unit unfitted until another job
     [[1, 1, 'used'], [1, 2, 'shelf'], [2, 1, 'fitted']]);
   assert.equal(result.swapWaste.length, 0);
 });
+
+test('an indexed fitting claims only that unit, and rejects a unit already fitted elsewhere', () => {
+  const input = base();
+  input.jobs = [job(1, 1, 1, ml / 2), job(2, 2, 1, ml / 2)];
+  input.inkFittings = [{ id: 7, printer_id: 1, channel: 'C', ink_purchase_id: 1,
+    unit_index: 3, after_record: 1, replaced: 'shelf', created_on: '2026-02-03' }];
+  const chosen = computeLedger(input);
+  assert.deepEqual(chosen.invalidFittings, []);
+  assert.equal(chosen.units.find(unit => unit.index === 3)!.fitting_id, 7);
+  assert.equal(chosen.units.find(unit => unit.index === 2)!.printer_id, 2);
+  input.inkFittings[0].unit_index = 2;
+  const conflict = computeLedger(input);
+  assert.deepEqual(conflict.invalidFittings, [7]);
+  assert.equal(conflict.units.find(unit => unit.index === 2)!.printer_id, 2);
+  input.inkFittings[0].unit_index = null;
+  assert.deepEqual(computeLedger(input).invalidFittings, [], 'legacy purchase-only fittings remain valid');
+});
+
+test('a part-used returned shelf cartridge records the write-off date and shelf source', () => {
+  const input = base(); input.jobs = [job(1, 1, 1, ml / 2)];
+  input.inkFittings = [{ id: 7, printer_id: 1, channel: 'C', ink_purchase_id: 1,
+    unit_index: 2, after_record: 1, replaced: 'shelf', created_on: '2026-02-03' }];
+  input.writeOffs = [{ id: 8, paper_stock_id: null, ink_product_id: 1, printer_id: null,
+    written_off_on: '2026-02-04', quantity: null, all_remaining: true }];
+  const used = computeLedger(input).units[0];
+  assert.deepEqual([used.state, used.last_printer_id, used.ended_by, used.written_off_on, used.written_off_from_shelf],
+    ['used', 1, 'write_off', '2026-02-04', true]);
+  input.writeOffs[0] = { ...input.writeOffs[0], quantity: 1.5 * ml, all_remaining: false };
+  assert.equal(computeLedger(input).units[0].written_off_from_shelf, true, 'quantity write-offs mark shelf units too');
+});

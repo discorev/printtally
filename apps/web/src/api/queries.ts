@@ -19,7 +19,7 @@ export const keys = {
   job: (id: number) => ['job', id] as const,
   allocationPreview: (id: number, target: object) => ['allocation-preview', id, target] as const,
   totals: ['totals'] as const, papers: ['papers'] as const, mediaTypes: ['media-types'] as const,
-  ink: (printer?: number) => ['ink', printer] as const, writeOffPreview: (target: object, day: string) => ['write-off-preview', target, day] as const, settings: ['settings'] as const, knownPrinters: ['known-printers'] as const, printers: ['printers'] as const, imports: ['imports'] as const,
+  ink: (printer?: number) => ['ink', printer] as const, recentPrinterJobs: (id?: number) => ['recent-printer-jobs', id] as const, writeOffPreview: (target: object, day: string) => ['write-off-preview', target, day] as const, settings: ['settings'] as const, knownPrinters: ['known-printers'] as const, printers: ['printers'] as const, imports: ['imports'] as const,
 };
 
 /** The jobs list; keeps the previous page on screen while a new search loads. */
@@ -29,6 +29,7 @@ export const useTotals = () => useQuery({ queryKey: keys.totals, queryFn: api.to
 export const usePapers = () => useQuery({ queryKey: keys.papers, queryFn: api.papers });
 export const useMediaTypes = () => useQuery({ queryKey: keys.mediaTypes, queryFn: api.mediaTypes });
 export const useInk = (printer?: number, enabled = true) => useQuery({ queryKey: keys.ink(printer), queryFn: () => api.ink(printer), enabled });
+export const useQueryRecentPrinterJobs = (id?: number) => useQuery({ queryKey: keys.recentPrinterJobs(id), queryFn: () => api.recentPrinterJobs(id!), enabled: id !== undefined });
 export const useSettings = () => useQuery({ queryKey: keys.settings, queryFn: api.settings });
 export const useKnownPrinters = () => useQuery({ queryKey: keys.knownPrinters, queryFn: api.knownPrinters });
 export const usePrinters = () => useQuery({ queryKey: keys.printers, queryFn: api.printers });

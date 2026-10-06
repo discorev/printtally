@@ -1,0 +1,2394 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "b9ad99c0-fc88-47de-a7c2-2fdecc4dfc3c",
+  "prevId": "8d707432-ea44-4551-a285-e8abdfdc1aa5",
+  "tables": {
+    "import_job_observations": {
+      "name": "import_job_observations",
+      "columns": {
+        "import_id": {
+          "name": "import_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "job_id": {
+          "name": "job_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "observation_id": {
+          "name": "observation_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "import_job_observations_import_id_import_runs_id_fk": {
+          "name": "import_job_observations_import_id_import_runs_id_fk",
+          "tableFrom": "import_job_observations",
+          "tableTo": "import_runs",
+          "columnsFrom": [
+            "import_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "import_job_observations_job_id_print_jobs_id_fk": {
+          "name": "import_job_observations_job_id_print_jobs_id_fk",
+          "tableFrom": "import_job_observations",
+          "tableTo": "print_jobs",
+          "columnsFrom": [
+            "job_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "import_job_observations_job_id_observation_id_job_observations_job_id_id_fk": {
+          "name": "import_job_observations_job_id_observation_id_job_observations_job_id_id_fk",
+          "tableFrom": "import_job_observations",
+          "tableTo": "job_observations",
+          "columnsFrom": [
+            "job_id",
+            "observation_id"
+          ],
+          "columnsTo": [
+            "job_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "import_job_observations_import_id_job_id_pk": {
+          "columns": [
+            "import_id",
+            "job_id"
+          ],
+          "name": "import_job_observations_import_id_job_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "import_runs": {
+      "name": "import_runs",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "printer_id": {
+          "name": "printer_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_host": {
+          "name": "source_host",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "observed_at": {
+          "name": "observed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "requested_first": {
+          "name": "requested_first",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "requested_last": {
+          "name": "requested_last",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "received_count": {
+          "name": "received_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "new_jobs": {
+          "name": "new_jobs",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "new_observations": {
+          "name": "new_observations",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "record_id_collisions": {
+          "name": "record_id_collisions",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "schema_json": {
+          "name": "schema_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "import_runs_printer_id_printers_id_fk": {
+          "name": "import_runs_printer_id_printers_id_fk",
+          "tableFrom": "import_runs",
+          "tableTo": "printers",
+          "columnsFrom": [
+            "printer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "import_runs_source_check": {
+          "name": "import_runs_source_check",
+          "value": "source IN ('live','snapshot')"
+        },
+        "import_runs_status_check": {
+          "name": "import_runs_status_check",
+          "value": "status IN ('running','succeeded','failed')"
+        },
+        "import_runs_schema_json_check": {
+          "name": "import_runs_schema_json_check",
+          "value": "schema_json IS NULL OR json_valid(schema_json)"
+        }
+      }
+    },
+    "ink_fittings": {
+      "name": "ink_fittings",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "printer_id": {
+          "name": "printer_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "channel": {
+          "name": "channel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ink_purchase_id": {
+          "name": "ink_purchase_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "unit_index": {
+          "name": "unit_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "after_record": {
+          "name": "after_record",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "replaced": {
+          "name": "replaced",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "ink_fittings_position_idx": {
+          "name": "ink_fittings_position_idx",
+          "columns": [
+            "printer_id",
+            "channel",
+            "after_record"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "ink_fittings_printer_id_printers_id_fk": {
+          "name": "ink_fittings_printer_id_printers_id_fk",
+          "tableFrom": "ink_fittings",
+          "tableTo": "printers",
+          "columnsFrom": [
+            "printer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ink_fittings_ink_purchase_id_ink_purchases_id_fk": {
+          "name": "ink_fittings_ink_purchase_id_ink_purchases_id_fk",
+          "tableFrom": "ink_fittings",
+          "tableTo": "ink_purchases",
+          "columnsFrom": [
+            "ink_purchase_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "ink_fittings_channel_check": {
+          "name": "ink_fittings_channel_check",
+          "value": "length(channel) BETWEEN 1 AND 16 AND channel NOT GLOB '*[^A-Za-z0-9_]*'"
+        },
+        "ink_fittings_after_record_check": {
+          "name": "ink_fittings_after_record_check",
+          "value": "after_record >= -1"
+        },
+        "ink_fittings_replaced_check": {
+          "name": "ink_fittings_replaced_check",
+          "value": "replaced IN ('shelf','used')"
+        }
+      }
+    },
+    "ink_products": {
+      "name": "ink_products",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "channel": {
+          "name": "channel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "capacity_nl": {
+          "name": "capacity_nl",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "product_code": {
+          "name": "product_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "ink_products_name_check": {
+          "name": "ink_products_name_check",
+          "value": "length(trim(name)) > 0"
+        },
+        "ink_products_capacity_nl_check": {
+          "name": "ink_products_capacity_nl_check",
+          "value": "capacity_nl > 0"
+        }
+      }
+    },
+    "ink_purchases": {
+      "name": "ink_purchases",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ink_product_id": {
+          "name": "ink_product_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "purchased_on": {
+          "name": "purchased_on",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cartridges": {
+          "name": "cartridges",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "price_micros": {
+          "name": "price_micros",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "ink_purchases_ink_product_id_ink_products_id_fk": {
+          "name": "ink_purchases_ink_product_id_ink_products_id_fk",
+          "tableFrom": "ink_purchases",
+          "tableTo": "ink_products",
+          "columnsFrom": [
+            "ink_product_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "ink_purchases_purchased_on_check": {
+          "name": "ink_purchases_purchased_on_check",
+          "value": "length(purchased_on)=10 AND date(purchased_on) IS NOT NULL AND date(purchased_on)=purchased_on"
+        },
+        "ink_purchases_cartridges_check": {
+          "name": "ink_purchases_cartridges_check",
+          "value": "typeof(cartridges)='integer' AND cartridges > 0"
+        },
+        "ink_purchases_price_micros_check": {
+          "name": "ink_purchases_price_micros_check",
+          "value": "typeof(price_micros)='integer' AND price_micros >= 0"
+        }
+      }
+    },
+    "job_annotations": {
+      "name": "job_annotations",
+      "columns": {
+        "job_id": {
+          "name": "job_id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "custom_paper_name": {
+          "name": "custom_paper_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "paper_stock_id": {
+          "name": "paper_stock_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "paper_id": {
+          "name": "paper_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "hidden": {
+          "name": "hidden",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "job_annotations_job_id_print_jobs_id_fk": {
+          "name": "job_annotations_job_id_print_jobs_id_fk",
+          "tableFrom": "job_annotations",
+          "tableTo": "print_jobs",
+          "columnsFrom": [
+            "job_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "job_annotations_paper_stock_id_paper_stocks_id_fk": {
+          "name": "job_annotations_paper_stock_id_paper_stocks_id_fk",
+          "tableFrom": "job_annotations",
+          "tableTo": "paper_stocks",
+          "columnsFrom": [
+            "paper_stock_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "job_annotations_paper_id_papers_id_fk": {
+          "name": "job_annotations_paper_id_papers_id_fk",
+          "tableFrom": "job_annotations",
+          "tableTo": "papers",
+          "columnsFrom": [
+            "paper_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "job_annotations_custom_paper_name_check": {
+          "name": "job_annotations_custom_paper_name_check",
+          "value": "custom_paper_name IS NULL OR length(trim(custom_paper_name)) > 0"
+        },
+        "job_annotations_hidden_check": {
+          "name": "job_annotations_hidden_check",
+          "value": "hidden IN (0,1)"
+        }
+      }
+    },
+    "job_cost_adjustments": {
+      "name": "job_cost_adjustments",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "job_id": {
+          "name": "job_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "amount_micros": {
+          "name": "amount_micros",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "job_cost_adjustments_job_id_print_jobs_id_fk": {
+          "name": "job_cost_adjustments_job_id_print_jobs_id_fk",
+          "tableFrom": "job_cost_adjustments",
+          "tableTo": "print_jobs",
+          "columnsFrom": [
+            "job_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "job_cost_adjustments_description_check": {
+          "name": "job_cost_adjustments_description_check",
+          "value": "length(trim(description)) > 0"
+        },
+        "job_cost_adjustments_amount_micros_check": {
+          "name": "job_cost_adjustments_amount_micros_check",
+          "value": "typeof(amount_micros)='integer'"
+        },
+        "job_cost_adjustments_currency_check": {
+          "name": "job_cost_adjustments_currency_check",
+          "value": "length(currency)=3 AND currency NOT GLOB '*[^A-Z]*'"
+        }
+      }
+    },
+    "job_ink_usage": {
+      "name": "job_ink_usage",
+      "columns": {
+        "observation_id": {
+          "name": "observation_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "channel": {
+          "name": "channel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "volume_nl": {
+          "name": "volume_nl",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "job_ink_usage_observation_id_job_observations_id_fk": {
+          "name": "job_ink_usage_observation_id_job_observations_id_fk",
+          "tableFrom": "job_ink_usage",
+          "tableTo": "job_observations",
+          "columnsFrom": [
+            "observation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "job_ink_usage_observation_id_channel_pk": {
+          "columns": [
+            "observation_id",
+            "channel"
+          ],
+          "name": "job_ink_usage_observation_id_channel_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "job_ink_usage_volume_nl_check": {
+          "name": "job_ink_usage_volume_nl_check",
+          "value": "volume_nl >= 0"
+        }
+      }
+    },
+    "job_observations": {
+      "name": "job_observations",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "job_id": {
+          "name": "job_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "content_hash": {
+          "name": "content_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "first_import_id": {
+          "name": "first_import_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "first_observed_at": {
+          "name": "first_observed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_observed_at": {
+          "name": "last_observed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "raw_json": {
+          "name": "raw_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "media_config_id": {
+          "name": "media_config_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "resolved_media_name": {
+          "name": "resolved_media_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "job_name": {
+          "name": "job_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "job_owner": {
+          "name": "job_owner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "started_at_raw": {
+          "name": "started_at_raw",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "completed_at_raw": {
+          "name": "completed_at_raw",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "completion_state": {
+          "name": "completion_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "job_type": {
+          "name": "job_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "width_um": {
+          "name": "width_um",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "height_um": {
+          "name": "height_um",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "used_area_mm2": {
+          "name": "used_area_mm2",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "impressions": {
+          "name": "impressions",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "color_pages": {
+          "name": "color_pages",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "monochrome_pages": {
+          "name": "monochrome_pages",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "duplex": {
+          "name": "duplex",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "jobs_started": {
+          "name": "jobs_started",
+          "columns": [
+            "started_at_raw"
+          ],
+          "isUnique": false
+        },
+        "job_observations_job_id_content_hash_unique": {
+          "name": "job_observations_job_id_content_hash_unique",
+          "columns": [
+            "job_id",
+            "content_hash"
+          ],
+          "isUnique": true
+        },
+        "job_observations_job_id_id_unique": {
+          "name": "job_observations_job_id_id_unique",
+          "columns": [
+            "job_id",
+            "id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "job_observations_job_id_print_jobs_id_fk": {
+          "name": "job_observations_job_id_print_jobs_id_fk",
+          "tableFrom": "job_observations",
+          "tableTo": "print_jobs",
+          "columnsFrom": [
+            "job_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "job_observations_first_import_id_import_runs_id_fk": {
+          "name": "job_observations_first_import_id_import_runs_id_fk",
+          "tableFrom": "job_observations",
+          "tableTo": "import_runs",
+          "columnsFrom": [
+            "first_import_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "job_observations_media_config_id_media_configs_id_fk": {
+          "name": "job_observations_media_config_id_media_configs_id_fk",
+          "tableFrom": "job_observations",
+          "tableTo": "media_configs",
+          "columnsFrom": [
+            "media_config_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "job_observations_raw_json_check": {
+          "name": "job_observations_raw_json_check",
+          "value": "json_valid(raw_json)"
+        },
+        "job_observations_width_um_check": {
+          "name": "job_observations_width_um_check",
+          "value": "width_um >= 0"
+        },
+        "job_observations_height_um_check": {
+          "name": "job_observations_height_um_check",
+          "value": "height_um >= 0"
+        },
+        "job_observations_used_area_mm2_check": {
+          "name": "job_observations_used_area_mm2_check",
+          "value": "used_area_mm2 >= 0"
+        },
+        "job_observations_impressions_check": {
+          "name": "job_observations_impressions_check",
+          "value": "impressions >= 0"
+        },
+        "job_observations_color_pages_check": {
+          "name": "job_observations_color_pages_check",
+          "value": "color_pages >= 0"
+        },
+        "job_observations_monochrome_pages_check": {
+          "name": "job_observations_monochrome_pages_check",
+          "value": "monochrome_pages >= 0"
+        }
+      }
+    },
+    "known_printers": {
+      "name": "known_printers",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "host": {
+          "name": "host",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "mac": {
+          "name": "mac",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "root_certificate_pem": {
+          "name": "root_certificate_pem",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "root_fingerprint_sha256": {
+          "name": "root_fingerprint_sha256",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "root_valid_from": {
+          "name": "root_valid_from",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "root_valid_to": {
+          "name": "root_valid_to",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "confirmed_at": {
+          "name": "confirmed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_verified_at": {
+          "name": "last_verified_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "known_printers_host_unique": {
+          "name": "known_printers_host_unique",
+          "columns": [
+            "host"
+          ],
+          "isUnique": true
+        },
+        "known_printers_root_fingerprint_sha256_unique": {
+          "name": "known_printers_root_fingerprint_sha256_unique",
+          "columns": [
+            "root_fingerprint_sha256"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "known_printers_mac_check": {
+          "name": "known_printers_mac_check",
+          "value": "mac IS NULL OR (length(mac)=12 AND mac NOT GLOB '*[^0-9a-f]*')"
+        }
+      }
+    },
+    "media_configs": {
+      "name": "media_configs",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "printer_id": {
+          "name": "printer_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_media_id": {
+          "name": "source_media_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "present_on_printer": {
+          "name": "present_on_printer",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "visible": {
+          "name": "visible",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "current_revision_id": {
+          "name": "current_revision_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "first_seen_at": {
+          "name": "first_seen_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "media_configs_printer_id_source_media_id_unique": {
+          "name": "media_configs_printer_id_source_media_id_unique",
+          "columns": [
+            "printer_id",
+            "source_media_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "media_configs_printer_id_printers_id_fk": {
+          "name": "media_configs_printer_id_printers_id_fk",
+          "tableFrom": "media_configs",
+          "tableTo": "printers",
+          "columnsFrom": [
+            "printer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "media_configs_id_current_revision_id_media_revisions_media_id_id_fk": {
+          "name": "media_configs_id_current_revision_id_media_revisions_media_id_id_fk",
+          "tableFrom": "media_configs",
+          "tableTo": "media_revisions",
+          "columnsFrom": [
+            "id",
+            "current_revision_id"
+          ],
+          "columnsTo": [
+            "media_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "media_configs_present_on_printer_check": {
+          "name": "media_configs_present_on_printer_check",
+          "value": "present_on_printer IN (0,1)"
+        },
+        "media_configs_visible_check": {
+          "name": "media_configs_visible_check",
+          "value": "visible IN (0,1)"
+        }
+      }
+    },
+    "media_revisions": {
+      "name": "media_revisions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "media_id": {
+          "name": "media_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "content_hash": {
+          "name": "content_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "names_json": {
+          "name": "names_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "short_name": {
+          "name": "short_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "english_name": {
+          "name": "english_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "checksum": {
+          "name": "checksum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "first_observed_at": {
+          "name": "first_observed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_observed_at": {
+          "name": "last_observed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "media_revisions_media_id_content_hash_unique": {
+          "name": "media_revisions_media_id_content_hash_unique",
+          "columns": [
+            "media_id",
+            "content_hash"
+          ],
+          "isUnique": true
+        },
+        "media_revisions_media_id_id_unique": {
+          "name": "media_revisions_media_id_id_unique",
+          "columns": [
+            "media_id",
+            "id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "media_revisions_media_id_media_configs_id_fk": {
+          "name": "media_revisions_media_id_media_configs_id_fk",
+          "tableFrom": "media_revisions",
+          "tableTo": "media_configs",
+          "columnsFrom": [
+            "media_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "media_revisions_names_json_check": {
+          "name": "media_revisions_names_json_check",
+          "value": "json_valid(names_json)"
+        }
+      }
+    },
+    "paper_media_types": {
+      "name": "paper_media_types",
+      "columns": {
+        "paper_id": {
+          "name": "paper_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_media_id": {
+          "name": "source_media_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "paper_media_types_media": {
+          "name": "paper_media_types_media",
+          "columns": [
+            "source_media_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "paper_media_types_paper_id_papers_id_fk": {
+          "name": "paper_media_types_paper_id_papers_id_fk",
+          "tableFrom": "paper_media_types",
+          "tableTo": "papers",
+          "columnsFrom": [
+            "paper_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "paper_media_types_paper_id_source_media_id_pk": {
+          "columns": [
+            "paper_id",
+            "source_media_id"
+          ],
+          "name": "paper_media_types_paper_id_source_media_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "paper_purchases": {
+      "name": "paper_purchases",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "paper_stock_id": {
+          "name": "paper_stock_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "purchased_on": {
+          "name": "purchased_on",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "packs": {
+          "name": "packs",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sheets_per_pack": {
+          "name": "sheets_per_pack",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "length_um": {
+          "name": "length_um",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "price_micros": {
+          "name": "price_micros",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "paper_purchases_paper_stock_id_paper_stocks_id_fk": {
+          "name": "paper_purchases_paper_stock_id_paper_stocks_id_fk",
+          "tableFrom": "paper_purchases",
+          "tableTo": "paper_stocks",
+          "columnsFrom": [
+            "paper_stock_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "paper_purchases_purchased_on_check": {
+          "name": "paper_purchases_purchased_on_check",
+          "value": "length(purchased_on)=10 AND date(purchased_on) IS NOT NULL AND date(purchased_on)=purchased_on"
+        },
+        "paper_purchases_quantity_check": {
+          "name": "paper_purchases_quantity_check",
+          "value": "CASE WHEN length_um IS NULL THEN typeof(packs)='integer' AND packs > 0 AND typeof(sheets_per_pack)='integer' AND sheets_per_pack > 0\n    ELSE packs IS NULL AND sheets_per_pack IS NULL AND typeof(length_um)='integer' AND length_um > 0 END"
+        },
+        "paper_purchases_price_micros_check": {
+          "name": "paper_purchases_price_micros_check",
+          "value": "typeof(price_micros)='integer' AND price_micros >= 0"
+        }
+      }
+    },
+    "paper_stocks": {
+      "name": "paper_stocks",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "paper_id": {
+          "name": "paper_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "format": {
+          "name": "format",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "width_um": {
+          "name": "width_um",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "height_um": {
+          "name": "height_um",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "deckle": {
+          "name": "deckle",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "product_code": {
+          "name": "product_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "paper_stocks_paper_id_papers_id_fk": {
+          "name": "paper_stocks_paper_id_papers_id_fk",
+          "tableFrom": "paper_stocks",
+          "tableTo": "papers",
+          "columnsFrom": [
+            "paper_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "paper_stocks_name_check": {
+          "name": "paper_stocks_name_check",
+          "value": "length(trim(name)) > 0"
+        },
+        "paper_stocks_format_check": {
+          "name": "paper_stocks_format_check",
+          "value": "format IN ('sheet','roll')"
+        },
+        "paper_stocks_width_um_check": {
+          "name": "paper_stocks_width_um_check",
+          "value": "width_um > 0"
+        },
+        "paper_stocks_height_um_check": {
+          "name": "paper_stocks_height_um_check",
+          "value": "CASE format WHEN 'sheet' THEN typeof(height_um)='integer' AND height_um > 0 ELSE height_um IS NULL AND deckle=0 END"
+        },
+        "paper_stocks_deckle_check": {
+          "name": "paper_stocks_deckle_check",
+          "value": "deckle IN (0,1)"
+        }
+      }
+    },
+    "papers": {
+      "name": "papers",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "papers_name_unique": {
+          "name": "papers_name_unique",
+          "columns": [
+            "name"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "papers_name_check": {
+          "name": "papers_name_check",
+          "value": "length(trim(name)) > 0"
+        }
+      }
+    },
+    "print_jobs": {
+      "name": "print_jobs",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "printer_id": {
+          "name": "printer_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_record_id": {
+          "name": "source_record_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "identity_hash": {
+          "name": "identity_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "identity_json": {
+          "name": "identity_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "first_seen_at": {
+          "name": "first_seen_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "current_observation_id": {
+          "name": "current_observation_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "jobs_source_id": {
+          "name": "jobs_source_id",
+          "columns": [
+            "printer_id",
+            "source_record_id"
+          ],
+          "isUnique": false
+        },
+        "print_jobs_printer_id_source_record_id_identity_hash_unique": {
+          "name": "print_jobs_printer_id_source_record_id_identity_hash_unique",
+          "columns": [
+            "printer_id",
+            "source_record_id",
+            "identity_hash"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "print_jobs_printer_id_printers_id_fk": {
+          "name": "print_jobs_printer_id_printers_id_fk",
+          "tableFrom": "print_jobs",
+          "tableTo": "printers",
+          "columnsFrom": [
+            "printer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "print_jobs_id_current_observation_id_job_observations_job_id_id_fk": {
+          "name": "print_jobs_id_current_observation_id_job_observations_job_id_id_fk",
+          "tableFrom": "print_jobs",
+          "tableTo": "job_observations",
+          "columnsFrom": [
+            "id",
+            "current_observation_id"
+          ],
+          "columnsTo": [
+            "job_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "print_jobs_source_record_id_check": {
+          "name": "print_jobs_source_record_id_check",
+          "value": "source_record_id >= 0"
+        },
+        "print_jobs_identity_json_check": {
+          "name": "print_jobs_identity_json_check",
+          "value": "json_valid(identity_json)"
+        }
+      }
+    },
+    "printer_ink_mappings": {
+      "name": "printer_ink_mappings",
+      "columns": {
+        "printer_id": {
+          "name": "printer_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "channel": {
+          "name": "channel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "effective_from": {
+          "name": "effective_from",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ink_product_id": {
+          "name": "ink_product_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "printer_ink_mappings_printer_id_printers_id_fk": {
+          "name": "printer_ink_mappings_printer_id_printers_id_fk",
+          "tableFrom": "printer_ink_mappings",
+          "tableTo": "printers",
+          "columnsFrom": [
+            "printer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "printer_ink_mappings_ink_product_id_ink_products_id_fk": {
+          "name": "printer_ink_mappings_ink_product_id_ink_products_id_fk",
+          "tableFrom": "printer_ink_mappings",
+          "tableTo": "ink_products",
+          "columnsFrom": [
+            "ink_product_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "printer_ink_mappings_printer_id_channel_effective_from_pk": {
+          "columns": [
+            "printer_id",
+            "channel",
+            "effective_from"
+          ],
+          "name": "printer_ink_mappings_printer_id_channel_effective_from_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "printer_ink_mappings_effective_from_check": {
+          "name": "printer_ink_mappings_effective_from_check",
+          "value": "length(effective_from)=10 AND date(effective_from) IS NOT NULL AND date(effective_from)=effective_from"
+        }
+      }
+    },
+    "printer_ink_readings": {
+      "name": "printer_ink_readings",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "printer_id": {
+          "name": "printer_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "channel": {
+          "name": "channel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "series": {
+          "name": "series",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "level": {
+          "name": "level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "replacement_count": {
+          "name": "replacement_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "first_seen_at": {
+          "name": "first_seen_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "printer_ink_readings_latest_idx": {
+          "name": "printer_ink_readings_latest_idx",
+          "columns": [
+            "printer_id",
+            "channel",
+            "first_seen_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "printer_ink_readings_printer_id_printers_id_fk": {
+          "name": "printer_ink_readings_printer_id_printers_id_fk",
+          "tableFrom": "printer_ink_readings",
+          "tableTo": "printers",
+          "columnsFrom": [
+            "printer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "printer_ink_readings_channel_check": {
+          "name": "printer_ink_readings_channel_check",
+          "value": "length(channel) BETWEEN 1 AND 16 AND channel NOT GLOB '*[^A-Za-z0-9_]*'"
+        },
+        "printer_ink_readings_level_check": {
+          "name": "printer_ink_readings_level_check",
+          "value": "level IS NULL OR level BETWEEN 0 AND 100"
+        },
+        "printer_ink_readings_count_check": {
+          "name": "printer_ink_readings_count_check",
+          "value": "replacement_count IS NULL OR replacement_count >= 0"
+        }
+      }
+    },
+    "printers": {
+      "name": "printers",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "mac": {
+          "name": "mac",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "firmware": {
+          "name": "firmware",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "timezone": {
+          "name": "timezone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_host": {
+          "name": "last_host",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "first_seen_at": {
+          "name": "first_seen_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "media_observed_at": {
+          "name": "media_observed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "identified_at": {
+          "name": "identified_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "printers_mac_unique": {
+          "name": "printers_mac_unique",
+          "columns": [
+            "mac"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "printers_mac_check": {
+          "name": "printers_mac_check",
+          "value": "length(mac)=12 AND mac NOT GLOB '*[^0-9a-f]*'"
+        }
+      }
+    },
+    "settings": {
+      "name": "settings",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "costing_method": {
+          "name": "costing_method",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'oldest'"
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'GBP'"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "settings_id_check": {
+          "name": "settings_id_check",
+          "value": "id = 1"
+        },
+        "settings_costing_method_check": {
+          "name": "settings_costing_method_check",
+          "value": "costing_method IN ('oldest','average','max')"
+        },
+        "settings_currency_check": {
+          "name": "settings_currency_check",
+          "value": "length(currency)=3 AND currency NOT GLOB '*[^A-Z]*'"
+        }
+      }
+    },
+    "stock_write_offs": {
+      "name": "stock_write_offs",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "paper_stock_id": {
+          "name": "paper_stock_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "ink_product_id": {
+          "name": "ink_product_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "printer_id": {
+          "name": "printer_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "written_off_on": {
+          "name": "written_off_on",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "all_remaining": {
+          "name": "all_remaining",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "stock_write_offs_paper_stock_id_paper_stocks_id_fk": {
+          "name": "stock_write_offs_paper_stock_id_paper_stocks_id_fk",
+          "tableFrom": "stock_write_offs",
+          "tableTo": "paper_stocks",
+          "columnsFrom": [
+            "paper_stock_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "stock_write_offs_ink_product_id_ink_products_id_fk": {
+          "name": "stock_write_offs_ink_product_id_ink_products_id_fk",
+          "tableFrom": "stock_write_offs",
+          "tableTo": "ink_products",
+          "columnsFrom": [
+            "ink_product_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "stock_write_offs_printer_id_printers_id_fk": {
+          "name": "stock_write_offs_printer_id_printers_id_fk",
+          "tableFrom": "stock_write_offs",
+          "tableTo": "printers",
+          "columnsFrom": [
+            "printer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "stock_write_offs_printer_check": {
+          "name": "stock_write_offs_printer_check",
+          "value": "printer_id IS NULL OR (ink_product_id IS NOT NULL AND all_remaining=1)"
+        },
+        "stock_write_offs_target_check": {
+          "name": "stock_write_offs_target_check",
+          "value": "(paper_stock_id IS NULL) <> (ink_product_id IS NULL)"
+        },
+        "stock_write_offs_written_off_on_check": {
+          "name": "stock_write_offs_written_off_on_check",
+          "value": "length(written_off_on)=10 AND date(written_off_on) IS NOT NULL AND date(written_off_on)=written_off_on"
+        },
+        "stock_write_offs_all_remaining_check": {
+          "name": "stock_write_offs_all_remaining_check",
+          "value": "all_remaining IN (0,1)"
+        },
+        "stock_write_offs_quantity_check": {
+          "name": "stock_write_offs_quantity_check",
+          "value": "CASE all_remaining WHEN 1 THEN quantity IS NULL ELSE typeof(quantity)='integer' AND quantity > 0 END"
+        },
+        "stock_write_offs_reason_check": {
+          "name": "stock_write_offs_reason_check",
+          "value": "reason IS NULL OR length(trim(reason)) > 0"
+        }
+      }
+    }
+  },
+  "views": {
+    "job_details": {
+      "columns": {
+        "job_id": {
+          "name": "job_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "printer_id": {
+          "name": "printer_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_record_id": {
+          "name": "source_record_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "first_seen_at": {
+          "name": "first_seen_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "job_name": {
+          "name": "job_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "job_owner": {
+          "name": "job_owner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "started_at_raw": {
+          "name": "started_at_raw",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "completed_at_raw": {
+          "name": "completed_at_raw",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "completion_state": {
+          "name": "completion_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "job_type": {
+          "name": "job_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "width_um": {
+          "name": "width_um",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "height_um": {
+          "name": "height_um",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "used_area_mm2": {
+          "name": "used_area_mm2",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "impressions": {
+          "name": "impressions",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "color_pages": {
+          "name": "color_pages",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "monochrome_pages": {
+          "name": "monochrome_pages",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "duplex": {
+          "name": "duplex",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "source_media_id": {
+          "name": "source_media_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "configured_paper_name": {
+          "name": "configured_paper_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "paper_name_at_import": {
+          "name": "paper_name_at_import",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "display_paper_name": {
+          "name": "display_paper_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "hidden": {
+          "name": "hidden",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "custom_paper_name": {
+          "name": "custom_paper_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "stock_override_id": {
+          "name": "stock_override_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "paper_override_id": {
+          "name": "paper_override_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "record_id_collision": {
+          "name": "record_id_collision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "name": "job_details",
+      "isExisting": false,
+      "definition": "SELECT j.id AS job_id, j.printer_id, j.source_record_id,\n       j.first_seen_at, j.last_seen_at,\n       o.job_name, o.job_owner, o.started_at_raw, o.completed_at_raw,\n       o.completion_state, o.job_type, o.width_um, o.height_um, o.used_area_mm2,\n       o.impressions, o.color_pages, o.monochrome_pages, o.duplex,\n       m.source_media_id, r.english_name AS configured_paper_name,\n       o.resolved_media_name AS paper_name_at_import,\n       COALESCE(a.custom_paper_name, r.english_name, r.short_name,\n                o.resolved_media_name) AS display_paper_name,\n       COALESCE(a.hidden, 0) AS hidden, a.custom_paper_name,\n       a.paper_stock_id AS stock_override_id, a.paper_id AS paper_override_id, a.notes,\n       CASE WHEN EXISTS(SELECT 1 FROM print_jobs other\n                        WHERE other.printer_id=j.printer_id\n                          AND other.source_record_id=j.source_record_id\n                          AND other.id<>j.id) THEN 1 ELSE 0 END AS record_id_collision\nFROM print_jobs j\nJOIN job_observations o ON o.id=j.current_observation_id\nLEFT JOIN media_configs m ON m.id=o.media_config_id\nLEFT JOIN media_revisions r ON r.id=m.current_revision_id\nLEFT JOIN job_annotations a ON a.job_id=j.id"
+    }
+  },
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}
