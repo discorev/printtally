@@ -106,6 +106,8 @@ export function allocateInk(input: LedgerInput) {
           if (intermediate) retire(intermediate, day, event.after_record, 'used');
         }
       }
+      // The reading itself proves a cartridge is installed, even before another job prints.
+      if (event.series !== null && !fitted.has(k)) claim(event.printer_id, event.channel, day, event.after_record);
     } else {
       if (current) retire(current, day, event.after_record, event.replaced);
       claim(event.printer_id, event.channel, day, event.after_record, event.ink_purchase_id, event.id);

@@ -33,6 +33,43 @@ test('first reading only covers later records, never infers a swap from its abso
   assert.equal(result.jobs.get(3)!.ink[0].cost_micros, 10 * GBP);
 });
 
+test('a baseline reading with no jobs fits the oldest available unit of the reported series without waste', () => {
+  const input = base();
+  input.cartridges.push({ id: 2, name: 'PFI-3300 C', channel: 'C', capacity_nl: 2 * ml });
+  input.inkPurchases = [
+    { id: 4, ink_product_id: 1, purchased_on: '2026-01-08', cartridges: 1, price_micros: 10 * GBP },
+    { id: 2, ink_product_id: 2, purchased_on: '2026-01-01', cartridges: 1, price_micros: 10 * GBP },
+    { id: 3, ink_product_id: 1, purchased_on: '2026-01-03', cartridges: 1, price_micros: 10 * GBP },
+    { id: 5, ink_product_id: 1, purchased_on: '2026-02-04', cartridges: 1, price_micros: 10 * GBP },
+  ];
+  input.inkEvents = [{ printer_id: 1, channel: 'C', after_record: 7, observed_on: '2026-02-03', series: 'PFI-4100', swaps: 0 }];
+  const result = computeLedger(input);
+  assert.deepEqual(result.units.filter(unit => unit.state === 'fitted').map(unit => [unit.purchase_id, unit.printer_id, unit.starts_after_record]), [[3, 1, 7]]);
+  assert.equal(result.units.filter(unit => unit.state === 'shelf').length, 3);
+  assert.equal(result.units.every(unit => unit.waste_nl === 0), true);
+  assert.equal(result.swapWaste.length, 0);
+});
+
+test('a reading swap retires the old unit and fits the next one without a job', () => {
+  const input = base();
+  input.inkEvents = [
+    { printer_id: 1, channel: 'C', after_record: 1, observed_on: '2026-02-01', series: 'PFI-4100', swaps: 0 },
+    { printer_id: 1, channel: 'C', after_record: 2, observed_on: '2026-02-02', series: 'PFI-4100', swaps: 1 },
+  ];
+  const result = computeLedger(input);
+  assert.deepEqual(result.units.map(unit => [unit.state, unit.printer_id, unit.starts_after_record, unit.ended_after_record]),
+    [['used', null, 1, 2], ['fitted', 1, 2, null], ['shelf', null, null, null]]);
+  assert.deepEqual(result.swapWaste.map(event => event.quantity), [2 * ml]);
+});
+
+test('a reading with no stock of its reported series leaves nothing fitted', () => {
+  const input = base();
+  input.inkEvents = [{ printer_id: 1, channel: 'C', after_record: 1, observed_on: '2026-02-01', series: 'PFI-3300', swaps: 0 }];
+  const result = computeLedger(input);
+  assert.equal(result.units.every(unit => unit.state === 'shelf' && unit.printer_id === null), true);
+  assert.equal(result.swapWaste.length, 0);
+});
+
 test('swap after an import record retires the old unit as waste despite out-of-order printer clock', () => {
   const input = base();
   input.jobs = [job(1, 1, 10, ml, '2026-02-04T12:00:00'), job(2, 1, 11, ml, '2026-02-01T12:00:00')];
@@ -150,7 +187,7 @@ test('a reading swap after the last print is reflected in units and waste', () =
   const result = computeLedger(input);
   assert.equal(result.swapWaste.length, 1);
   assert.equal(result.swapWaste[0].quantity, ml);
-  assert.deepEqual(result.units.map(unit => unit.state), ['used', 'shelf', 'shelf']);
+  assert.deepEqual(result.units.map(unit => unit.state), ['used', 'fitted', 'shelf']);
 });
 
 test('a fitting after the last print executes and claims its specified purchase', () => {
