@@ -5,6 +5,7 @@ export interface InkUnit {
   purchase_id: number; index: number; product_id: number;
   state: 'shelf' | 'fitted' | 'used'; printer_id: number | null; last_printer_id: number | null;
   starts_after_record: number | null; ended_after_record: number | null;
+  ended_by: 'write_off' | 'swap' | 'fitting' | null; written_off_on: string | null; written_off_from_shelf: boolean;
   printed_nl: number; waste_nl: number; remaining_nl: number; fitting_id: number | null;
 }
 interface Unit extends InkUnit { date: string; capacity: number; price: bigint; cartridges: number; channel: string; series: string; poolSeries: string | null }
@@ -25,7 +26,7 @@ export function allocateInk(input: LedgerInput) {
       purchase_id: purchase.id, index: i + 1, product_id: product.id, channel: product.channel,
       date: purchase.purchased_on, capacity: product.capacity_nl, price: BigInt(purchase.price_micros), cartridges: purchase.cartridges,
       series: product.series, poolSeries: null, state: 'shelf', printer_id: null, last_printer_id: null,
-      starts_after_record: null, ended_after_record: null, printed_nl: 0, waste_nl: 0,
+      starts_after_record: null, ended_after_record: null, ended_by: null, written_off_on: null, written_off_from_shelf: false, printed_nl: 0, waste_nl: 0,
       remaining_nl: product.capacity_nl, fitting_id: null,
     }));
   }).sort(order);
@@ -93,33 +94,34 @@ export function allocateInk(input: LedgerInput) {
     const pool = poolForIndex(channel, series);
     return pool ? pool.units.slice(0, bound(pool.units, day, pool.days)) : [];
   };
-  const claim = (printer: number, channel: string, day: string, after: number, purchaseId?: number, fittingId?: number): Unit | undefined => {
+  const claim = (printer: number, channel: string, day: string, after: number, purchaseId?: number, fittingId?: number, unitIndex?: number | null): Unit | undefined => {
     const expected = readings.get(key(printer, channel)) ?? null;
-    const pool = purchaseId === undefined ? poolFor(channel, expected, day) : byPurchase.get(purchaseId) ?? [];
+    const pool = purchaseId === undefined ? poolFor(channel, expected, day)
+      : (byPurchase.get(purchaseId) ?? []).filter(unit => unitIndex == null || unit.index === unitIndex);
     // Part-used cartridges returned to the shelf keep their actual remaining amount.
     const available = pool.find(u => u.state === 'shelf' && u.remaining_nl > 0 && u.date <= day);
     // When no stock is left, the legacy one-printer ledger overdraws its newest purchase.
     // Never claim a unit concurrently fitted in a different printer.
-    const fallback = purchaseId !== undefined ? pool.find(u => u.state !== 'fitted') ?? pool[0]
+    const fallback = purchaseId !== undefined ? (unitIndex == null ? pool.find(u => u.state !== 'fitted') ?? pool[0] : undefined)
       : !readings.has(key(printer, channel)) ? pool.findLast(u => u.state !== 'fitted') : undefined;
     if (!available && fittingId !== undefined) invalidFittings.push(fittingId);
     const unit = available ?? fallback;
     if (!unit) return undefined;
     if (unit.printer_id !== null) fitted.delete(key(unit.printer_id, channel));
     unit.state = 'fitted'; unit.printer_id = printer; unit.last_printer_id = printer; unit.starts_after_record = after;
-    unit.ended_after_record = null; unit.fitting_id = fittingId ?? null;
+    unit.ended_after_record = null; unit.ended_by = null; unit.written_off_on = null; unit.written_off_from_shelf = false; unit.fitting_id = fittingId ?? null;
     unit.poolSeries = purchaseId !== undefined && expected !== null && expected !== unit.series ? unit.series : expected;
     fitted.set(key(printer, channel), unit);
     return unit;
   };
-  const retire = (unit: Unit, day: string, after: number, destination: 'shelf' | 'used'): void => {
+  const retire = (unit: Unit, day: string, after: number, destination: 'shelf' | 'used', cause: 'swap' | 'fitting' = 'swap'): void => {
     if (destination === 'used' && unit.remaining_nl > 0) {
       const remaining = unit.remaining_nl;
       unit.waste_nl += remaining; unit.remaining_nl = 0;
       swapWaste.push({ date: day, cost_micros: price(unit, remaining, day), product_id: unit.product_id, quantity: remaining });
     }
     unit.state = destination === 'shelf' && unit.remaining_nl > 0 ? 'shelf' : 'used';
-    unit.ended_after_record = after;
+    unit.ended_after_record = after; unit.ended_by = cause; unit.written_off_on = null; unit.written_off_from_shelf = false;
     if (unit.printer_id !== null) fitted.delete(key(unit.printer_id, unit.channel));
     unit.printer_id = null;
   };
@@ -148,8 +150,8 @@ export function allocateInk(input: LedgerInput) {
       // The reading itself proves a cartridge is installed, even before another job prints.
       if (event.series !== null && !fitted.has(k)) claim(event.printer_id, event.channel, day, event.after_record);
     } else {
-      if (current) retire(current, day, event.after_record, event.replaced);
-      claim(event.printer_id, event.channel, day, event.after_record, event.ink_purchase_id, event.id);
+      if (current) retire(current, day, event.after_record, event.replaced, 'fitting');
+      claim(event.printer_id, event.channel, day, event.after_record, event.ink_purchase_id, event.id, event.unit_index);
     }
   };
   // Prints advance by source record, while a pending observation/fitting also takes effect
@@ -215,6 +217,7 @@ export function allocateInk(input: LedgerInput) {
         if (unit) {
           unit.waste_nl += quantity; unit.remaining_nl -= quantity;
           if (unit.printer_id !== null) fitted.delete(key(unit.printer_id, unit.channel));
+          unit.ended_by = 'write_off'; unit.written_off_on = off.written_off_on; unit.written_off_from_shelf = unit.state === 'shelf';
           unit.ended_after_record = unit.printer_id === null ? null : (processedRecords.get(unit.printer_id) ?? 0);
           unit.printer_id = null; unit.state = 'used';
         }
@@ -231,7 +234,9 @@ export function allocateInk(input: LedgerInput) {
           if (need <= 0) break;
           const amount = unit === own.at(-1) ? need : Math.min(need, unit.remaining_nl);
           unit.remaining_nl -= amount; unit.waste_nl += amount;
-          if (unit.remaining_nl <= 0 && unit.state === 'shelf') unit.state = 'used';
+          if (unit.remaining_nl <= 0 && unit.state === 'shelf') {
+            unit.ended_by = 'write_off'; unit.written_off_on = off.written_off_on; unit.written_off_from_shelf = true; unit.state = 'used';
+          }
           uses.push({ unit, quantity: amount });
           need -= amount;
         }

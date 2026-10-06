@@ -51,7 +51,7 @@ export function CartridgeFittingForm({ cartridge, unit, printers, selectedPrinte
   const selectedFrom = from !== 'next' && printerId === unit.printer_id && Number(from) === recent.data?.highest_source_record_id ? 'next' : from;
   const starts = choices.map(job => job.source_record_id - 1);
   const existing = selectedFrom !== 'next' && !starts.includes(Number(selectedFrom));
-  const input = () => ({ printer_id: printerId!, channel: cartridge.channel, ink_purchase_id: unit.purchase_id,
+  const input = () => ({ printer_id: printerId!, channel: cartridge.channel, ink_purchase_id: unit.purchase_id, unit_index: unit.index,
     after_record: selectedFrom === 'next' ? recent.data!.highest_source_record_id : Number(selectedFrom), replaced });
   // A returned shelf unit may still carry its earlier correction: fitting it again creates a new event.
   const correction = unit.state !== 'shelf' ? unit.fitting_id : null;

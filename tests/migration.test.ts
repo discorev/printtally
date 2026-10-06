@@ -48,7 +48,7 @@ test('the ledger migration keeps every job, observation, ink reading and annotat
     firstRelease(path);
     const db = new AccountingDatabase(path);
     try {
-      assert.equal(db.all('SELECT * FROM __drizzle_migrations').length, 4);
+      assert.equal(db.all('SELECT * FROM __drizzle_migrations').length, 5);
       assert.deepEqual([db.summary().print_jobs, db.summary().job_observations, db.summary().job_ink_usage], [76, 76, 76 * 12]);
       assert.deepEqual(db.all('SELECT job_id,custom_paper_name,paper_stock_id,paper_id,hidden,notes FROM job_annotations ORDER BY job_id'), [
         { job_id: 3, custom_paper_name: 'Test pack', paper_stock_id: null, paper_id: null, hidden: 0, notes: 'Edition 1/10' },
@@ -99,6 +99,37 @@ test('cartridge migration preserves existing paper and ink write-offs and backfi
       assert.equal(db.get('SELECT identified_at FROM printers WHERE id=1')!.identified_at, db.get('SELECT last_seen_at FROM printers WHERE id=1')!.last_seen_at);
       assert.deepEqual(db.all('PRAGMA foreign_key_check'), []);
       assert.deepEqual(db.get('PRAGMA integrity_check'), { integrity_check: 'ok' });
+    } finally { db.close(); }
+  } finally { rmSync(dir, { recursive: true }); }
+});
+
+test('0004 adds nullable unit identity while preserving existing purchase-only fittings', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'printtally-migrate-fitting-')), path = join(dir, 'accounting.sqlite3');
+  try {
+    firstRelease(path);
+    const folder = fileURLToPath(new URL('../packages/database/drizzle/', import.meta.url));
+    const entries = (JSON.parse(readFileSync(folder + 'meta/_journal.json', 'utf8')) as { entries: { tag: string; when: number }[] }).entries;
+    const raw = new Database(path);
+    try {
+      for (const entry of entries.slice(1, 4)) {
+        const query = readFileSync(folder + entry.tag + '.sql', 'utf8');
+        raw.transaction(() => {
+          for (const statement of query.split('--> statement-breakpoint')) raw.exec(statement);
+          raw.query('INSERT INTO __drizzle_migrations(hash,created_at) VALUES(?,?)').run(createHash('sha256').update(query).digest('hex'), entry.when);
+        })();
+      }
+      raw.exec(`INSERT INTO ink_products(id,name,channel,capacity_nl) VALUES(1,'PFI-4100 C','C',80000000);
+        INSERT INTO ink_purchases(id,ink_product_id,purchased_on,cartridges,price_micros) VALUES(1,1,'2026-01-01',2,20000000);
+        INSERT INTO ink_fittings(id,printer_id,channel,ink_purchase_id,after_record,replaced,created_at)
+          VALUES(1,1,'C',1,76,'shelf','2026-10-01T12:00:00Z');`);
+    } finally { raw.close(); }
+    const db = new AccountingDatabase(path);
+    try {
+      assert.equal(db.all('SELECT * FROM __drizzle_migrations').length, 5);
+      assert.deepEqual(db.get('SELECT id,ink_purchase_id,unit_index FROM ink_fittings WHERE id=1'),
+        { id: 1, ink_purchase_id: 1, unit_index: null });
+      assert.deepEqual(db.all('PRAGMA foreign_key_check'), []);
+      assert.equal(db.get('PRAGMA integrity_check')!.integrity_check, 'ok');
     } finally { db.close(); }
   } finally { rmSync(dir, { recursive: true }); }
 });

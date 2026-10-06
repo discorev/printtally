@@ -14,7 +14,7 @@ export interface LedgerInput {
   paperPurchases: { id: number; paper_stock_id: number; purchased_on: string; quantity: number; unit: number; price_micros: number }[];
   cartridges: { id: number; name: string; channel: string; capacity_nl: number }[];
   inkEvents?: { printer_id: number; channel: string; after_record: number; upper_record?: number; observed_on?: string; series: string | null; swaps: number }[];
-  inkFittings?: { id: number; printer_id: number; channel: string; ink_purchase_id: number; after_record: number; created_on?: string; replaced: 'shelf' | 'used' }[];
+  inkFittings?: { id: number; printer_id: number; channel: string; ink_purchase_id: number; unit_index?: number | null; after_record: number; created_on?: string; replaced: 'shelf' | 'used' }[];
   inkPurchases: { id: number; ink_product_id: number; purchased_on: string; cartridges: number; price_micros: number }[];
   writeOffs: { id: number; paper_stock_id: number | null; ink_product_id: number | null; printer_id: number | null; written_off_on: string; quantity: number | null; all_remaining: boolean }[];
 }

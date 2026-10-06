@@ -168,16 +168,17 @@ export class Ledger {
     });
   }
 
-  private checkFittingReferences(row: { printer_id: number; channel: string; ink_purchase_id: number }): void {
+  private checkFittingReferences(row: { printer_id: number; channel: string; ink_purchase_id: number; unit_index?: number | null }): void {
     if (!this.db.orm.select({ id: printers.id }).from(printers).where(eq(printers.id, row.printer_id)).get())
       throw new LedgerError(400, 'printer_not_found');
-    const purchase = this.db.orm.select({ product: ink_purchases.ink_product_id, channel: ink_products.channel }).from(ink_purchases)
+    const purchase = this.db.orm.select({ product: ink_purchases.ink_product_id, cartridges: ink_purchases.cartridges, channel: ink_products.channel }).from(ink_purchases)
       .innerJoin(ink_products, eq(ink_products.id, ink_purchases.ink_product_id))
       .where(eq(ink_purchases.id, row.ink_purchase_id)).get();
     if (!purchase) throw new LedgerError(400, 'purchase_not_found');
     if (purchase.channel !== row.channel) throw new LedgerError(400, 'channel_mismatch');
+    if (row.unit_index != null && row.unit_index > purchase.cartridges) throw new LedgerError(400, 'fitting_conflict');
   }
-  private checkFitting(row: { id: number; printer_id: number; channel: string; ink_purchase_id: number; after_record: number; created_at: string; replaced: 'shelf' | 'used' }): void {
+  private checkFitting(row: { id: number; printer_id: number; channel: string; ink_purchase_id: number; unit_index?: number | null; after_record: number; created_at: string; replaced: 'shelf' | 'used' }): void {
     this.checkFittingReferences(row);
     const { input } = this.load();
     const result = computeLedger({ ...input, inkFittings: [...input.inkFittings!.filter(item => item.id !== row.id), { ...row, created_on: row.created_at.slice(0, 10) }] });
@@ -453,6 +454,7 @@ export class Ledger {
           replaced: input.inkFittings?.find(fitting => fitting.id === unit.fitting_id)?.replaced ?? null };
       }), purchases: bought, write_offs: wasted,
         open_purchase_id: open && (open.remaining_nl > 0 || readingChannels.has(cartridge.channel)) ? open.purchase_id : null,
+        open_unit_index: open && (open.remaining_nl > 0 || readingChannels.has(cartridge.channel)) ? open.index : null,
         open_remaining_nl: open && (open.remaining_nl > 0 || readingChannels.has(cartridge.channel)) ? Math.max(0, open.remaining_nl) : null,
         spares: own.filter(unit => unit.state === 'shelf' && unit !== open && unit.remaining_nl > 0).length, jobs: printed.length,
         bought: bought.reduce((sum, p) => sum + p.cartridges * cartridge.capacity_nl, 0),

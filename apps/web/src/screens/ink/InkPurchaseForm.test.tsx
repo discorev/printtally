@@ -6,7 +6,7 @@ import { renderApp } from '../../../test/render.tsx';
 import { today } from '../../lib/format.ts';
 
 const cartridge = (id: number, name: string, channel: string, capacity_nl: number): CartridgeView => ({
-  id, name, channel, capacity_nl, product_code: null, open_remaining_nl: null, open_purchase_id: null,
+  id, name, channel, capacity_nl, product_code: null, open_remaining_nl: null, open_purchase_id: null, open_unit_index: null,
   spares: 0, bought: 0, used: 0, wasted: 0, remaining: 0, used_micros: 0, waste_micros: 0, jobs: 0, purchases: [], write_offs: [], units: [],
 });
 const ink: InkResponse = { fitted: {}, channels: ['PM', 'C', 'MBK'], cartridges: [cartridge(1, 'PFI-3300 C', 'C', 330_000_000)], settings: settings(), totals: totals() };

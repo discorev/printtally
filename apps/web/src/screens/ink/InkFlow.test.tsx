@@ -12,7 +12,7 @@ const purchase = (overrides: Partial<InkPurchaseView> = {}): InkPurchaseView => 
 });
 const cartridge = (overrides: Partial<CartridgeView> = {}): CartridgeView => ({
   id: 1, name: 'PFI-4100 C', channel: 'C', capacity_nl: 80_000_000, product_code: null,
-  open_remaining_nl: 60_000_000, open_purchase_id: 21, spares: 1,
+  open_remaining_nl: 60_000_000, open_purchase_id: 21, open_unit_index: null, spares: 1,
   bought: 160_000_000, used: 20_000_000, wasted: 0, remaining: 140_000_000,
   used_micros: 9_000_000, waste_micros: 0, jobs: 3,
   purchases: [purchase()], write_offs: [], units: [], ...overrides,
@@ -72,7 +72,7 @@ test('an unfitted reading-mode channel still offers a measured write-off, while 
     quantity: null, all_remaining: true, reason: 'Changed early', written_off: 60_000_000, cost_micros: 27_000_000,
   };
   const api = fakeApi(routes(ink({ fitted: {}, cartridges: [cartridge({
-    open_remaining_nl: null, open_purchase_id: null, spares: 1, wasted: 60_000_000, remaining: 80_000_000,
+    open_remaining_nl: null, open_purchase_id: null, open_unit_index: null, spares: 1, wasted: 60_000_000, remaining: 80_000_000,
     waste_micros: 27_000_000, purchases: [purchase({ remaining_nl: 80_000_000 })], write_offs: [writeOff],
   })] })));
   const { screen } = await renderApp('/ink/C', api);
@@ -271,7 +271,7 @@ test('reading mode uses the first observation even when the latest reading is in
 });
 
 for (const [label, product, fitted] of [
-  ['shelf preview after write-off', cartridge({ open_remaining_nl: 80_000_000, open_purchase_id: 22,
+  ['shelf preview after write-off', cartridge({ open_remaining_nl: 80_000_000, open_purchase_id: 22, open_unit_index: null,
     purchases: [purchase({ id: 22, purchased_on: '2026-09-02' }), purchase()] }), {}],
   ['exhausted fitted unit', cartridge({ open_remaining_nl: null, open_purchase_id: null }),
     { C: { product_id: 1, purchase_id: 21, index: 1, remaining_nl: 0 } }],

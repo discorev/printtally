@@ -21,9 +21,14 @@ function UnitLine({ unit, cartridge, printers, selectedPrinterId, fittedPurchase
     });
   };
   const printer = printers.find(item => item.id === unit.printer_id)?.name ?? 'the printer';
-  const place = unit.state === 'shelf' ? <>On the shelf{unit.remaining_nl > 0 && unit.remaining_nl < cartridge.capacity_nl && <> · ~{ml(unit.remaining_nl, 1)} left</>}</>
+  const preview = unit.state === 'shelf' && selectedPrinterId != null && !fittedPurchaseId
+    && cartridge.open_purchase_id === unit.purchase_id && cartridge.open_unit_index === unit.index;
+  const nextPrinter = printers.find(item => item.id === selectedPrinterId)?.name ?? 'the printer';
+  const place = unit.state === 'shelf' ? <>On the shelf{unit.remaining_nl > 0 && unit.remaining_nl < cartridge.capacity_nl && <> · ~{ml(unit.remaining_nl, 1)} left</>}{preview && <> · next in {nextPrinter}</>}</>
     : unit.state === 'fitted' ? <>In {printer} {unit.started_on ? `since ${day(unit.started_on)}` : 'from the next print'}{unit.printed_nl > 0 && <> · {ml(unit.printed_nl, 1)} printed</>}</>
-    : <>Used up{unit.printer_id && ` in ${printer}`}{unit.started_on && <> · {unit.ended_on ? <>{day(unit.started_on)} – {day(unit.ended_on)}</> : `since ${day(unit.started_on)}`}</>}{unit.printed_nl > 0 && <> · {ml(unit.printed_nl, 1)} printed</>}{unit.waste_nl > 0 && <>{unit.printed_nl > 0 ? ', ' : ' · '}{ml(unit.waste_nl, 1)} waste</>}</>;
+    : unit.ended_by === 'write_off' && unit.written_off_from_shelf
+      ? <>Written off · {unit.written_off_on && day(unit.written_off_on)}</>
+      : <>Used up{unit.printer_id && ` in ${printer}`}{unit.started_on && <> · {unit.ended_on ? <>{day(unit.started_on)} – {day(unit.ended_on)}</> : `since ${day(unit.started_on)}`}</>}{unit.printed_nl > 0 && <> · {ml(unit.printed_nl, 1)} printed</>}{unit.waste_nl > 0 && <>{unit.printed_nl > 0 ? ', ' : ' · '}{ml(unit.waste_nl, 1)} waste</>}</>;
   return <div ref={row} tabIndex={-1} className="border-t border-rule py-1.5 first:border-t-0">
     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-2 text-[12.5px] leading-[19px]">
       <span className="min-w-0"><span className="text-ink">{place}</span>{unit.fitting_id && <> <span className="ml-1 text-[11px] whitespace-nowrap text-muted">set by you</span></>}</span>

@@ -35,7 +35,7 @@ test('Ink selects an archived printer, displays its cartridge type, and marks th
 
 test('a mismatched printer series hides the pooled estimate and fill but retains its level tick', async () => {
   const product: CartridgeView = { id: 10, name: 'PFI-4100 C', channel: 'C', capacity_nl: 80_000_000, product_code: null,
-    open_remaining_nl: 60_000_000, open_purchase_id: null, spares: 2, bought: 160_000_000, used: 20_000_000,
+    open_remaining_nl: 60_000_000, open_purchase_id: null, open_unit_index: null, spares: 2, bought: 160_000_000, used: 20_000_000,
     wasted: 0, remaining: 140_000_000, used_micros: 0, waste_micros: 0, jobs: 1, purchases: [], write_offs: [], units: [] };
   const service = fakeApi({ 'GET /printers': { printers: [...printers, archivedPrinter({ id: 3, name: 'No reading' })] },
     ...Object.fromEntries([1, 2, 3].map(id => [`GET /ink?printer=${id}`, { channels: ['C'], cartridges: [{ ...product, open_remaining_nl: id === 2 ? null : product.open_remaining_nl }], settings: settings(), totals: totals() }])), 'GET /settings': settings() });
@@ -57,7 +57,7 @@ test('a mismatched printer series hides the pooled estimate and fill but retains
 
 test('the reported product supplies the estimate, and spares depend on the selected printer model', async () => {
   const pfi4100: CartridgeView = { id: 10, name: 'PFI-4100 C', channel: 'C', capacity_nl: 80_000_000, product_code: null,
-    open_remaining_nl: 60_000_000, open_purchase_id: null, spares: 2, bought: 160_000_000, used: 20_000_000,
+    open_remaining_nl: 60_000_000, open_purchase_id: null, open_unit_index: null, spares: 2, bought: 160_000_000, used: 20_000_000,
     wasted: 0, remaining: 140_000_000, used_micros: 0, waste_micros: 0, jobs: 1, purchases: [], write_offs: [], units: [] };
   const pfi3300: CartridgeView = { ...pfi4100, id: 11, name: 'PFI-3300 C', capacity_nl: 330_000_000,
     open_remaining_nl: 200_000_000, spares: 3 };
@@ -97,7 +97,7 @@ test('a single printer hides the printer dropdown', async () => {
 
 test('a fitted unit takes precedence over a stale reported series in the selected printer', async () => {
   const product: CartridgeView = { id: 10, name: 'PFI-4100 C', channel: 'C', capacity_nl: 80_000_000, product_code: null,
-    open_remaining_nl: 60_000_000, open_purchase_id: 21, spares: 0, bought: 80_000_000, used: 20_000_000,
+    open_remaining_nl: 60_000_000, open_purchase_id: 21, open_unit_index: null, spares: 0, bought: 80_000_000, used: 20_000_000,
     wasted: 0, remaining: 60_000_000, used_micros: 0, waste_micros: 0, jobs: 1,
     purchases: [{ id: 21, ink_product_id: 10, purchased_on: '2026-01-01', cartridges: 1, price_micros: 20_000_000, remaining_nl: 60_000_000 }],
     write_offs: [], units: [] };

@@ -75,8 +75,8 @@ export type StockInput = z.infer<typeof stockSchema>;
 export type PaperPurchaseInput = z.infer<typeof paperPurchaseSchema>;
 export type CartridgeInput = z.infer<typeof cartridgeSchema>;
 export type InkPurchaseInput = z.infer<typeof inkPurchaseSchema>;
-export const inkFittingSchema = z.object({ printer_id: id, channel, ink_purchase_id: id, after_record: z.number().int().min(-1).max(Number.MAX_SAFE_INTEGER), replaced: z.enum(['shelf', 'used']) }).strict();
-export const inkFittingPatchSchema = someFields({ printer_id: id, channel, ink_purchase_id: id, after_record: z.number().int().min(-1).max(Number.MAX_SAFE_INTEGER), replaced: z.enum(['shelf', 'used']) });
+export const inkFittingSchema = z.object({ printer_id: id, channel, ink_purchase_id: id, unit_index: id.nullable().optional(), after_record: z.number().int().min(-1).max(Number.MAX_SAFE_INTEGER), replaced: z.enum(['shelf', 'used']) }).strict();
+export const inkFittingPatchSchema = someFields({ printer_id: id, channel, ink_purchase_id: id, unit_index: id.nullable(), after_record: z.number().int().min(-1).max(Number.MAX_SAFE_INTEGER), replaced: z.enum(['shelf', 'used']) });
 export type InkFittingInput = z.infer<typeof inkFittingSchema>;
 export type WriteOffInput = z.infer<typeof writeOffSchema>;
 export type PaperPurchaseSetup = z.infer<typeof paperPurchaseSetupSchema>;
@@ -154,10 +154,11 @@ export interface CartridgeView extends Usage {
   id: number; name: string; channel: string; capacity_nl: number; product_code: string | null;
   open_remaining_nl: number | null; // What the ledger thinks is left in the cartridge in use.
   open_purchase_id: number | null; // The purchase that cartridge came from.
+  open_unit_index: number | null; // Its exact unit in the selected printer's preview.
   spares: number; // Whole cartridges left on the shelf, besides the one in use.
   jobs: number; // Prints that drew ink from this cartridge (hidden ones too: they use ink like any other).
   purchases: InkPurchaseView[]; write_offs: WriteOffView[];
-  units: { purchase_id: number; index: number; state: 'shelf' | 'fitted' | 'used'; printer_id: number | null; starts_after_record: number | null; ended_after_record: number | null; started_on: string | null; ended_on: string | null; printed_nl: number; waste_nl: number; remaining_nl: number; fitting_id: number | null; replaced: 'shelf' | 'used' | null }[];
+  units: { purchase_id: number; index: number; state: 'shelf' | 'fitted' | 'used'; printer_id: number | null; starts_after_record: number | null; ended_after_record: number | null; started_on: string | null; ended_on: string | null; ended_by: 'write_off' | 'swap' | 'fitting' | null; written_off_on: string | null; written_off_from_shelf: boolean; printed_nl: number; waste_nl: number; remaining_nl: number; fitting_id: number | null; replaced: 'shelf' | 'used' | null }[];
 }
 export interface RecentPrinterJobsResponse {
   jobs: { job_id: number; source_record_id: number; date: string; time: string; label: string }[];

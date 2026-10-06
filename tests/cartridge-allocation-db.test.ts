@@ -69,6 +69,8 @@ test('fitting routes validate references, channel and available units, then supp
   assert.deepEqual(await put('POST', '/ink-fittings', { ...fitting, printer_id: 999 }), { status: 400, body: { error: 'printer_not_found' } });
   assert.deepEqual(await put('POST', '/ink-fittings', { ...fitting, ink_purchase_id: 999 }), { status: 400, body: { error: 'purchase_not_found' } });
   assert.deepEqual(await put('POST', '/ink-fittings', { ...fitting, ink_purchase_id: wrong }), { status: 400, body: { error: 'channel_mismatch' } });
+  assert.deepEqual(await put('POST', '/ink-fittings', { ...fitting, unit_index: 3 }),
+    { status: 400, body: { error: 'fitting_conflict' } }, 'the index must exist in the purchase');
   assert.equal(db.all('SELECT id FROM ink_fittings').length, 0, 'invalid creations roll back');
   const made = await put('POST', '/ink-fittings', fitting);
   assert.equal(made.status, 201);
@@ -192,6 +194,7 @@ test('exhausted capacity mode shows the next shelf unit or None', t => {
   let view = ledger.ink(1).cartridges[0];
   assert.equal(view.open_remaining_nl, null);
   assert.equal(view.open_purchase_id, null);
+  assert.equal(view.open_unit_index, null);
   const product = ledger.createCartridge({ name: 'PFI-3300 C', channel: 'C', capacity_nl: ml });
   const spare = ledger.createInkPurchase({ ink_product_id: product, purchased_on: '2026-02-03', cartridges: 1, price_micros: 10 * GBP });
   const cartridges = ledger.ink(1).cartridges;
@@ -199,6 +202,7 @@ test('exhausted capacity mode shows the next shelf unit or None', t => {
   view = cartridges.find(item => item.id === product)!;
   assert.equal(view.open_remaining_nl, ml);
   assert.equal(view.open_purchase_id, spare);
+  assert.equal(view.open_unit_index, 1);
   assert.equal(view.spares, 0, 'the displayed open unit is not also a spare');
 });
 
@@ -253,9 +257,10 @@ test('capacity-mode /ink previews the next shelf unit after a write-off without 
   const off = ledger.createWriteOff({ printer_id: 1, ink_product_id: product, written_off_on: '2026-02-02', all_remaining: true });
   const response = await request('/api/v1/ink?printer=1');
   assert.equal(response.status, 200);
-  const view = response.json<{ cartridges: { open_purchase_id: number | null; open_remaining_nl: number | null;
+  const view = response.json<{ cartridges: { open_purchase_id: number | null; open_unit_index: number | null; open_remaining_nl: number | null;
     units: { purchase_id: number; index: number; state: string }[] }[] }>().cartridges[0];
   assert.deepEqual([view.open_purchase_id, view.open_remaining_nl], [first, 2 * ml]);
+  assert.equal(view.open_unit_index, 2, 'preview identifies the precise shelf unit');
   assert.equal(view.units.find(unit => unit.purchase_id === first && unit.index === 2)!.state, 'shelf');
   ledger.createInkFitting({ printer_id: 1, channel: 'C', ink_purchase_id: replacement, after_record: 1, replaced: 'used' });
   const after = ledger.ink(1).cartridges[0];
@@ -356,4 +361,28 @@ test('a moved unit written off in its new printer uses only that printer’s bou
   assert.ok(moved.waste_nl > 0, 'the write-off consumed ink moved between printers');
   assert.deepEqual([moved.state, moved.printer_id, moved.starts_after_record, moved.ended_after_record, moved.started_on, moved.ended_on],
     ['used', 2, 0, 1, '2026-02-03', '2026-02-03']);
+});
+
+
+test('fitting API pins a unit and rejects create/update conflicts without changing other units', async t => {
+  const { db, request } = await apiFixture(t);
+  const first = snapshot(['2026-02-01'], '2026-02-01T12:00:00Z', 0);
+  first.inks = undefined;
+  const second = structuredClone(first); second.printer.mac = '020000000002'; second.printer.host = '192.0.2.11';
+  db.importSnapshot(first); db.importSnapshot(second);
+  const ledger = new Ledger(db), { purchase } = stock(ledger, 'PFI-4100', 3);
+  const body = { printer_id: 1, channel: 'C', ink_purchase_id: purchase, unit_index: 3,
+    after_record: 1, replaced: 'shelf' };
+  const made = await request('/api/v1/ink-fittings', { method: 'POST', body });
+  assert.equal(made.status, 201);
+  const id = made.json<{ id: number }>().id;
+  assert.deepEqual([db.get('SELECT unit_index FROM ink_fittings WHERE id=?', id)!.unit_index,
+    ledger.ink(1).fitted.C.index, ledger.ink(2).fitted.C.index], [3, 3, 2]);
+  const create = await request('/api/v1/ink-fittings', { method: 'POST', body: { ...body, printer_id: 2, unit_index: 3 } });
+  assert.deepEqual([create.status, create.json()], [400, { error: 'fitting_conflict' }]);
+  const update = await request(`/api/v1/ink-fittings/${id}`, { method: 'PATCH', body: { unit_index: 2 } });
+  assert.deepEqual([update.status, update.json()], [400, { error: 'fitting_conflict' }]);
+  assert.equal(db.get('SELECT unit_index FROM ink_fittings WHERE id=?', id)!.unit_index, 3);
+  assert.equal((await request(`/api/v1/ink-fittings/${id}`, { method: 'PATCH', body: { unit_index: null } })).status, 200);
+  assert.equal(db.get('SELECT unit_index FROM ink_fittings WHERE id=?', id)!.unit_index, null);
 });
