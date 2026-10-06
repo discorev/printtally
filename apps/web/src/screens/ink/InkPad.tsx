@@ -1,9 +1,9 @@
 import type { ArchivedPrinter, CostTotals, Settings } from 'print-accounting-contracts';
-import { cartridgeSize, cartridgeTypes } from 'print-accounting-core/printer-models';
+import { cartridgeSize } from 'print-accounting-core/printer-models';
 import { ButtonLink, Empty, InkSwatch, LevelBar, ListRow, Loading, Money, Pad, PadBody, PadHead, Select } from '../../components/index.ts';
 import { useCanEdit } from '../../connection/index.ts';
 import { count, ml, mlValue, plural } from '../../lib/format.ts';
-import { productName, type InkChannelView } from './channels.ts';
+import { productName, spareCount, type InkChannelView } from './channels.ts';
 import { useSelectedInkPrinter } from './useSelectedInkPrinter.ts';
 
 // The cartridges (vInk): one row per channel with its level, spares and the cost of its ink in prints. The head's
@@ -39,9 +39,7 @@ function InkRow({ channel, printer, selected }: { channel: InkChannelView; print
   // The server's fitted product is specific to the selected printer; the reading is only a level/type hint.
   const product = channel.fitted ? channel.product : reading?.series ? matchingProduct : channel.product;
   const left = Math.max(0, product?.open_remaining_nl ?? 0), fitted = product?.open_remaining_nl != null;
-  const compatible = cartridgeTypes(printer?.model, code).map(type => type.series);
-  const spares = reading ? channel.cartridges.filter(item => compatible.length
-    ? compatible.includes(productName(item)) : productName(item) === reading.series).reduce((total, item) => total + item.spares, 0) : channel.spares;
+  const spares = spareCount(channel, printer);
   const shownSeries = fitted && product ? productName(product) : reading?.series;
   const size = fitted && product ? product.capacity_nl / 1e6 : reading?.series ? cartridgeSize(reading.series)
     ?? ((matchingProduct?.capacity_nl ?? 0) / 1e6) : null;

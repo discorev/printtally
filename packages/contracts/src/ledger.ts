@@ -157,7 +157,11 @@ export interface CartridgeView extends Usage {
   spares: number; // Whole cartridges left on the shelf, besides the one in use.
   jobs: number; // Prints that drew ink from this cartridge (hidden ones too: they use ink like any other).
   purchases: InkPurchaseView[]; write_offs: WriteOffView[];
-  units: { purchase_id: number; index: number; state: 'shelf' | 'fitted' | 'used'; printer_id: number | null; starts_after_record: number | null; ended_after_record: number | null; printed_nl: number; waste_nl: number; remaining_nl: number; fitting_id: number | null }[];
+  units: { purchase_id: number; index: number; state: 'shelf' | 'fitted' | 'used'; printer_id: number | null; starts_after_record: number | null; ended_after_record: number | null; started_on: string | null; ended_on: string | null; printed_nl: number; waste_nl: number; remaining_nl: number; fitting_id: number | null; replaced: 'shelf' | 'used' | null }[];
+}
+export interface RecentPrinterJobsResponse {
+  jobs: { job_id: number; source_record_id: number; date: string; time: string; label: string }[];
+  highest_source_record_id: number; // -1 when the printer has no jobs yet.
 }
 /** totals: visible prints' ink as Jobs and Totals count it (unknown_jobs: prints with an ink cost unknown) and ink written off; paper figures are 0. */
 export interface InkResponse { cartridges: CartridgeView[]; channels: string[]; settings: Settings; totals: CostTotals; fitted: Record<string, { product_id: number; purchase_id: number; index: number; remaining_nl: number }> }

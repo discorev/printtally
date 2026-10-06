@@ -18,7 +18,7 @@ const cartridge = (overrides: Partial<CartridgeView> = {}): CartridgeView => ({
   purchases: [purchase()], write_offs: [], units: [], ...overrides,
 });
 const ink = (overrides: Partial<InkResponse> = {}): InkResponse => ({
-  channels: ['C'], cartridges: [cartridge()], fitted: {}, settings: settings(),
+  channels: ['C'], cartridges: [cartridge()], fitted: { C: { product_id: 1, purchase_id: 21, index: 1, remaining_nl: 60_000_000 } }, settings: settings(),
   totals: totals({ jobs: 3, ink_micros: 9_000_000 }), ...overrides,
 });
 const preview = (overrides: Partial<WriteOffPreview> = {}): WriteOffPreview => ({
@@ -71,7 +71,7 @@ test('an unfitted reading-mode channel still offers a measured write-off, while 
     id: 31, paper_stock_id: null, ink_product_id: 1, printer_id: null, written_off_on: '2026-09-02',
     quantity: null, all_remaining: true, reason: 'Changed early', written_off: 60_000_000, cost_micros: 27_000_000,
   };
-  const api = fakeApi(routes(ink({ cartridges: [cartridge({
+  const api = fakeApi(routes(ink({ fitted: {}, cartridges: [cartridge({
     open_remaining_nl: null, open_purchase_id: null, spares: 1, wasted: 60_000_000, remaining: 80_000_000,
     waste_micros: 27_000_000, purchases: [purchase({ remaining_nl: 80_000_000 })], write_offs: [writeOff],
   })] })));

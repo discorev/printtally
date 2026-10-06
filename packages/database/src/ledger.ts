@@ -5,10 +5,11 @@ import {
   paperPurchasePatchSchema, paperPurchaseSchema, paperPurchaseSetupSchema, paperSchema, settingsSchema, stockPatchSchema, stockSchema,
   writeOffPatchSchema, writeOffSchema,
   type AllocationPreview, type CartridgeView, type CostTotals, type InkPurchaseSetupResult, type InkResponse, type InkSetPurchaseResult, type JobDetails, type JobsResponse, type LedgerJob,
-  type MediaTypesResponse, type PaperPurchaseSetupResult, type PapersResponse, type Settings, type StockFormat, type TotalsResponse,
+  type MediaTypesResponse, type RecentPrinterJobsResponse, type PaperPurchaseSetupResult, type PapersResponse, type Settings, type StockFormat, type TotalsResponse,
   type WriteOffPreview, type WriteOffView,
 } from 'print-accounting-contracts';
 import { computeLedger, splitByWeight, now, type LedgerInput, type LedgerResult } from 'print-accounting-core';
+import { sizeName } from 'print-accounting-core/sizes';
 import type { AccountingDatabase } from './index.ts';
 import { KnownPrinters } from './known-printers.ts';
 import { ink_fittings, printer_ink_readings, import_runs, printers, ink_products, ink_purchases, paper_media_types, paper_purchases, paper_stocks, papers, settings, stock_write_offs } from './schema.ts';
@@ -330,6 +331,21 @@ export class Ledger {
         job.paper_name_at_import, job.paper.paper_name, job.paper.stock_name, job.notes].some(text => text?.toLowerCase().includes(q))));
     return { jobs: matches.slice(offset, offset + limit), total: matches.length, limit, offset, settings };
   }
+  recentPrinterJobs(printerId: number, limit = 20): RecentPrinterJobsResponse {
+    if (!this.db.orm.select({ id: printers.id }).from(printers).where(eq(printers.id, printerId)).get())
+      throw new LedgerError(404, 'printer_not_found');
+    // A source record is a printer-local position, including hidden prints.
+    const jobs = this.load().jobs.filter(job => job.printer_id === printerId)
+      .sort((a, b) => b.source_record_id - a.source_record_id || b.job_id - a.job_id);
+    return { highest_source_record_id: jobs[0]?.source_record_id ?? -1,
+      jobs: jobs.slice(0, limit).map(job => {
+        const name = job.paper.paper_name ?? job.display_paper_name ?? 'Unknown paper';
+        const size = sizeName(job.width_um, job.height_um);
+        const at = moment(job);
+        return { job_id: job.job_id, source_record_id: job.source_record_id, date: job.date,
+          time: at.slice(11, 16), label: `${name} ${size}` };
+      }) };
+  }
   job(id: number): { job: LedgerJob; settings: Settings } | undefined {
     const { jobs, settings } = this.load(), job = jobs.find(row => row.job_id === id);
     return job && { job, settings };
@@ -384,7 +400,7 @@ export class Ledger {
     }) };
   }
   ink(printerId?: number): InkResponse {
-    const { settings, result, jobs, cartridges, inkPurchases, writeOffs } = this.load();
+    const { settings, input, result, jobs, cartridges, inkPurchases, writeOffs } = this.load();
     const selected = printerId ?? new KnownPrinters(this.db).archived()[0]?.id;
     if (printerId !== undefined && !this.db.orm.select({ id: printers.id }).from(printers).where(eq(printers.id, printerId)).get())
       throw new LedgerError(404, 'printer_not_found');
@@ -399,6 +415,12 @@ export class Ledger {
     const channels = this.db.all('SELECT DISTINCT channel FROM job_ink_usage ORDER BY channel').map(row => String(row.channel));
     const readingChannels = new Set(this.db.orm.select({ channel: printer_ink_readings.channel }).from(printer_ink_readings)
       .where(eq(printer_ink_readings.printer_id, selected ?? -1)).all().map(row => row.channel));
+    const printerJobs = new Map<number, typeof jobs>();
+    for (const job of jobs) {
+      const own = printerJobs.get(job.printer_id) ?? [];
+      own.push(job); printerJobs.set(job.printer_id, own);
+    }
+    for (const own of printerJobs.values()) own.sort((a, b) => a.source_record_id - b.source_record_id || a.job_id - b.job_id);
     const fittedUnits = result.units.filter(unit => unit.state === 'fitted' && unit.printer_id === selected);
     const fitted = Object.fromEntries(fittedUnits.map(unit => [cartridges.find(product => product.id === unit.product_id)!.channel,
       { product_id: unit.product_id, purchase_id: unit.purchase_id, index: unit.index, remaining_nl: Math.max(0, unit.remaining_nl) }]));
@@ -423,7 +445,13 @@ export class Ledger {
       const open = channelOpen?.product_id === cartridge.id ? channelOpen : undefined;
       const wasteEvents = result.swapWaste.filter(event => event.product_id === cartridge.id);
       const writeOffWaste = [...result.inkWaste.values()].filter(event => event.product_id === cartridge.id);
-      return { ...cartridge, units: own, purchases: bought, write_offs: wasted,
+      return { ...cartridge, units: own.map(unit => {
+        const history = (printerJobs.get(unit.last_printer_id ?? -1) ?? []).filter(job => unit.starts_after_record !== null
+          && job.source_record_id > unit.starts_after_record && (unit.ended_after_record === null || job.source_record_id <= unit.ended_after_record));
+        const { last_printer_id, ...publicUnit } = unit;
+        return { ...publicUnit, printer_id: last_printer_id, started_on: history[0]?.date ?? null, ended_on: unit.ended_after_record === null ? null : history.at(-1)?.date ?? null,
+          replaced: input.inkFittings?.find(fitting => fitting.id === unit.fitting_id)?.replaced ?? null };
+      }), purchases: bought, write_offs: wasted,
         open_purchase_id: open && (open.remaining_nl > 0 || readingChannels.has(cartridge.channel)) ? open.purchase_id : null,
         open_remaining_nl: open && (open.remaining_nl > 0 || readingChannels.has(cartridge.channel)) ? Math.max(0, open.remaining_nl) : null,
         spares: own.filter(unit => unit.state === 'shelf' && unit !== open && unit.remaining_nl > 0).length, jobs: printed.length,

@@ -72,6 +72,11 @@ export const LOCAL_NETWORK_BLOCKED = 'macOS is blocking Print Tally from your lo
 // The server's error codes, in words. Screens may map a code to something more specific first.
 const MESSAGES: Record<string, string> = {
   in_use: "It's still in use, so it can't be deleted.",
+  fitting_conflict: 'That fitting conflicts with another cartridge or print.',
+  printer_not_found: 'That printer no longer exists.',
+  purchase_not_found: 'That purchase no longer exists.',
+  channel_mismatch: 'That purchase is for another cartridge.',
+  invalid_limit: 'Choose a valid number of prints.',
   already_exists: 'That already exists.',
   not_found: 'It no longer exists. It may have been deleted on another device.',
   job_not_found: 'That print no longer exists.',

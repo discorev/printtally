@@ -3,7 +3,7 @@ import type { LedgerInput } from './ledger.ts';
 
 export interface InkUnit {
   purchase_id: number; index: number; product_id: number;
-  state: 'shelf' | 'fitted' | 'used'; printer_id: number | null;
+  state: 'shelf' | 'fitted' | 'used'; printer_id: number | null; last_printer_id: number | null;
   starts_after_record: number | null; ended_after_record: number | null;
   printed_nl: number; waste_nl: number; remaining_nl: number; fitting_id: number | null;
 }
@@ -24,7 +24,7 @@ export function allocateInk(input: LedgerInput) {
     return Array.from({ length: purchase.cartridges }, (_, i): Unit => ({
       purchase_id: purchase.id, index: i + 1, product_id: product.id, channel: product.channel,
       date: purchase.purchased_on, capacity: product.capacity_nl, price: BigInt(purchase.price_micros), cartridges: purchase.cartridges,
-      series: product.series, poolSeries: null, state: 'shelf', printer_id: null,
+      series: product.series, poolSeries: null, state: 'shelf', printer_id: null, last_printer_id: null,
       starts_after_record: null, ended_after_record: null, printed_nl: 0, waste_nl: 0,
       remaining_nl: product.capacity_nl, fitting_id: null,
     }));
@@ -106,7 +106,7 @@ export function allocateInk(input: LedgerInput) {
     const unit = available ?? fallback;
     if (!unit) return undefined;
     if (unit.printer_id !== null) fitted.delete(key(unit.printer_id, channel));
-    unit.state = 'fitted'; unit.printer_id = printer; unit.starts_after_record = after;
+    unit.state = 'fitted'; unit.printer_id = printer; unit.last_printer_id = printer; unit.starts_after_record = after;
     unit.ended_after_record = null; unit.fitting_id = fittingId ?? null;
     unit.poolSeries = purchaseId !== undefined && expected !== null && expected !== unit.series ? unit.series : expected;
     fitted.set(key(printer, channel), unit);

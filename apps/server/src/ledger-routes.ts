@@ -34,6 +34,13 @@ export async function ledgerRoute(ledger: Ledger, method: string | undefined, ur
   if (method === 'GET' && preview) return [200, ledger.allocationPreview(Number(preview[1]), Object.fromEntries(url.searchParams))];
   if (method === 'GET' && path === '/api/v1/totals') return [200, ledger.totals()];
   if (method === 'GET' && path === '/api/v1/papers') return [200, ledger.papers()];
+  const recentJobs = /^\/api\/v1\/printers\/(\d{1,15})\/recent-jobs$/.exec(path);
+  if (method === 'GET' && recentJobs) {
+    const values = url.searchParams.getAll('limit'), value = values[0];
+    if (values.length > 1 || (value !== undefined && (!/^[1-9]\d*$/.test(value) || Number(value) > 100)))
+      return [400, { error: 'invalid_limit' }];
+    return [200, ledger.recentPrinterJobs(Number(recentJobs[1]), value === undefined ? 20 : Number(value))];
+  }
   if (method === 'GET' && path === '/api/v1/ink') {
     const values = url.searchParams.getAll('printer'), value = values[0];
     if (values.length > 1 || (value !== undefined && (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(Number(value)))))

@@ -264,3 +264,59 @@ test('capacity-mode /ink previews the next shelf unit after a write-off without 
   assert.equal(after.units.find(unit => unit.purchase_id === first && unit.index === 2)!.state, 'shelf');
   assert.equal(ledger.ink(1).fitted.C.purchase_id, replacement);
 });
+
+test('recent printer jobs return printer-local record positions, labels, times and highest record', async t => {
+  const { db, request } = await apiFixture(t);
+  const studio = batch([
+    { day: '2026-02-01', time: '091200', w: 329, h: 483 },
+    { day: '2026-02-03', time: '101200', w: 329, h: 483 },
+    { day: '2026-02-04', time: '112300', w: 329, h: 483 },
+  ]);
+  db.importSnapshot(studio);
+  const wide = batch([{ day: '2026-02-05', time: '131500' }]);
+  wide.printer.mac = '020000000002'; wide.printer.host = '192.0.2.11'; wide.media_catalogue!.printer_mac = wide.printer.mac;
+  db.importSnapshot(wide);
+  const ledger = new Ledger(db);
+  const paper = ledger.createPaper({ name: 'Photo Rag', media_types: ['custom-media-type-canon-11111111-1111-1111-1111-111111111111'] });
+  ledger.createStock({ paper_id: paper, name: 'A3+', format: 'sheet', width_um: 329_000, height_um: 483_000 });
+  const response = await request('/api/v1/printers/1/recent-jobs?limit=2');
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.json(), { highest_source_record_id: 3, jobs: [
+    { job_id: 3, source_record_id: 3, date: '2026-02-04', time: '11:23', label: 'Photo Rag A3+' },
+    { job_id: 2, source_record_id: 2, date: '2026-02-03', time: '10:12', label: 'Photo Rag A3+' },
+  ] });
+  assert.deepEqual((await request('/api/v1/printers/2/recent-jobs')).json<{ highest_source_record_id: number }>().highest_source_record_id, 1);
+  const missing = await request('/api/v1/printers/99/recent-jobs');
+  assert.deepEqual([missing.status, missing.json()], [404, { error: 'printer_not_found' }]);
+  for (const limit of ['0', '101', 'abc', '1&limit=2']) {
+    const invalid = await request(`/api/v1/printers/1/recent-jobs?limit=${limit}`);
+    assert.deepEqual([invalid.status, invalid.json()], [400, { error: 'invalid_limit' }]);
+  }
+});
+
+test('unit dates follow its printer records and a future fitting has no start date yet', async t => {
+  const { db, request } = await apiFixture(t);
+  const first = snapshot(['2026-02-01', '2026-02-02'], '2026-02-02T12:00:00Z', 1);
+  for (const record of first.records) record.raw.job_used_ink_C = 100;
+  db.importSnapshot(first);
+  const { product, purchase } = stock(new Ledger(db), 'PFI-4100', 4);
+  const second = snapshot(['2026-02-01', '2026-02-02', '2026-02-03'], '2026-02-04T12:00:00Z', 2);
+  for (const record of second.records) record.raw.job_used_ink_C = 100;
+  second.records = second.records.slice(0, 2); second.requested_range = [1, 2];
+  db.importSnapshot(second);
+  const third = snapshot(['2026-02-01', '2026-02-02', '2026-02-03'], '2026-02-05T12:00:00Z', 2);
+  for (const record of third.records) record.raw.job_used_ink_C = 100;
+  db.importSnapshot(third);
+  const ledger = new Ledger(db);
+  const newPurchase = ledger.createInkPurchase({ ink_product_id: product, purchased_on: '2026-01-02', cartridges: 1, price_micros: 10 * GBP });
+  const correction = ledger.createInkFitting({ printer_id: 1, channel: 'C', ink_purchase_id: newPurchase, after_record: 3, replaced: 'shelf' });
+  const view = (await request('/api/v1/ink?printer=1')).json<{ cartridges: { id: number; units: { state: string; printer_id: number | null; started_on: string | null;
+    ended_on: string | null; printed_nl: number; waste_nl: number; fitting_id: number | null; replaced: string | null }[] }[] }>();
+  const units = view.cartridges.find(item => item.id === product)!.units;
+  assert.deepEqual([units[0].state, units[0].printer_id, units[0].started_on, units[0].ended_on, units[0].waste_nl > 0],
+    ['used', 1, '2026-02-01', '2026-02-02', true]);
+  assert.deepEqual([units[1].state, units[1].started_on, units[1].ended_on], ['shelf', '2026-02-03', '2026-02-03']);
+  const fitted = units.find(unit => unit.fitting_id === correction)!;
+  assert.deepEqual([fitted.state, fitted.started_on, fitted.ended_on, fitted.replaced],
+    ['fitted', null, null, 'shelf']);
+});

@@ -4,7 +4,7 @@ import {
   renamePrinterSchema, settingsSchema, stockPatchSchema, stockSchema, writeOffPatchSchema, writeOffSchema,
   type AllocationPreview, type AllocationPreviewQuery, type Annotation, type CartridgeInput, type DiscoveredPrinter, type EnrolmentRequest, type HealthResponse, type ImportResult, type ImportsResponse,
   type InkPurchaseInput, type InkFittingInput, type InkPurchaseSetup, type InkPurchaseSetupResult, type InkResponse, type InkSetPurchase, type InkSetPurchaseResult, type JobResponse, type JobsResponse, type KnownPrinter, type KnownPrinterListing,
-  type MediaTypesResponse, type PaperInput, type PaperPurchaseInput, type PaperPurchaseSetup, type PaperPurchaseSetupResult, type PapersResponse, type PrintersResponse, type PrinterTrustPreview, type Settings,
+  type MediaTypesResponse, type RecentPrinterJobsResponse, type PaperInput, type PaperPurchaseInput, type PaperPurchaseSetup, type PaperPurchaseSetupResult, type PapersResponse, type PrintersResponse, type PrinterTrustPreview, type Settings,
   type StockInput, type TotalsResponse, type WriteOffInput, type WriteOffPreview,
 } from 'print-accounting-contracts';
 import type { ZodType } from 'zod';
@@ -49,6 +49,7 @@ export const api = {
   mediaTypes: (): Promise<MediaTypesResponse> => request('GET', '/media-types'),
 
   ink: (printer?: number): Promise<InkResponse> => request('GET', '/ink' + query({ printer })),
+  recentPrinterJobs: (id: number): Promise<RecentPrinterJobsResponse> => request('GET', `/printers/${id}/recent-jobs?limit=20`),
   inkFitting: collection<InkFittingInput>('ink-fittings', inkFittingSchema, inkFittingPatchSchema),
   cartridge: collection<CartridgeInput>('ink-cartridges', cartridgeSchema, cartridgePatchSchema),
   inkPurchase: collection<InkPurchaseInput>('ink-purchases', inkPurchaseSchema, inkPurchasePatchSchema),

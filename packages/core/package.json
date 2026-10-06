@@ -1,1 +1,1 @@
-{"name":"print-accounting-core","version":"0.1.0","private":true,"type":"module","exports":{".":"./src/index.ts","./printer-models":"./src/printer-models.ts"},"dependencies":{"print-accounting-contracts":"workspace:*"}}
+{"name":"print-accounting-core","version":"0.1.0","private":true,"type":"module","exports":{".":"./src/index.ts","./printer-models":"./src/printer-models.ts","./sizes":"./src/sizes.ts"},"dependencies":{"print-accounting-contracts":"workspace:*"}}

@@ -1,4 +1,5 @@
-import type { CartridgeView, InkPurchaseView, InkResponse, WriteOffView } from 'print-accounting-contracts';
+import { cartridgeTypes } from 'print-accounting-core/printer-models';
+import type { ArchivedPrinter, CartridgeView, InkPurchaseView, InkResponse, WriteOffView } from 'print-accounting-contracts';
 import { byChannelOrder, inkChannel, INK_CHANNELS } from '../../lib/inks.ts';
 
 // The Ink screen has one row per ink channel. A channel usually has one cartridge product; when it has more
@@ -9,6 +10,7 @@ export interface InkChannelView {
   /** The product in the printer, else the first one set up; undefined when the channel has none yet. */
   product: CartridgeView | undefined;
   fittedProductId: number | undefined; // The selected printer's fitted unit from /ink, even when exhausted.
+  fittedPurchaseId: number | undefined; fittedRemainingNl: number | undefined;
   fitted: boolean; // Whether the ledger has a cartridge in the printer (some ink left).
   spares: number; used: number; usedMicros: number; wasteMicros: number; jobs: number;
   purchases: { purchase: InkPurchaseView; capacityNl: number }[]; // Newest first.
@@ -23,7 +25,8 @@ export function inkChannels(data: InkResponse): InkChannelView[] {
   return codes.map(code => {
     const cartridges = data.cartridges.filter(c => c.channel === code), fitted = cartridges.find(c => c.open_remaining_nl !== null);
     return {
-      code, name: inkChannel(code).name, cartridges, product: fitted ?? cartridges[0], fittedProductId: data.fitted?.[code]?.product_id, fitted: !!fitted,
+      code, name: inkChannel(code).name, cartridges, product: fitted ?? cartridges[0], fittedProductId: data.fitted?.[code]?.product_id, fittedPurchaseId: data.fitted?.[code]?.purchase_id,
+      fittedRemainingNl: data.fitted?.[code]?.remaining_nl, fitted: !!fitted,
       spares: sum(cartridges, c => c.spares), used: sum(cartridges, c => c.used), jobs: sum(cartridges, c => c.jobs),
       usedMicros: sum(cartridges, c => c.used_micros), wasteMicros: sum(cartridges, c => c.waste_micros),
       purchases: cartridges.flatMap(c => c.purchases.map(purchase => ({ purchase, capacityNl: c.capacity_nl })))
@@ -35,7 +38,7 @@ export function inkChannels(data: InkResponse): InkChannelView[] {
 
 /** A PRO-1100 channel the ledger hasn't seen yet (no prints, no cartridge), so stock can be added from its docket. */
 export const unseenChannel = (code: string): InkChannelView | undefined => INK_CHANNELS.some(ink => ink.code === code) ? {
-  code, name: inkChannel(code).name, cartridges: [], product: undefined, fittedProductId: undefined, fitted: false,
+  code, name: inkChannel(code).name, cartridges: [], product: undefined, fittedProductId: undefined, fittedPurchaseId: undefined, fittedRemainingNl: undefined, fitted: false,
   spares: 0, used: 0, usedMicros: 0, wasteMicros: 0, jobs: 0, purchases: [], writeOffs: [],
 } : undefined;
 
@@ -47,8 +50,8 @@ export const purchasableChannels = (channels: InkChannelView[]): { code: string;
 export const productName = (c: Pick<CartridgeView, 'name' | 'channel'>): string => c.name.replace(new RegExp(`\\s+${c.channel}$`), '') || c.name;
 /** The cartridge in the printer's purchase, when the ledger knows it. */
 export const fittedPurchase = (channel: InkChannelView): InkPurchaseView | undefined => {
-  const product = channel.fitted ? channel.product : undefined;
-  return product?.purchases.find(p => p.id === product.open_purchase_id);
+  const product = channel.cartridges.find(item => item.id === channel.fittedProductId);
+  return product?.purchases.find(p => p.id === channel.fittedPurchaseId);
 };
 /** A whole set is one cartridge for every channel in the list: the channel's product, or a new one where it has none. */
 export const inkSet = (channels: InkChannelView[]): { productIds: number[]; missing: string[] } =>
@@ -60,4 +63,13 @@ export function commonCapacity(channels: InkChannelView[]): number | undefined {
   let best: [number, number] | undefined;
   for (const entry of tally) if (!best || entry[1] > best[1]) best = entry;
   return best?.[0];
+}
+
+/** Spares eligible for the selected printer, using the same count in the list and docket. */
+export function spareCount(channel: InkChannelView, printer?: ArchivedPrinter): number {
+  const reading = printer?.inks.find(ink => ink.channel === channel.code);
+  if (!reading) return channel.spares;
+  const known = cartridgeTypes(printer?.model, channel.code).map(type => type.series);
+  return channel.cartridges.filter(item => known.length ? known.includes(productName(item)) : productName(item) === reading.series)
+    .reduce((sum, item) => sum + item.spares, 0);
 }
