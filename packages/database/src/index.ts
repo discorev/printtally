@@ -112,7 +112,7 @@ export class AccountingDatabase {
     if (last < first) throw new Error('Invalid requested range');
     return this.transaction(() => {
       if (this.orm.select({ status: import_runs.status }).from(import_runs).where(eq(import_runs.id, runId)).get()?.status !== 'running') throw new Error('Import is not running');
-      const priorPrinter = this.orm.select({ last_seen_at: printers.last_seen_at, model: printers.model, firmware: printers.firmware })
+      const priorPrinter = this.orm.select({ last_seen_at: printers.last_seen_at, identified_at: printers.identified_at, model: printers.model, firmware: printers.firmware })
         .from(printers).where(eq(printers.mac, mac)).get();
       const printerId = this.orm.insert(printers).values({ mac, last_host: snapshot.printer.host, first_seen_at: observedAt, last_seen_at: observedAt })
         .onConflictDoUpdate({ target: printers.mac, set: {
@@ -120,13 +120,13 @@ export class AccountingDatabase {
           first_seen_at: sql`min(${printers.first_seen_at},excluded.first_seen_at)`, last_seen_at: sql`max(${printers.last_seen_at},excluded.last_seen_at)` } })
         .returning({ id: printers.id }).get().id;
       // Older imports can fill missing details, but cannot replace newer identification.
-      const current = !priorPrinter || observedAt >= priorPrinter.last_seen_at;
+      const current = !priorPrinter?.identified_at || observedAt > priorPrinter.identified_at;
       const identification = {
         ...(snapshot.device_model && (current || priorPrinter?.model === null) ? { model: snapshot.device_model } : {}),
         ...(snapshot.firmware && (current || priorPrinter?.firmware === null) ? { firmware: snapshot.firmware } : {}),
       };
       if (Object.keys(identification).length)
-        this.orm.update(printers).set(identification).where(eq(printers.id, printerId)).run();
+        this.orm.update(printers).set({ ...identification, identified_at: priorPrinter?.identified_at && priorPrinter.identified_at > observedAt ? priorPrinter.identified_at : observedAt }).where(eq(printers.id, printerId)).run();
       for (const ink of snapshot.inks ?? []) {
         const rows = this.orm.select().from(printer_ink_readings)
           .where(and(eq(printer_ink_readings.printer_id, printerId), eq(printer_ink_readings.channel, ink.channel)))

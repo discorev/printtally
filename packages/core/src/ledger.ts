@@ -1,3 +1,4 @@
+import { allocateInk, type InkUnit } from './ink-allocation.ts';
 import type { CostingMethod, InkLine, LotUse, PaperLine, StockFormat, UnknownReason } from 'print-accounting-contracts';
 
 // The costing engine. Stock is used up oldest purchase first, in the order things happened: prints at
@@ -6,14 +7,16 @@ import type { CostingMethod, InkLine, LotUse, PaperLine, StockFormat, UnknownRea
 // Using more than was bought draws the newest purchase below zero rather than guessing a price.
 export interface LedgerInput {
   method: CostingMethod;
-  jobs: { id: number; date: string; at: string; source_media_id: string | null; width_um: number | null; height_um: number | null;
+  jobs: { id: number; printer_id: number; source_record_id: number; date: string; at: string; source_media_id: string | null; width_um: number | null; height_um: number | null;
     impressions: number | null; stock_id: number | null; paper_id: number | null; ink: { channel: string; volume_nl: number | null }[] }[];
   papers: { id: number; name: string; media_types: string[] }[];
   stock: { id: number; paper_id: number; name: string; format: StockFormat; width_um: number; height_um: number | null; deckle: boolean }[];
   paperPurchases: { id: number; paper_stock_id: number; purchased_on: string; quantity: number; unit: number; price_micros: number }[];
-  cartridges: { id: number; channel: string; capacity_nl: number }[];
+  cartridges: { id: number; name: string; channel: string; capacity_nl: number }[];
+  inkEvents?: { printer_id: number; channel: string; after_record: number; series: string | null; swaps: number }[];
+  inkFittings?: { id: number; printer_id: number; channel: string; ink_purchase_id: number; after_record: number; replaced: 'shelf' | 'used' }[];
   inkPurchases: { id: number; ink_product_id: number; purchased_on: string; cartridges: number; price_micros: number }[];
-  writeOffs: { id: number; paper_stock_id: number | null; ink_product_id: number | null; written_off_on: string; quantity: number | null; all_remaining: boolean }[];
+  writeOffs: { id: number; paper_stock_id: number | null; ink_product_id: number | null; printer_id: number | null; written_off_on: string; quantity: number | null; all_remaining: boolean }[];
 }
 export interface JobCost {
   paper: PaperLine; ink: InkLine[];
@@ -24,6 +27,10 @@ export interface LedgerResult {
   jobs: Map<number, JobCost>;
   lots: Map<string, { quantity: number; remaining: number }>; // Keyed paper:<id> or ink:<id>.
   writeOffs: Map<number, { written_off: number; cost_micros: number | null; remaining: number }>; // remaining: all left of the item before it.
+  units: InkUnit[];
+  invalidFittings: number[];
+  inkWaste: Map<number, { product_id: number; quantity: number; cost_micros: number }>;
+  swapWaste: { date: string; cost_micros: number; product_id: number; quantity: number }[];
 }
 interface Lot { key: string; id: number; owner: number; date: string; quantity: number; unit: number; price: bigint; left: number }
 const TOLERANCE_UM = 1000; // Sizes within 1 mm match, so 17" (431.8 mm) or 329 x 483 mm entered either way still match.
@@ -33,15 +40,11 @@ const scale = (a: bigint, b: bigint, c: bigint) => Number((2n * a * b + c) / (2n
 const byDate = (a: Lot, b: Lot) => a.date.localeCompare(b.date) || a.id - b.id;
 
 export function computeLedger(input: LedgerInput): LedgerResult {
-  const paperLots = new Map<number, Lot[]>(), inkLots = new Map<string, Lot[]>();
+  const paperLots = new Map<number, Lot[]>();
+  const allocated = allocateInk(input);
   const push = <K>(map: Map<K, Lot[]>, key: K, lot: Lot) => map.set(key, [...map.get(key) ?? [], lot]);
   for (const p of input.paperPurchases) push(paperLots, p.paper_stock_id, { key: 'paper:' + p.id, id: p.id, owner: p.paper_stock_id, date: p.purchased_on, quantity: p.quantity, unit: p.unit, price: BigInt(p.price_micros), left: p.quantity });
-  const cartridges = new Map(input.cartridges.map(c => [c.id, c]));
-  for (const p of input.inkPurchases) {
-    const cartridge = cartridges.get(p.ink_product_id)!, quantity = p.cartridges * cartridge.capacity_nl;
-    push(inkLots, cartridge.channel, { key: 'ink:' + p.id, id: p.id, owner: cartridge.id, date: p.purchased_on, quantity, unit: cartridge.capacity_nl, price: BigInt(p.price_micros), left: quantity });
-  }
-  for (const lots of [...paperLots.values(), ...inkLots.values()]) lots.sort(byDate);
+  for (const lots of paperLots.values()) lots.sort(byDate);
 
   // Takes quantity from the lots bought by date, oldest first; null when nothing had been bought.
   const take = (lots: Lot[], date: string, quantity: number, from = lots.filter(lot => lot.date <= date)): { cost: number; uses: (LotUse & { owner: number })[] } | null => {
@@ -69,7 +72,7 @@ export function computeLedger(input: LedgerInput): LedgerResult {
     ...input.writeOffs.map(writeOff => ({ at: writeOff.written_off_on + 'T24', job: undefined, writeOff })),
   ].sort((a, b) => a.at.localeCompare(b.at) || (a.job?.id ?? 0) - (b.job?.id ?? 0) || (a.writeOff?.id ?? 0) - (b.writeOff?.id ?? 0));
 
-  const result: LedgerResult = { jobs: new Map(), lots: new Map(), writeOffs: new Map() };
+  const result: LedgerResult = { jobs: new Map(), lots: new Map(), writeOffs: new Map(allocated.offCosts), units: allocated.units, swapWaste: allocated.swapWaste, invalidFittings: allocated.invalidFittings, inkWaste: allocated.inkWaste };
   for (const { job, writeOff } of events) {
     if (job) {
       // Allocation: a chosen stock item, else stock of the chosen paper or of the papers printed as this media type,
@@ -97,22 +100,16 @@ export function computeLedger(input: LedgerInput): LedgerResult {
         const used = take(paperLots.get(item.id)!, job.date, quantity)!;
         cost = used.cost; from = used.uses.map(({ owner, ...use }) => use);
       }
-      const ink = job.ink.map(({ channel, volume_nl }): InkLine => {
-        if (volume_nl === 0) return { channel, volume_nl, cost_micros: 0, from: [] };
-        const used = volume_nl === null ? null : take(inkLots.get(channel) ?? [], job.date, volume_nl);
-        return { channel, volume_nl, cost_micros: used?.cost ?? null, from: used?.uses.map(({ owner, ...use }) => ({ ...use, ink_product_id: owner })) ?? [] };
-      });
+      const ink = allocated.jobLines.get(job.id)!;
       result.jobs.set(job.id, { ink, sized: sized.map(item => item.id), left: remaining, paper: {
         paper_id: paper?.id ?? null, paper_name: paper?.name ?? null, stock_id: item?.id ?? null, stock_name: item?.name ?? null,
         format: item?.format ?? null, deckle: item?.deckle ?? false, allocation: chosen ? 'stock' : job.paper_id !== null ? 'paper' : 'default',
         quantity, cost_micros: cost, unknown_reason: reason, from,
       } });
     } else if (writeOff) {
-      const cartridge = writeOff.ink_product_id === null ? undefined : cartridges.get(writeOff.ink_product_id)!;
-      const pool = cartridge ? inkLots.get(cartridge.channel) ?? [] : paperLots.get(writeOff.paper_stock_id!) ?? [];
-      const own = pool.filter(lot => lot.date <= writeOff.written_off_on && (!cartridge || lot.owner === cartridge.id));
-      // All that's left of the open pack, roll or cartridge: the oldest purchase with stock left, modulo its pack size.
-      // Ink is used oldest first across the channel, so the cartridge in use may be another product's.
+      if (writeOff.ink_product_id != null) continue; // Ink write-offs were processed with cartridge allocations.
+      const pool = paperLots.get(writeOff.paper_stock_id!) ?? [];
+      const own = pool.filter(lot => lot.date <= writeOff.written_off_on);
       const open = pool.find(lot => lot.date <= writeOff.written_off_on && lot.left > 0);
       const quantity = writeOff.all_remaining ? (open ? open.left % open.unit || open.unit : 0) : writeOff.quantity!;
       const remaining = own.reduce((sum, lot) => sum + lot.left, 0);
@@ -120,7 +117,12 @@ export function computeLedger(input: LedgerInput): LedgerResult {
       result.writeOffs.set(writeOff.id, { written_off: quantity, cost_micros: quantity === 0 ? 0 : used?.cost ?? null, remaining });
     }
   }
-  for (const lot of [...paperLots.values(), ...inkLots.values()].flat()) result.lots.set(lot.key, { quantity: lot.quantity, remaining: lot.left });
+  for (const lot of [...paperLots.values()].flat()) result.lots.set(lot.key, { quantity: lot.quantity, remaining: lot.left });
+  for (const purchase of input.inkPurchases) {
+    const own = result.units.filter(unit => unit.purchase_id === purchase.id);
+    result.lots.set('ink:' + purchase.id, { quantity: own.reduce((sum, unit) => sum + unit.remaining_nl + unit.printed_nl + unit.waste_nl, 0),
+      remaining: own.reduce((sum, unit) => sum + unit.remaining_nl, 0) });
+  }
   return result;
 }
 

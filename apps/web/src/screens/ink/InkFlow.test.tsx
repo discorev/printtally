@@ -15,10 +15,10 @@ const cartridge = (overrides: Partial<CartridgeView> = {}): CartridgeView => ({
   open_remaining_nl: 60_000_000, open_purchase_id: 21, spares: 1,
   bought: 160_000_000, used: 20_000_000, wasted: 0, remaining: 140_000_000,
   used_micros: 9_000_000, waste_micros: 0, jobs: 3,
-  purchases: [purchase()], write_offs: [], ...overrides,
+  purchases: [purchase()], write_offs: [], units: [], ...overrides,
 });
 const ink = (overrides: Partial<InkResponse> = {}): InkResponse => ({
-  channels: ['C'], cartridges: [cartridge()], settings: settings(),
+  channels: ['C'], cartridges: [cartridge()], fitted: {}, settings: settings(),
   totals: totals({ jobs: 3, ink_micros: 9_000_000 }), ...overrides,
 });
 const preview = (overrides: Partial<WriteOffPreview> = {}): WriteOffPreview => ({
@@ -66,7 +66,7 @@ test('no collected channels shows an empty state but still offers adding stock',
 
 test('an unfitted channel cannot be written off, while its purchase and waste history remains visible', async () => {
   const writeOff: WriteOffView = {
-    id: 31, paper_stock_id: null, ink_product_id: 1, written_off_on: '2026-09-02',
+    id: 31, paper_stock_id: null, ink_product_id: 1, printer_id: null, written_off_on: '2026-09-02',
     quantity: null, all_remaining: true, reason: 'Changed early', written_off: 60_000_000, cost_micros: 27_000_000,
   };
   const api = fakeApi(routes(ink({ cartridges: [cartridge({
@@ -156,7 +156,7 @@ test('write-off waits for the ledger preview and cannot save a zero remainder', 
   const date = today();
   let release!: (value: WriteOffPreview) => void;
   const response = new Promise<WriteOffPreview>(resolve => { release = resolve; });
-  const api = fakeApi({ ...routes(), [`GET /write-offs/preview?ink_product_id=1&written_off_on=${date}`]: () => response });
+  const api = fakeApi({ ...routes(), [`GET /write-offs/preview?ink_product_id=1&printer_id=1&written_off_on=${date}`]: () => response });
   const { screen } = await renderApp('/ink/C?form=writeoff', api);
   const save = await screen.findByRole('button', { name: 'Save write-off' }) as HTMLButtonElement;
   expect(save.disabled).toBe(true);
@@ -171,7 +171,7 @@ test('writing off the fitted cartridge sends all remaining and only confirms aft
   const response = new Promise<WriteOffPreview>(resolve => { release = resolve; });
   let attempts = 0;
   const api = fakeApi({
-    ...routes(), [`GET /write-offs/preview?ink_product_id=1&written_off_on=${date}`]: () => response,
+    ...routes(), [`GET /write-offs/preview?ink_product_id=1&printer_id=1&written_off_on=${date}`]: () => response,
     'POST /write-offs': () => ++attempts === 1 ? reply(422, { error: 'invalid_request' }) : { id: 41 },
   });
   const { screen, user, router } = await renderApp('/ink/C?form=writeoff', api);
@@ -188,6 +188,6 @@ test('writing off the fitted cartridge sends all remaining and only confirms aft
   await user.click(save);
   expect(await screen.findByText('Saved. It shows as waste in totals.')).toBeTruthy();
   expect(api.sent('POST /write-offs')).toEqual(Array(2).fill({
-    ink_product_id: 1, written_off_on: date, all_remaining: true, reason: 'Changed early',
+    ink_product_id: 1, printer_id: 1, written_off_on: date, all_remaining: true, reason: 'Changed early',
   }));
 });

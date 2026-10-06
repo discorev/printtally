@@ -36,21 +36,23 @@ function InkRow({ channel, printer, selected }: { channel: InkChannelView; print
   const { code, name } = channel;
   const reading = printer?.inks.find(ink => ink.channel === code);
   const matchingProduct = reading?.series ? channel.cartridges.find(item => productName(item) === reading.series) : undefined;
-  const product = reading?.series ? matchingProduct : channel.product;
+  // The server's fitted product is specific to the selected printer; the reading is only a level/type hint.
+  const product = channel.fitted ? channel.product : reading?.series ? matchingProduct : channel.product;
   const left = product?.open_remaining_nl ?? 0, fitted = product?.open_remaining_nl != null;
   const compatible = cartridgeTypes(printer?.model, code).map(type => type.series);
   const spares = reading ? channel.cartridges.filter(item => compatible.length
     ? compatible.includes(productName(item)) : productName(item) === reading.series).reduce((total, item) => total + item.spares, 0) : channel.spares;
-  const size = reading?.series ? cartridgeSize(reading.series)
+  const shownSeries = fitted && product ? productName(product) : reading?.series;
+  const size = fitted && product ? product.capacity_nl / 1e6 : reading?.series ? cartridgeSize(reading.series)
     ?? ((matchingProduct?.capacity_nl ?? 0) / 1e6) : null;
   return (
     <ListRow to={selected ? '/ink' : '/ink/$channel'} params={selected ? undefined : { channel: code }} search={prev => ({ ...prev, form: undefined })} selected={selected}
       className="grid-cols-[22px_44px_minmax(120px,1fr)_220px_120px_120px] gap-x-3 py-[9px] @max-[840px]:grid-cols-[22px_44px_minmax(100px,1fr)_200px_110px] phone:grid-cols-[22px_44px_1fr_104px]!">
       <InkSwatch channel={code} size="lg" />
       <span className="font-slab text-[14px] leading-5 font-semibold">{code}</span>
-      <span className="min-w-0 truncate text-muted">{name}{reading?.series && <small className="block text-[12px] text-muted">{reading.series}{size ? ` · ${size} ml` : ''}</small>}</span>
+      <span className="min-w-0 truncate text-muted">{name}{shownSeries && <small className="block text-[12px] text-muted">{shownSeries}{size ? ` · ${size} ml` : ''}</small>}</span>
       <span className="flex flex-col gap-1 text-[13px]">
-        {reading?.series && !matchingProduct
+        {reading?.series && !matchingProduct && !fitted
           ? <><span className="text-muted">{reading.series} not set up</span>{reading.level != null && <LevelBar value={0} tick={reading.level} />}</>
           : product
             ? <><span>{fitted ? <><b className="font-medium">~{ml(left, 1)}</b><span className="phone:hidden"> of {mlValue(product.capacity_nl, 0)}</span></> : <b className="font-medium">None</b>}

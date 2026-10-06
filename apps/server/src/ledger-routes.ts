@@ -11,6 +11,7 @@ function collections(ledger: Ledger): Record<string, Collection> {
     'paper-purchases': { create: input => ledger.createPaperPurchase(input), update: (id, input) => ledger.updatePaperPurchase(id, input), remove: id => ledger.deletePaperPurchase(id) },
     'ink-cartridges': { create: input => ledger.createCartridge(input), update: (id, input) => ledger.updateCartridge(id, input), remove: id => ledger.deleteCartridge(id) },
     'ink-purchases': { create: input => ledger.createInkPurchase(input), update: (id, input) => ledger.updateInkPurchase(id, input), remove: id => ledger.deleteInkPurchase(id) },
+    'ink-fittings': { create: input => ledger.createInkFitting(input), update: (id, input) => ledger.updateInkFitting(id, input), remove: id => ledger.deleteInkFitting(id) },
     'write-offs': { create: input => ledger.createWriteOff(input), update: (id, input) => ledger.updateWriteOff(id, input), remove: id => ledger.deleteWriteOff(id) },
   };
 }
@@ -33,7 +34,12 @@ export async function ledgerRoute(ledger: Ledger, method: string | undefined, ur
   if (method === 'GET' && preview) return [200, ledger.allocationPreview(Number(preview[1]), Object.fromEntries(url.searchParams))];
   if (method === 'GET' && path === '/api/v1/totals') return [200, ledger.totals()];
   if (method === 'GET' && path === '/api/v1/papers') return [200, ledger.papers()];
-  if (method === 'GET' && path === '/api/v1/ink') return [200, ledger.ink()];
+  if (method === 'GET' && path === '/api/v1/ink') {
+    const values = url.searchParams.getAll('printer'), value = values[0];
+    if (values.length > 1 || (value !== undefined && (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(Number(value)))))
+      return [400, { error: 'invalid_printer' }];
+    return [200, ledger.ink(value === undefined ? undefined : Number(value))];
+  }
   if (method === 'GET' && path === '/api/v1/media-types') return [200, ledger.mediaTypes()];
   if (method === 'GET' && path === '/api/v1/settings') return [200, ledger.settings()];
   if (method === 'PATCH' && path === '/api/v1/settings') return [200, ledger.updateSettings(await body())];
@@ -44,7 +50,7 @@ export async function ledgerRoute(ledger: Ledger, method: string | undefined, ur
   if (method === 'POST' && path === '/api/v1/ink-purchases/set') return [201, ledger.purchaseInkSet(await body())];
   if (method === 'GET' && path === '/api/v1/write-offs/preview') {
     const param = (name: string) => { const value = url.searchParams.get(name); return value === null ? undefined : Number(value); };
-    return [200, ledger.writeOffPreview({ paper_stock_id: param('paper_stock_id'), ink_product_id: param('ink_product_id') }, url.searchParams.get('written_off_on') ?? '')];
+    return [200, ledger.writeOffPreview({ paper_stock_id: param('paper_stock_id'), ink_product_id: param('ink_product_id'), printer_id: param('printer_id') }, url.searchParams.get('written_off_on') ?? '')];
   }
   const item = /^\/api\/v1\/([a-z-]+)(?:\/(\d{1,15}))?$/.exec(path), all = collections(ledger);
   const collection = item && Object.hasOwn(all, item[1]) ? all[item[1]] : undefined;

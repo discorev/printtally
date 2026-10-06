@@ -4,16 +4,19 @@ import { describeError } from '../../api/client.ts';
 import { useEdit, useWriteOffPreview } from '../../api/queries.ts';
 import { Button, DateInput, DocketSection, Field, FieldPair, FieldStack, RowActions, StatusLine, Sub, TextInput } from '../../components/index.ts';
 import { ml, today } from '../../lib/format.ts';
+import { useSelectedInkPrinter } from './useSelectedInkPrinter.ts';
 import type { InkChannelView } from './channels.ts';
 
 /** Writing off a cartridge changed early: all the ledger thinks is left in the one in the printer on the chosen
  *  day (the ledger's write-off preview). */
 export function InkWriteOffForm({ channel, onSaved, onCancel }: { channel: InkChannelView; onSaved: () => void; onCancel: () => void }) {
+  const { selected } = useSelectedInkPrinter();
+  const printer_id = selected?.id;
   const [date, setDate] = useState(today());
   const [reason, setReason] = useState('');
   const fitted = channel.fitted ? channel.product : undefined;
-  const preview = useWriteOffPreview(fitted && { ink_product_id: fitted.id }, date).data, left = preview?.written_off ?? 0;
-  const save = useEdit(() => api.writeOff.create({ ink_product_id: fitted!.id, written_off_on: date, all_remaining: true, reason: reason.trim() || null }));
+  const preview = useWriteOffPreview(fitted && { ink_product_id: fitted.id, printer_id }, date).data, left = preview?.written_off ?? 0;
+  const save = useEdit(() => api.writeOff.create({ ink_product_id: fitted!.id, printer_id, written_off_on: date, all_remaining: true, reason: reason.trim() || null }));
   return (
     <DocketSection label="Write off">
       <FieldStack>

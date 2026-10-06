@@ -27,6 +27,7 @@ export const printers = sqliteTable('printers', {
   first_seen_at: text().notNull(),
   last_seen_at: text().notNull(),
   media_observed_at: text(),
+  identified_at: text(),
 }, () => [check('printers_mac_check', mac('mac'))]);
 
 export const printer_ink_readings = sqliteTable('printer_ink_readings', {
@@ -232,6 +233,22 @@ export const printer_ink_mappings = sqliteTable('printer_ink_mappings', {
   check('printer_ink_mappings_effective_from_check', date('effective_from')),
 ]);
 
+// User corrections to the automatic allocation. Imports never modify these rows.
+export const ink_fittings = sqliteTable('ink_fittings', {
+  id: integer().primaryKey(),
+  printer_id: integer().notNull().references(() => printers.id),
+  channel: text().notNull(),
+  ink_purchase_id: integer().notNull().references(() => ink_purchases.id),
+  after_record: integer().notNull(),
+  replaced: text({ enum: ['shelf', 'used'] }).notNull(),
+  created_at: text().notNull(),
+}, t => [
+  index('ink_fittings_position_idx').on(t.printer_id, t.channel, t.after_record),
+  check('ink_fittings_channel_check', sql`length(channel) BETWEEN 1 AND 16 AND channel NOT GLOB '*[^A-Za-z0-9_]*'`),
+  check('ink_fittings_after_record_check', sql`after_record >= -1`),
+  check('ink_fittings_replaced_check', sql`replaced IN ('shelf','used')`),
+]);
+
 export const ink_purchases = sqliteTable('ink_purchases', {
   id: integer().primaryKey(),
   ink_product_id: integer().notNull().references(() => ink_products.id),
@@ -250,11 +267,13 @@ export const stock_write_offs = sqliteTable('stock_write_offs', {
   id: integer().primaryKey(),
   paper_stock_id: integer().references(() => paper_stocks.id),
   ink_product_id: integer().references(() => ink_products.id),
+  printer_id: integer().references(() => printers.id),
   written_off_on: text().notNull(),
   quantity: integer(),
   all_remaining: integer().notNull().default(0),
   reason: text(),
 }, () => [
+  check('stock_write_offs_printer_check', sql`printer_id IS NULL OR (ink_product_id IS NOT NULL AND all_remaining=1)`),
   check('stock_write_offs_target_check', sql`(paper_stock_id IS NULL) <> (ink_product_id IS NULL)`),
   check('stock_write_offs_written_off_on_check', date('written_off_on')),
   check('stock_write_offs_all_remaining_check', flag('all_remaining')),
