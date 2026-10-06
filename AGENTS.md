@@ -31,3 +31,11 @@ A change is done only when all of these are true:
 1. `bun run typecheck` and `bun test` pass.
 2. It has been seen working in the running app, on web and desktop.
 3. It is committed on a branch, pushed, and the PR has been merged.
+
+### PR review
+
+Greptile reviews every opened PR, and again after each push. Wait for its review of the latest commit, then resolve every comment it left: fix it, or reply saying why not (using the `responding-to-others` skill), and resolve the thread. Merge (`gh pr merge --merge`) once that latest review scores 4/5 or higher; below that, keep addressing its feedback.
+
+### Clean up merged branches
+
+GitHub deletes the remote branch on merge. Then switch to `main`, pull, and delete the local branch with `git branch -d` (never `-D`); `git fetch --prune` drops the stale remote reference.
