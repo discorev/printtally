@@ -1,7 +1,8 @@
 // A throwaway data folder with a ledger for UI work, seeded with realistic sample data:
 //   bun run seed:dev [snapshot.json]   (default tests/fixtures/reference.json; e.g. a copy of jobs.json)
-// The printer sits at a TEST-NET address (192.0.2.10), so collection fails fast and never reaches a
-// real printer, and no password or Keychain item is created.
+// The printers sit at TEST-NET addresses (192.0.2.10 and .11), so collection fails fast and never reaches a
+// real printer, and no password or Keychain item is created. The second printer has a few of the same jobs
+// again, so the Jobs printer filter shows.
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -10,17 +11,74 @@ import { AccountingDatabase, KnownPrinters, Ledger } from 'print-accounting-data
 import { snapshotSchema } from 'print-accounting-contracts';
 import { tlsFixtures } from '../tests/tls-fixtures.ts';
 
-const source = resolve(process.argv[2] ?? new URL('../tests/fixtures/reference.json', import.meta.url).pathname);
+const reference = resolve(new URL('../tests/fixtures/reference.json', import.meta.url).pathname);
+const source = resolve(process.argv[2] ?? reference);
 const input: { snapshot?: unknown } = JSON.parse(readFileSync(source, 'utf8'));
 const snapshot = snapshotSchema.parse(input.snapshot ?? input);
 const dir = mkdtempSync(join(tmpdir(), 'printtally-dev-')), db = new AccountingDatabase(join(dir, 'accounting.sqlite3'));
 const ledger = new Ledger(db), money = (pounds: number) => Math.round(pounds * 1_000_000), mm = (value: number) => Math.round(value * 1000);
+// A printer's day stamp (YYYYMMDDhhmmss) moved on by some days.
+const later = (stamp: unknown, days: number) => {
+  if (typeof stamp !== 'string' || !/^\d{14}$/.test(stamp)) return stamp;
+  const day = new Date(Date.UTC(Number(stamp.slice(0, 4)), Number(stamp.slice(4, 6)) - 1, Number(stamp.slice(6, 8)) + days));
+  return day.toISOString().slice(0, 10).replaceAll('-', '') + stamp.slice(8);
+};
+const OFFICE_MAC = snapshot.printer.mac === '0200000000ff' ? '0200000000fe' : '0200000000ff';
+const office = structuredClone(snapshot), recent = snapshot.records.slice(-3);
+const seedChannels = ['PM', 'R', 'C', 'PGY', 'MBK', 'PBK', 'B', 'CO', 'GY', 'Y', 'M', 'PC'];
+snapshot.device_model = 'PRO-1100 series'; snapshot.firmware = '2.050';
+snapshot.inks = seedChannels.map((channel, index) => ({ channel, series: 'PFI-4100', level: index < 4 ? 10 : 90 - index * 5, replacement_count: index < 4 ? 0 : 1 }));
+const demo = source === reference; // Custom snapshots keep their original job history.
+let swap: typeof snapshot | undefined, afterSwap: typeof snapshot | undefined;
+if (demo) {
+  // Three observations: two prints, an MBK swap, then two more prints. MBK use is on each print
+  // so the retired unit shows both ink printed and the remainder lost in the swap.
+  snapshot.schema.push({ name: 'job_used_ink_MBK', type: 'uint', unit: 'ml', factor: '1000' });
+  const firstPrint = structuredClone(snapshot.records[0]);
+  firstPrint.raw.job_used_ink_MBK = 400;
+  const printAt = (index: number, days: number) => {
+    const record = structuredClone(firstPrint);
+    Object.assign(record.raw, { job_record_number: index, job_time_at_processing: later(record.raw.job_time_at_processing, days),
+      job_time_at_completed: later(record.raw.job_time_at_completed, days) });
+    return record;
+  };
+  snapshot.records = [firstPrint, printAt(2, 1)]; snapshot.requested_range = [1, 2];
+  snapshot.collected_at = '2026-09-03T12:00:00Z';
+  swap = structuredClone(snapshot);
+  swap.collected_at = '2026-09-04T12:00:00Z';
+  swap.inks!.find(ink => ink.channel === 'MBK')!.replacement_count! += 1;
+  swap.inks!.find(ink => ink.channel === 'MBK')!.level = 65;
+  afterSwap = structuredClone(swap);
+  afterSwap.records.push(printAt(3, 3), printAt(4, 4)); afterSwap.requested_range = [1, 4];
+  afterSwap.collected_at = '2026-09-07T12:00:00Z';
+}
+office.device_model = 'PRO-2600 series'; office.firmware = '1.000';
+office.inks = seedChannels.map((channel, index) => ({ channel,
+  series: channel === 'MBK' ? 'PFI-2300' : channel === 'PM' ? 'PFI-3100' : channel === 'PBK' ? 'PFI-3700' : 'PFI-3300',
+  level: [20, 80, 50, 10, 70, 90, 30, 60, 40, 80, 50, 20][index], replacement_count: index % 3,
+}));
+office.printer = { host: '192.0.2.11', mac: OFFICE_MAC };
+if (office.media_catalogue) office.media_catalogue.printer_mac = OFFICE_MAC;
+// An empty history gets an Office printer with no jobs.
+office.records = (recent.length ? [0, 1, 2] : []).map(index => {
+  const record = structuredClone(recent[index % recent.length]);
+  Object.assign(record.raw, { job_record_number: index + 1, job_time_at_processing: later(record.raw.job_time_at_processing, index + 1),
+    job_time_at_completed: later(record.raw.job_time_at_completed, index + 1) });
+  return record;
+});
+office.requested_range = office.records.length ? [1, office.records.length] : snapshot.requested_range;
 try {
   const imported = db.importSnapshot(snapshot);
-  const root = new X509Certificate((await tlsFixtures()).root), now = new Date().toISOString();
-  new KnownPrinters(db).save({ id: '00000000-0000-4000-8000-00000000d0c7', host: '192.0.2.10', name: 'PRO-1100 (dev seed)', mac: snapshot.printer.mac,
-    fingerprintSha256: root.fingerprint256, rootCertificatePem: root.toString(), validFrom: root.validFromDate.toISOString(), validTo: root.validToDate.toISOString(),
-    confirmedAt: now, lastVerifiedAt: now }, undefined);
+  if (swap && afterSwap) { db.importSnapshot(swap); db.importSnapshot(afterSwap); }
+  const second = db.importSnapshot(office);
+  const roots = await tlsFixtures(), known = new KnownPrinters(db), now = new Date().toISOString();
+  const printer = (id: string, host: string, name: string, mac: string, pem: string) => {
+    const root = new X509Certificate(pem);
+    known.save({ id, host, name, mac, fingerprintSha256: root.fingerprint256, rootCertificatePem: root.toString(),
+      validFrom: root.validFromDate.toISOString(), validTo: root.validToDate.toISOString(), confirmedAt: now, lastVerifiedAt: now }, undefined);
+  };
+  printer('00000000-0000-4000-8000-00000000d0c7', '192.0.2.10', 'PRO-1100 (dev seed)', snapshot.printer.mac, roots.root);
+  printer('00000000-0000-4000-8000-00000000d0c8', '192.0.2.11', 'Wide PRO-2600 (dev seed)', OFFICE_MAC, roots.otherRoot);
 
   // Papers list the printer media types they print as, matched by the media's English name.
   const media = Object.entries(snapshot.media_catalogue?.entries ?? {}).map(([id, entry]) => ({ id, name: entry.names.EN }));
@@ -61,16 +119,17 @@ try {
   packs('platinum-a4', '2025-12-10', 1, 20, 24.99);
 
   const channels = ['PM', 'R', 'C', 'PGY', 'MBK', 'PBK', 'B', 'CO', 'GY', 'Y', 'M', 'PC'];
-  const cartridge = Object.fromEntries(channels.map(channel => [channel, ledger.createCartridge({ name: 'PFI-1100 ' + channel, channel, capacity_nl: 80_000_000 })]));
-  const ink = (channel: string, date: string, price: number) => ledger.createInkPurchase({ ink_product_id: cartridge[channel], purchased_on: date, cartridges: 1, price_micros: money(price) });
-  for (const channel of channels) ink(channel, '2025-10-15', 38.9);
-  ink('MBK', '2026-05-05', 42.5); ink('PBK', '2026-05-05', 42.5); ink('M', '2026-08-12', 42.5); ink('CO', '2026-08-20', 41); ink('GY', '2026-09-02', 43);
+  const cartridge = Object.fromEntries(channels.map(channel => [channel, ledger.createCartridge({ name: 'PFI-4100 ' + channel, channel, capacity_nl: 80_000_000 })]));
+  const ink = (channel: string, date: string, price: number, count = 1) => ledger.createInkPurchase({ ink_product_id: cartridge[channel], purchased_on: date, cartridges: count, price_micros: money(price) });
+  for (const channel of channels) ink(channel, '2025-10-15', demo && channel === 'MBK' ? 116.7 : 38.9, demo && channel === 'MBK' ? 3 : 1);
+  const mbkCorrection = ink('MBK', '2026-05-05', 42.5); ink('PBK', '2026-05-05', 42.5); ink('M', '2026-08-12', 42.5); ink('CO', '2026-08-20', 41); ink('GY', '2026-09-02', 43);
 
+  if (demo) ledger.createInkFitting({ printer_id: 1, channel: 'MBK', ink_purchase_id: mbkCorrection, after_record: 4, replaced: 'shelf' });
   ledger.createWriteOff({ paper_stock_id: stock['museum-a4'], written_off_on: '2026-04-30', quantity: 4, reason: 'Damp — the bottom of the pack' });
   ledger.createWriteOff({ paper_stock_id: stock['pe310-a4'], written_off_on: '2026-07-14', quantity: 2, reason: 'Creased corners — the box was damaged in the post' });
   ledger.createWriteOff({ ink_product_id: cartridge.M, written_off_on: '2026-08-12', all_remaining: true, reason: 'Printer reported it as faulty' });
 
-  console.log(`Seeded ${dir}\n  ${imported.new_jobs} jobs from ${source}; ${papers.length} papers, ${Object.keys(stock).length} stock items, ${channels.length} cartridges, 3 write-offs; a printer at 192.0.2.10 (TEST-NET)`);
+  console.log(`Seeded ${dir}\n  ${imported.new_jobs + (demo ? 2 : 0)} jobs from ${source}, and ${second.new_jobs} on a second printer; ${papers.length} papers, ${Object.keys(stock).length} stock items, ${channels.length} cartridges, 3 write-offs; printers at 192.0.2.10 and 192.0.2.11 (TEST-NET)`);
   console.log(`\nRun the server against it (pick a free port; never 4318, which may be your real server):\n  PRINTTALLY_MEMORY_SECRETS=1 bun apps/server/src/cli.ts serve --port 4400 --data-dir ${dir}`);
   console.log(`Then the UI with hot reload:\n  PRINTTALLY_API=http://127.0.0.1:4400 bun run dev:web`);
 } finally { db.close(); }

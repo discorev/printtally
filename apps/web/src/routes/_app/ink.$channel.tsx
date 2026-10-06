@@ -1,4 +1,4 @@
-import { createFileRoute, Navigate } from '@tanstack/react-router';
+import { createFileRoute, Navigate, useSearch } from '@tanstack/react-router';
 import { Docket, LoadingHead } from '../../components/index.ts';
 import { CartridgeDocket, type CartridgeForm } from '../../screens/ink/CartridgeDocket.tsx';
 import { unseenChannel } from '../../screens/ink/channels.ts';
@@ -12,10 +12,10 @@ export const Route = createFileRoute('/_app/ink/$channel')({
 });
 
 function Cartridge() {
-  const { channel: code } = Route.useParams(), { form } = Route.useSearch();
+  const { channel: code } = Route.useParams(), { form } = Route.useSearch(), { printer } = useSearch({ from: '/_app/ink' });
   const { channels, settings } = useInkChannels();
-  if (!channels) return <Docket label="Cartridge" close={{ to: { to: '/ink' }, label: 'Ink' }}><LoadingHead when="Cartridge" what="this cartridge" /></Docket>;
+  if (!channels) return <Docket label="Cartridge" close={{ to: { to: '/ink', search: { printer } }, label: 'Ink' }}><LoadingHead when="Cartridge" what="this cartridge" /></Docket>;
   const channel = channels.find(c => c.code === code) ?? unseenChannel(code);
-  if (!channel) return <Navigate to="/ink" replace />;
+  if (!channel) return <Navigate to="/ink" search={{ printer }} replace />;
   return <CartridgeDocket key={code} channel={channel} channels={channels} settings={settings} form={form} />;
 }

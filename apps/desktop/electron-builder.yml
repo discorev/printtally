@@ -15,6 +15,9 @@ extraResources:
   # apps/desktop/scripts/make-icon.sh compiles this asset catalog; Finder and the Dock read it via
   # CFBundleIconName (mac.extendInfo below), falling back to mac.icon's .icns only where the catalog can't apply.
   - { from: assets/icon/Assets.car, to: Assets.car }
+  # electron-updater reads this even though src/updater.ts sets the feed itself. electron-builder only writes it for
+  # zip and dmg targets, and bundle.sh builds a dir, so it's checked in.
+  - { from: build/app-update.yml, to: app-update.yml }
 # Gives the main executable, the helpers and the server their own Mach-O UUIDs, which macOS Local Network privacy
 # tracks them by (scripts/macho-uuid.ts). It runs before signing; `--prepackaged` (make-dmg.sh) skips it.
 afterPack: ./scripts/after-pack.mjs

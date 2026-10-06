@@ -113,17 +113,18 @@ export function PurchaseLine(props: ({ paper: PaperPurchaseView; stock: Pick<Sto
  *  or for ink "cartridge changed early, 12.3 ml left in it". */
 export function WriteOffLine(props: { writeOff: WriteOffView; onRemove?: () => Promise<unknown> } & ({ stock: Pick<StockView, 'name' | 'format'> } | { ink: true })) {
   const currency = useCurrency(), { writeOff } = props;
-  const what = 'ink' in props ? `cartridge changed early, ${ml(writeOff.written_off, 1)} left in it`
+  const what = 'ink' in props ? writeOff.all_remaining ? `cartridge changed early, ${ml(writeOff.written_off, 1)} left in it` : `${ml(writeOff.written_off, 1)} written off`
     : writeOff.all_remaining ? `everything left of ${props.stock.name}` : `${stockQuantity(writeOff.written_off, props.stock.format)} ${props.stock.name}`;
   return <LedgerLine what={<>{dateShort(writeOff.written_off_on)} · {what}</>} sub={writeOff.reason ?? undefined} amount={money(writeOff.cost_micros, currency)} waste
     noun="write-off" onRemove={props.onRemove} />;
 }
 
 /** An ink level gauge (Ink list): `value` 0–1 of a cartridge; amber when `low`. */
-export function LevelBar({ value, low, className }: { value: number; low?: boolean; className?: string }) {
+export function LevelBar({ value, low, tick, className }: { value: number; low?: boolean; tick?: number; className?: string }) {
   return (
     <span aria-hidden className={cx('relative block h-1.5 overflow-hidden rounded-[2px] border border-rule-2 bg-paper-2', className)}>
       <i className={cx('absolute inset-y-0 left-0 rounded-[1px]', low ? 'bg-amber' : 'bg-green')} style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%` }} />
+      {tick !== undefined && <i data-printer-level={tick} className="absolute inset-y-0 w-[2px] bg-ink" style={{ left: `calc(${Math.max(0, Math.min(100, tick))}% - 1px)` }} />}
     </span>
   );
 }

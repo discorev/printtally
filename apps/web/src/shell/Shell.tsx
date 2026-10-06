@@ -8,6 +8,7 @@ import { count } from '../lib/format.ts';
 import { cx } from '../lib/cx.ts';
 import { SECTION_ICONS } from './icons.tsx';
 import { showServerChip } from './serverChip.ts';
+import { UpdateChip } from './UpdateChip.tsx';
 
 const SECTIONS = [
   { to: '/jobs', label: 'Jobs', icon: SECTION_ICONS.jobs }, { to: '/papers', label: 'Papers', icon: SECTION_ICONS.papers },
@@ -27,7 +28,7 @@ export function ConnectionGate() {
   return null;
 }
 
-/** The server chip at the top right: the computer's name, and "retrying" (amber, pulsing) while it's lost.
+/** The server chip at the top right (left of the update chip): the computer's name, and "retrying" (amber, pulsing) while it's lost.
  *  Hidden in the desktop app once it's running the server it started itself — naming the computer is only
  *  useful there for a borrowed local server or a remote host. The server-lost banner still shows regardless. */
 function ServerChip() {
@@ -36,7 +37,7 @@ function ServerChip() {
   const lost = status === 'lost';
   const title = connection ? `Connected to ${name} (${connection.host}:${connection.port})` : `${onServerMachine() ? 'Serving on' : 'Connected to'} ${location.host}`;
   return (
-    <span title={title} className={cx('ml-auto inline-flex items-center gap-2 rounded-[3px] border py-1 pr-2.5 pl-[9px] text-[12px] leading-4 font-medium whitespace-nowrap phone:hidden',
+    <span title={title} className={cx('inline-flex items-center gap-2 rounded-[3px] border py-1 pr-2.5 pl-[9px] text-[12px] leading-4 font-medium whitespace-nowrap phone:hidden',
       lost ? 'border-amber bg-black/25 text-amber' : 'border-white/28 bg-black/12 text-inherit')}>
       <i className={cx('block size-[7px] rounded-full bg-current', lost && 'animate-pulse-dot')} />{name}{lost && ' · retrying'}
     </span>
@@ -54,7 +55,10 @@ function TopBar() {
             {section.label}</Link>
         ))}
       </nav>
-      <ServerChip />
+      <div className="ml-auto flex items-center gap-2">
+        <ServerChip />
+        <UpdateChip />
+      </div>
     </header>
   );
 }
@@ -130,11 +134,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-/** Setup and Connect: no top bar or nav, one docket centred on the mat. */
+/** Setup and Connect: no top bar or nav, one docket centred on the mat, and the update drop at the top right. */
 export function CenteredShell({ children }: { children: ReactNode }) {
   return (
     <div className="mat relative flex h-full flex-col text-ink">
-      <div className="drag hidden h-7 flex-none desktop:block" />
+      <div className="drag relative hidden h-7 flex-none desktop:block">
+        <div className="absolute top-2 right-[14px]"><UpdateChip /></div>
+      </div>
       <LostBanner />
       <main className="flex min-h-0 flex-1 items-center justify-center px-4 pt-2 pb-4 phone:px-2 phone:pb-2">{children}</main>
     </div>

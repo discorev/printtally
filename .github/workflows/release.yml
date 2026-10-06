@@ -314,10 +314,23 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          BACKEND_RELEASE: ${{ needs.release-please.outputs.backend_release }}
+          BACKEND_TAG: ${{ needs.release-please.outputs.backend_tag }}
         run: |
           set -euo pipefail
-          ditto -c -k --keepParent "$APP" "apps/desktop/release/PrintTally-$VERSION.zip"
-          gh release upload "$TAG" "apps/desktop/release/PrintTally-$VERSION.dmg" "apps/desktop/release/PrintTally-$VERSION.zip" --clobber
+          ZIP="apps/desktop/release/PrintTally-$VERSION.zip"
+          FEED="apps/desktop/release/latest-mac.yml"
+          APP_NOTES="$RUNNER_TEMP/app-notes.md"
+          BACKEND_NOTES="$RUNNER_TEMP/backend-notes.md"
+          ditto -c -k --keepParent "$APP" "$ZIP"
+          gh release view "$TAG" --json body --jq .body > "$APP_NOTES"
+          : > "$BACKEND_NOTES"
+          if [ "$BACKEND_RELEASE" = "true" ]; then
+            gh release view "$BACKEND_TAG" --json body --jq .body > "$BACKEND_NOTES"
+          fi
+          bun scripts/update-feed.ts "$VERSION" "$ZIP" "https://github.com/discorev/printtally/releases/download/$TAG/PrintTally-$VERSION.zip" "$APP_NOTES" "$BACKEND_NOTES" "$FEED"
+          gh release upload "$TAG" "apps/desktop/release/PrintTally-$VERSION.dmg" "$ZIP" "$FEED" --clobber
+          gh release edit "$TAG" --latest
 
       - name: Delete temporary keychain
         if: always()

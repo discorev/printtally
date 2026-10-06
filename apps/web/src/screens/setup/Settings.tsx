@@ -1,20 +1,20 @@
-import { useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { costingMethods, type CostingMethod, type KnownPrinter, type KnownPrinterListing } from 'print-accounting-contracts';
 import { api } from '../../api/endpoints.ts';
 import { describeError, LOCAL_NETWORK_BLOCKED } from '../../api/client.ts';
 import { keys, useEdit, useKnownPrinters, useSettings, useTotals } from '../../api/queries.ts';
-import { onServerMachine, useCanEdit, useHealth, useServerName } from '../../connection/index.ts';
-import { desktop, useDesktopConnection, useDesktopVersion } from '../../desktop.ts';
+import { connection, onServerMachine, useCanEdit, useHealth, useServerName } from '../../connection/index.ts';
+import { desktop, useAutoDownload, useDesktopConnection, useDesktopUpdate, useDesktopVersion } from '../../desktop.ts';
 import {
-  Button, ButtonLink, Fingerprint, KV, LinkButton, Mono, Money, Pad, PadBody, PadHead, RowActions, SectionLabel, StatusLine, Sub, TextLink, useLoadingText,
+  Button, ButtonLink, Fingerprint, KV, LinkButton, Mono, Money, Pad, PadBody, PadHead, RowActions, SectionLabel, StatusLine, Sub, TextInput, TextLink, Toggle, useLoadingText,
 } from '../../components/index.ts';
 import { clock, dateShort, plural } from '../../lib/format.ts';
 import { cx } from '../../lib/cx.ts';
 import { useLedgerSpan } from './ledger.ts';
 import { PasswordForm } from './PasswordForm.tsx';
 
-// Settings: the costing method (a ledger setting on the server), the printer, which computer this client uses
+// Settings: the costing method (a ledger setting on the server), the printers, which computer this client uses
 // (with "Switch computer" in the desktop app), and what the ledger keeps.
 const METHODS: Record<CostingMethod, [name: string, description: string]> = {
   oldest: ['Oldest', 'The price of the pack, roll or cartridge the print most likely came from.'],
@@ -96,25 +96,29 @@ function CostingCard() {
 }
 
 function PrinterCard() {
-  const printers = useKnownPrinters().data?.printers, loading = useLoadingText('the printer');
+  const printers = useKnownPrinters().data?.printers, loading = useLoadingText('the printers');
   return (
-    <Card label="Printer" lockable>
+    <Card label="Printers" lockable>
       {!printers && <Sub>{loading}</Sub>}
-      {printers?.length === 0 && <><Sub>No printer is set up yet.</Sub><RowActions><ButtonLink size="sm" to="/setup">Set up your printer</ButtonLink></RowActions></>}
+      {printers?.length === 0 && <><Sub>No printer is set up yet.</Sub><RowActions><ButtonLink size="sm" to="/setup">Set up a printer</ButtonLink></RowActions></>}
       {printers?.map(printer => <Printer key={printer.id} printer={printer} />)}
-      {!!printers?.length && <RowActions className="mt-3.5"><ButtonLink size="sm" to="/setup">Set up a different printer</ButtonLink></RowActions>}
+      {!!printers?.length && <RowActions className="mt-3.5"><ButtonLink size="sm" to="/setup">Add a printer</ButtonLink></RowActions>}
     </Card>
   );
 }
 
 function Printer({ printer }: { printer: KnownPrinterListing }) {
   const state = useHealth()?.printers.find(item => item.id === printer.id)?.state, server = useServerName();
-  const [showFingerprint, setShowFingerprint] = useState(false), [changing, setChanging] = useState(false);
+  const [showFingerprint, setShowFingerprint] = useState(false), [changing, setChanging] = useState(false), [renaming, setRenaming] = useState(false);
   const [saved, setSaved] = useState<string>();
   return (
     <div className="[&+&]:mt-3.5 [&+&]:border-t [&+&]:border-rule [&+&]:pt-3.5">
+      {renaming ? <Rename printer={printer} onDone={() => setRenaming(false)} /> : (
+        <h3 className="mb-1.5 flex items-baseline gap-2">{printer.name}
+          <LinkButton className="font-sans text-[13px] font-normal" onClick={() => setRenaming(true)}>Rename</LinkButton></h3>
+      )}
       <KV rows={[
-        ['Printer', <>{printer.name} · <Mono>{printer.host}</Mono></>],
+        ['Address', <Mono>{printer.host}</Mono>],
         ['Fingerprint', state === 'needs_confirming'
           ? <span className="text-amber">Changed on the printer · <TextLink to="/setup" search={{ host: printer.host }}>Check it</TextLink></span>
           : <>Confirmed {dateShort(printer.confirmedAt)} · <LinkButton onClick={() => setShowFingerprint(!showFingerprint)}>{showFingerprint ? 'Hide' : 'Show'}</LinkButton></>],
@@ -130,6 +134,33 @@ function Printer({ printer }: { printer: KnownPrinterListing }) {
   );
 }
 
+/** The printer's name, edited in place: Enter or Save saves, Escape or Cancel leaves it as it was. */
+function Rename({ printer, onDone }: { printer: KnownPrinter; onDone: () => void }) {
+  const [name, setName] = useState(printer.name);
+  const rename = useEdit(async (value: string) => {
+    const renamed = await api.renamePrinter(printer.id, value);
+    await connection.check(); // Health names the printer too.
+    return renamed;
+  });
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!name.trim()) return;
+    if (name.trim() === printer.name) onDone();
+    else rename.mutate(name, { onSuccess: onDone });
+  };
+  return (
+    <form onSubmit={submit} noValidate className="mb-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <TextInput aria-label="Printer name" value={name} maxLength={120} autoFocus className="max-w-[260px]"
+          onChange={event => setName(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); onDone(); } }} />
+        <Button type="submit" variant="primary" size="sm" edit disabled={rename.isPending || !name.trim()}>{rename.isPending ? 'Saving…' : 'Save'}</Button>
+        <Button variant="text" size="sm" onClick={onDone}>Cancel</Button>
+      </div>
+      {rename.isError && <StatusLine error>{describeError(rename.error)}</StatusLine>}
+    </form>
+  );
+}
+
 function ChangePassword({ printer, onDone }: { printer: KnownPrinter; onDone: (saved?: string) => void }) {
   return <PasswordForm printer={printer} size="sm" className="mt-3 max-w-[360px]"
     onSaved={() => onDone(`Password saved ${clock(new Date().toISOString())}. It's used from the next collection.`)}
@@ -137,13 +168,17 @@ function ChangePassword({ printer, onDone }: { printer: KnownPrinter; onDone: (s
 }
 
 /** Which computer this client uses. Only the desktop app can switch; a browser uses the
- *  computer whose address it opened. Each part shows its own version: the desktop app's, and the server's. */
+ *  computer whose address it opened. Each part shows its own version: the desktop app's, and the server's.
+ *  Under the app's version, whether this Mac downloads updates without asking (when the app can update itself). */
 function ComputerCard() {
   const name = useServerName(), connection = useDesktopConnection();
   const local = onServerMachine();
   const appVersion = useDesktopVersion(), backendVersion = useHealth()?.version;
+  const update = useDesktopUpdate(), [autoDownload, setAutoDownload] = useAutoDownload();
   const versions = <KV className="mt-2.5" rows={[
     !!desktop && !!appVersion && ['App version', <Mono>{appVersion}</Mono>],
+    !!desktop && !!update && update.status !== 'disabled' && autoDownload !== undefined
+      && ['', <Toggle label="Download updates automatically" checked={autoDownload} onChange={event => setAutoDownload(event.target.checked)} />],
     !!backendVersion && ['Backend version', <Mono>{backendVersion}</Mono>],
   ]} />;
   if (desktop) return (

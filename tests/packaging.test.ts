@@ -49,6 +49,7 @@ test('the desktop build embeds the compiled server and its UI where the app runs
     { from: '../server/dist/printtally-server', to: 'server/printtally-server' },
     { from: '../server/dist/client', to: 'server/client' },
     { from: 'assets/icon/Assets.car', to: 'Assets.car' },
+    { from: 'build/app-update.yml', to: 'app-update.yml' },
   ]);
   // apps/desktop/scripts/make-icon.sh renders assets/icon/print-tally.svg into both committed icon artifacts.
   assert.equal(config.mac.icon, 'assets/icon/PrintTally.icns');

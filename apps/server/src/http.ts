@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { annotationSchema, pairingCodeRequestSchema, pairingRedeemSchema, type PairingCodeResponse } from 'print-accounting-contracts';
-import { Ledger, LedgerError } from 'print-accounting-database';
+import { annotationSchema, pairingCodeRequestSchema, pairingRedeemSchema, type PairingCodeResponse, type PrintersResponse } from 'print-accounting-contracts';
+import { KnownPrinters, Ledger, LedgerError } from 'print-accounting-database';
 import type { AccountingService } from './service.ts';
 import { PrinterEnrolment, EnrolmentError } from './printer-enrolment.ts';
 import { CredentialError } from './credentials.ts';
@@ -20,7 +20,7 @@ const securityHeaders = { 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options'
 // addresses and passwords; no route accepts file paths.
 export function createApi(service: AccountingService, options: ApiOptions): Server {
   const { enrolment, collections, sessions, remote = false, network = systemNetwork, isLocal = isLoopback } = options;
-  const ledger = new Ledger(service.db), checkHost = hostChecker(remote, network);
+  const ledger = new Ledger(service.db), archive = new KnownPrinters(service.db), checkHost = hostChecker(remote, network);
   const server = createServer(async (request, response) => {
     const send = (status: number, value: unknown, headers: Record<string, string> = {}): void => {
       response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...securityHeaders, ...headers });
@@ -78,6 +78,8 @@ export function createApi(service: AccountingService, options: ApiOptions): Serv
       const preview = /^\/api\/v1\/printer-enrolments\/([a-f0-9-]{36})$/.exec(path);
       if (method === 'DELETE' && preview) { enrolment.cancel(preview[1]); return send(200, { cancelled: true }); }
       if (method === 'GET' && path === '/api/v1/known-printers') return send(200, { printers: await enrolment.listing() });
+      const knownItem = /^\/api\/v1\/known-printers\/([a-f0-9-]{36})$/.exec(path);
+      if (method === 'PATCH' && knownItem) return send(200, enrolment.rename(knownItem[1], await jsonBody(request)));
       const known = /^\/api\/v1\/known-printers\/([a-f0-9-]{36})\/(password|collect)$/.exec(path);
       if (known && method === 'PUT' && known[2] === 'password') {
         await enrolment.setPassword(known[1], await jsonBody(request));
@@ -94,7 +96,7 @@ export function createApi(service: AccountingService, options: ApiOptions): Serv
         }
       }
       if (method === 'GET' && path === '/api/v1/summary') return send(200, service.db.summary());
-      if (method === 'GET' && path === '/api/v1/printers') return send(200, { printers: service.db.all('SELECT * FROM printers ORDER BY id') });
+      if (method === 'GET' && path === '/api/v1/printers') return send(200, { printers: archive.archived() } satisfies PrintersResponse);
       if (method === 'GET' && path === '/api/v1/media') {
         const [limit, offset] = page();
         return send(200, { media: service.db.all('SELECT m.*,r.names_json,r.short_name,r.english_name FROM media_configs m LEFT JOIN media_revisions r ON r.id=m.current_revision_id ORDER BY m.id LIMIT ? OFFSET ?', limit, offset), limit, offset });

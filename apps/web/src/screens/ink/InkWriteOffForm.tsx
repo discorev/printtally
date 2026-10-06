@@ -2,30 +2,55 @@ import { useState } from 'react';
 import { api } from '../../api/endpoints.ts';
 import { describeError } from '../../api/client.ts';
 import { useEdit, useWriteOffPreview } from '../../api/queries.ts';
-import { Button, DateInput, DocketSection, Field, FieldPair, FieldStack, RowActions, StatusLine, Sub, TextInput } from '../../components/index.ts';
-import { ml, today } from '../../lib/format.ts';
-import type { InkChannelView } from './channels.ts';
+import { Button, DateInput, DocketSection, Field, FieldPair, FieldStack, NumberInput, RowActions, Select, StatusLine, Sub, TextInput } from '../../components/index.ts';
+import { ml, mlValue, today } from '../../lib/format.ts';
+import { productName, type InkChannelView } from './channels.ts';
+import { useSelectedInkPrinter } from './useSelectedInkPrinter.ts';
 
-/** Writing off a cartridge changed early: all the ledger thinks is left in the one in the printer on the chosen
- *  day (the ledger's write-off preview). */
+/** A printer that reports swaps already accounts for a changed cartridge's remainder as waste.
+ * Earlier dates and printers without readings can still write off an entire fitted cartridge. */
 export function InkWriteOffForm({ channel, onSaved, onCancel }: { channel: InkChannelView; onSaved: () => void; onCancel: () => void }) {
+  const { selected } = useSelectedInkPrinter();
+  const printer_id = selected?.id;
   const [date, setDate] = useState(today());
+  const [quantity, setQuantity] = useState('1');
   const [reason, setReason] = useState('');
-  const fitted = channel.fitted ? channel.product : undefined;
-  const preview = useWriteOffPreview(fitted && { ink_product_id: fitted.id }, date).data, left = preview?.written_off ?? 0;
-  const save = useEdit(() => api.writeOff.create({ ink_product_id: fitted!.id, written_off_on: date, all_remaining: true, reason: reason.trim() || null }));
+  const [productId, setProductId] = useState<number | null>(null);
+  const reading = selected?.inks.find(ink => ink.channel === channel.code);
+  const reportsSwaps = !!reading && (reading.first_observed_at ?? reading.observed_at).slice(0, 10) <= date;
+  const fittedProduct = channel.cartridges.find(item => item.id === channel.fittedProductId);
+  const reportedProduct = reading?.series ? channel.cartridges.find(item => productName(item) === reading.series) : undefined;
+  const product = reportsSwaps
+    ? channel.cartridges.find(item => item.id === productId) ?? fittedProduct ?? reportedProduct ?? channel.product
+    : fittedProduct ?? channel.product;
+  const preview = useWriteOffPreview(!reportsSwaps && channel.fitted && product ? { ink_product_id: product.id, printer_id } : undefined, date).data;
+  const left = preview?.written_off ?? 0;
+  const units = Math.round(Number(quantity) * 1e6);
+  const ready = !!product && /^\d{4}-\d\d-\d\d$/.test(date) && (reportsSwaps
+    ? Number.isSafeInteger(units) && units > 0 : channel.fitted && left > 0);
+  const save = useEdit(() => api.writeOff.create({
+    ink_product_id: product!.id, written_off_on: date, reason: reason.trim() || null,
+    ...reportsSwaps ? { quantity: units } : { printer_id, all_remaining: true },
+  }));
   return (
     <DocketSection label="Write off">
       <FieldStack>
-        <Sub className="[&_b]:font-medium [&_b]:text-ink">Writes off the <b>~{preview ? ml(left, 1) : '…'}</b> the ledger thinks is left in the {channel.code} cartridge
-          in use — for a cartridge changed early. Cleaning isn't logged, so this is an estimate.</Sub>
+        {reportsSwaps ? <Sub>Cartridge changes are already counted as waste from this printer's readings. Write off a measured quantity instead.</Sub>
+          : <Sub className="[&_b]:font-medium [&_b]:text-ink">Writes off the <b>~{preview ? ml(left, 1) : '…'}</b> the ledger thinks is left in the {channel.code} cartridge
+            in use — for a cartridge changed early. Cleaning isn't logged, so this is an estimate.</Sub>}
         <FieldPair>
           <Field label="Date">{id => <DateInput id={id} value={date} onChange={e => setDate(e.target.value)} />}</Field>
           <Field label="Reason" optional>{id => <TextInput id={id} value={reason} maxLength={1000} onChange={e => setReason(e.target.value)} />}</Field>
         </FieldPair>
+        {reportsSwaps && channel.cartridges.length > 1 && <Field label="Type" className="max-w-56">{id =>
+          <Select id={id} value={product?.id ?? ''} onChange={e => setProductId(Number(e.target.value))}>
+            {channel.cartridges.map(item => <option key={item.id} value={item.id}>{productName(item)} · {mlValue(item.capacity_nl, 0)} ml</option>)}
+          </Select>}</Field>}
+        {reportsSwaps && <Field label="Quantity (ml)" className="max-w-40">{id =>
+          <NumberInput id={id} min={0.001} step="any" value={quantity} onChange={e => setQuantity(e.target.value)} />}</Field>}
         <div>
           <RowActions className="mt-0">
-            <Button variant="primary" edit disabled={!fitted || left <= 0 || !/^\d{4}-\d\d-\d\d$/.test(date) || save.isPending}
+            <Button variant="primary" edit disabled={!ready || save.isPending}
               onClick={() => save.mutate(undefined, { onSuccess: onSaved })}>{save.isPending ? 'Saving…' : 'Save write-off'}</Button>
             <Button variant="text" onClick={onCancel}>Cancel</Button>
           </RowActions>

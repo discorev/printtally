@@ -3,9 +3,9 @@
 Combinations that have been tested end to end: certificate trust, authentication,
 job collection and paper names.
 
-| Printer | Firmware | Operating system | Bun | Tested |
-|---|---|---|---|---|
-| imagePROGRAF PRO-1100 | not recorded | macOS 27.2 | 1.3.9 | 2026-09-28 |
+| Printer | Cartridges | Firmware | Operating system | Bun | Tested |
+|---|---|---|---|---|---|
+| imagePROGRAF PRO-1100 | PFI-4100 | 2.050 | macOS 27.2 | 1.3.9 | 2026-09-28 |
 
 Other imagePROGRAF models may use the same protocol but have not been tested.
 They could differ in authentication, encryption or the job fields they report.

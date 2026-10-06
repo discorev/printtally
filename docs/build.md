@@ -28,7 +28,7 @@ bun run dist:desktop
 
 This runs two scripts. `apps/desktop/scripts/bundle.sh` compiles the server, builds the app with electron-builder and signs it. It writes `apps/desktop/release/mac-arm64/Print Tally.app`. `apps/desktop/scripts/make-dmg.sh` then makes `apps/desktop/release/PrintTally-<version>.dmg` from that app. The disk image shows the app on the left and an Applications link on the right, over `apps/desktop/assets/dmg/background.svg`.
 
-Local and release builds use the same name, Print Tally, and the same bundle identifier, `com.olliespage.PrintTally`. Run a local build from `apps/desktop/release`. Don't drag it into Applications over the release app.
+Local and release builds use the same name, Print Tally, and the same bundle identifier, `com.olliespage.PrintTally`. Run a local build from `apps/desktop/release`. Don't drag it into Applications over the release app. To test a real update install, copy the older build to a writable scratch folder outside `/Applications` (for example, `~/pt-update-test/A/Print Tally.app`) and launch it there; electron-updater can replace that copy without touching your installed app. Don't run the update test directly from a read-only disk image or from the build output, which a subsequent build overwrites.
 
 `PRINTTALLY_RELEASE=1 bun run dist:desktop` makes a release build on your Mac, signed but not notarized. Only the release workflow notarizes (see [release.md](release.md)). Don't open a release build to try it out, because it uses your real ledger.
 
@@ -59,6 +59,8 @@ A local build writes `dist/build-info.json` into the app, and the app reads it a
 - honours `PRINTTALLY_PORT` and `PRINTTALLY_DATA_DIR`.
 
 A release build always uses port 4318 and the real data folder, and it ignores both variables.
+
+Local builds don't check for updates by default. Set `PRINTTALLY_UPDATE_FEED=http://127.0.0.1:8000/` when launching a local build to check a test feed there (`latest-mac.yml` and its zip); it cannot redirect a release build. `PRINTTALLY_UPDATE_PREVIEW=available`, `downloading` or `ready` fakes that state in a dev or local build for UI previews. Clicking the available preview animates progress to ready; restarting only logs a message, without installing. Release builds ignore the preview flag. The auto-download setting is off by default and stored per Mac next to the saved remote host.
 
 ### Test data
 

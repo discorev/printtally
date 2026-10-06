@@ -1,10 +1,10 @@
 import {
-  annotationSchema, cartridgePatchSchema, cartridgeSchema, confirmPrinterSchema, enrolmentRequestSchema, inkPurchasePatchSchema,
+  annotationSchema, inkFittingSchema, inkFittingPatchSchema, cartridgePatchSchema, cartridgeSchema, confirmPrinterSchema, enrolmentRequestSchema, inkPurchasePatchSchema,
   inkPurchaseSchema, inkPurchaseSetupSchema, inkSetPurchaseSchema, paperPatchSchema, paperPurchaseSetupSchema, paperPurchasePatchSchema, paperPurchaseSchema, paperSchema, printerPasswordSchema,
-  settingsSchema, stockPatchSchema, stockSchema, writeOffPatchSchema, writeOffSchema,
+  renamePrinterSchema, settingsSchema, stockPatchSchema, stockSchema, writeOffPatchSchema, writeOffSchema,
   type AllocationPreview, type AllocationPreviewQuery, type Annotation, type CartridgeInput, type DiscoveredPrinter, type EnrolmentRequest, type HealthResponse, type ImportResult, type ImportsResponse,
-  type InkPurchaseInput, type InkPurchaseSetup, type InkPurchaseSetupResult, type InkResponse, type InkSetPurchase, type InkSetPurchaseResult, type JobResponse, type JobsResponse, type KnownPrinter, type KnownPrinterListing,
-  type MediaTypesResponse, type PaperInput, type PaperPurchaseInput, type PaperPurchaseSetup, type PaperPurchaseSetupResult, type PapersResponse, type PrinterTrustPreview, type Settings,
+  type InkPurchaseInput, type InkFittingInput, type InkPurchaseSetup, type InkPurchaseSetupResult, type InkResponse, type InkSetPurchase, type InkSetPurchaseResult, type JobResponse, type JobsResponse, type KnownPrinter, type KnownPrinterListing,
+  type MediaTypesResponse, type RecentPrinterJobsResponse, type PaperInput, type PaperPurchaseInput, type PaperPurchaseSetup, type PaperPurchaseSetupResult, type PapersResponse, type PrintersResponse, type PrinterTrustPreview, type Settings,
   type StockInput, type TotalsResponse, type WriteOffInput, type WriteOffPreview,
 } from 'print-accounting-contracts';
 import type { ZodType } from 'zod';
@@ -14,7 +14,7 @@ import { request } from './client.ts';
 // schema before sending. Creates return the new id; read models are refetched rather than patched locally.
 type Created = { id: number };
 type Patch<T> = Partial<T>;
-export interface JobsQuery { q?: string; includeHidden?: boolean; limit?: number; offset?: number }
+export interface JobsQuery { q?: string; printer?: number; includeHidden?: boolean; limit?: number; offset?: number }
 const query = (params: Record<string, string | number | boolean | undefined>): string => {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) if (value !== undefined && value !== '') search.set(key, String(value));
@@ -48,7 +48,9 @@ export const api = {
     request('POST', '/paper-purchases/setup', { body: input, schema: paperPurchaseSetupSchema }),
   mediaTypes: (): Promise<MediaTypesResponse> => request('GET', '/media-types'),
 
-  ink: (): Promise<InkResponse> => request('GET', '/ink'),
+  ink: (printer?: number): Promise<InkResponse> => request('GET', '/ink' + query({ printer })),
+  recentPrinterJobs: (id: number): Promise<RecentPrinterJobsResponse> => request('GET', `/printers/${id}/recent-jobs?limit=20`),
+  inkFitting: collection<InkFittingInput>('ink-fittings', inkFittingSchema, inkFittingPatchSchema),
   cartridge: collection<CartridgeInput>('ink-cartridges', cartridgeSchema, cartridgePatchSchema),
   inkPurchase: collection<InkPurchaseInput>('ink-purchases', inkPurchaseSchema, inkPurchasePatchSchema),
   /** A purchase with its new cartridge product, created together or not at all. */
@@ -59,7 +61,7 @@ export const api = {
     request('POST', '/ink-purchases/set', { body: input, schema: inkSetPurchaseSchema }),
   writeOff: collection<WriteOffInput>('write-offs', writeOffSchema, writeOffPatchSchema),
   /** What writing off all that's left of a stock item or cartridge would take on a day. */
-  writeOffPreview: (target: { paper_stock_id: number } | { ink_product_id: number }, day: string): Promise<WriteOffPreview> =>
+  writeOffPreview: (target: { paper_stock_id: number } | { ink_product_id: number; printer_id?: number }, day: string): Promise<WriteOffPreview> =>
     request('GET', '/write-offs/preview' + query({ ...target, written_off_on: day })),
 
   settings: (): Promise<Settings> => request('GET', '/settings'),
@@ -72,6 +74,10 @@ export const api = {
     request('POST', `/printer-enrolments/${previewId}/confirm`, { body: { fingerprintSha256, confirmed: true }, schema: confirmPrinterSchema, timeoutMs: 30_000 }),
   cancelPreview: (previewId: string): Promise<{ cancelled: true }> => request('DELETE', `/printer-enrolments/${previewId}`),
   knownPrinters: (): Promise<{ printers: KnownPrinterListing[] }> => request('GET', '/known-printers'),
+  renamePrinter: (printerId: string, name: string): Promise<KnownPrinter> =>
+    request('PATCH', `/known-printers/${printerId}`, { body: { name }, schema: renamePrinterSchema }),
+  /** Every printer the ledger has jobs from, by name. */
+  printers: (): Promise<PrintersResponse> => request('GET', '/printers'),
   savePrinterPassword: (printerId: string, password: string): Promise<{ saved: true }> =>
     request('PUT', `/known-printers/${printerId}/password`, { body: { password }, schema: printerPasswordSchema }),
   /** The import history, newest first (the printer's log range each collection read). */

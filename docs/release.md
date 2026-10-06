@@ -34,9 +34,13 @@ Before 1.0.0, a breaking change bumps the minor version. The first release of ea
 | `npm-prepare` | the backend was released | nothing; it tests, skips a version already on npm, and packs the package with `bun pm pack` |
 | `npm-publish` | `npm-prepare` packed a package | `printtally` on npm, through trusted publishing (OIDC) from the `release` environment. It's the only job with `id-token: write`, its actions are pinned to commits, and it runs no install scripts |
 | `backend-assets` | the backend was released and tested | `printtally-server-X.Y.Z-darwin-arm64.tar.gz` and its `.sha256`, on the backend's GitHub release: the compiled server and its UI, checked to report version X.Y.Z |
-| `app` | the app was released | `PrintTally-X.Y.Z.dmg` and `PrintTally-X.Y.Z.zip`, signed, notarized and stapled, on the app's GitHub release |
+| `app` | the app was released | `PrintTally-X.Y.Z.dmg`, `PrintTally-X.Y.Z.zip` and `latest-mac.yml`, signed and notarized where applicable, on the app's GitHub release |
 
 The app doesn't compile its own server. It downloads the server archive from the backend release made in the same run, or, for an app-only release, from the latest `backend-v*` release. It checks the archive's checksum, then `apps/desktop/scripts/bundle.sh` packages it (`PRINTTALLY_SERVER_ARCHIVE`). So the **Backend version** that Settings shows in a shipped app is always a published backend version.
+
+The app job generates `latest-mac.yml` after zipping the notarized app. The feed contains the zip's URL, size and SHA-512 checksum plus release notes for this app version. Its notes combine the app release body and, when the backend was released in the same run, the bundled backend release body; dependency bumps and duplicate commits are omitted. It uploads the feed with the disk image and zip, then marks the **app** release Latest. The desktop updater reads `https://github.com/discorev/printtally/releases/latest/download/latest-mac.yml`; the app release must remain Latest, not a backend release.
+
+The desktop app checks at launch and hourly. Downloads require a click unless **Download updates automatically** is on in that Mac's settings; a downloaded update installs on restart or quit. The first release with self-update still needs to be installed manually from the disk image in `/Applications`. Subsequent app releases can install themselves. Browsers using `bunx printtally` update through Bun, not this feed.
 
 Every job uses Bun 1.3.9.
 

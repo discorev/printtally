@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadRemote, parseTarget, saveRemote } from './config.ts';
+import { loadAutoDownload, loadRemote, parseTarget, saveAutoDownload, saveRemote } from './config.ts';
 
 const code = 'a'.repeat(43);
 
@@ -29,5 +29,25 @@ test('the remote host is remembered, and forgetting it means this Mac', () => {
     expect(loadRemote(dir)).toEqual({ host: 'studio-mac', port: 4400 });
     saveRemote(dir, undefined);
     expect(loadRemote(dir)).toBeUndefined();
+  } finally { rmSync(dir, { recursive: true }); }
+});
+
+test('auto-download defaults off, survives a remote change, and reads old connection files', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'printtally-desktop-'));
+  const file = join(dir, 'connection.json');
+  try {
+    expect(loadAutoDownload(dir)).toBe(false);
+    writeFileSync(file, JSON.stringify({ remote: { host: 'studio-mac', port: 4400 } }));
+    expect(loadAutoDownload(dir)).toBe(false);
+    saveAutoDownload(dir, true);
+    expect(loadRemote(dir)).toEqual({ host: 'studio-mac', port: 4400 });
+    saveRemote(dir, undefined);
+    expect(loadAutoDownload(dir)).toBe(true);
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({ autoDownloadUpdates: true });
+    saveAutoDownload(dir, false);
+    expect(loadAutoDownload(dir)).toBe(false);
+    writeFileSync(file, 'null');
+    expect(loadRemote(dir)).toBeUndefined();
+    expect(loadAutoDownload(dir)).toBe(false);
   } finally { rmSync(dir, { recursive: true }); }
 });

@@ -67,7 +67,9 @@ and collection, and quitting it stops the server for every client on the machine
   on request. Collections run one at a time; a request for a printer that is
   already queued or collecting shares that collection.
 - A collection reads everything from the printer first, then writes it to the
-  archive in a single transaction. No network I/O happens inside a transaction.
+  archive in a single transaction. Collection also reads ink status and the device
+  model over unauthenticated, read-only IVEC; failure of those reads does not fail
+  collection. No network I/O happens inside a transaction.
 - Live collection and snapshot import share one write path (`persistSnapshot`).
   New ways of triggering a collection wrap the existing service rather than adding
   another path into the database.
@@ -160,10 +162,15 @@ The API stays under `/api`.
   it falls back to its interpreter. Electron fuses turn off `ELECTRON_RUN_AS_NODE`,
   `NODE_OPTIONS` and the inspector flags, and the app only loads its own
   integrity-checked `app.asar`. The app registers `printtally://` in its Info.plist.
-  Only the release workflow notarizes ([docs/release.md](docs/release.md)).
+  Only the release workflow notarizes ([docs/release.md](docs/release.md)). A release app checks
+  the GitHub update feed on launch and hourly; it downloads on request (or automatically
+  when enabled on this Mac) and installs on restart or quit. Dev builds never check,
+  and local builds check only with `PRINTTALLY_UPDATE_FEED`.
 - **Releases.** release-please versions the backend (`apps/server`, which also ships
   `apps/web` and `packages/*`) and the app (`apps/desktop`) separately, in one release
   PR; a backend release always releases the app too. A backend release attaches its
   compiled server to its GitHub release, and a release build of the app packages that
-  server (`PRINTTALLY_SERVER_ARCHIVE`) instead of compiling its own
-  ([docs/release.md](docs/release.md)).
+  server (`PRINTTALLY_SERVER_ARCHIVE`) instead of compiling its own. The app job
+  attaches `latest-mac.yml` with the signed zip's checksum and notes from the app
+  and, when released together, the bundled backend, then marks the app release
+  Latest ([docs/release.md](docs/release.md)).

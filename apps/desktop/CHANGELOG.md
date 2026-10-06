@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.3.0](https://github.com/discorev/printtally/compare/app-v0.2.2...app-v0.3.0) (2026-10-03)
+
+
+### Features
+
+* **desktop:** download and install updates from inside the app ([d08dc61](https://github.com/discorev/printtally/commit/d08dc6148bc25952b109cec284d65244f553de2e))
+* self-updating desktop app ([d8eb6cf](https://github.com/discorev/printtally/commit/d8eb6cf0780e95d4f3ccc93c1ce36d25868f056f))
+
+
+### Bug Fixes
+
+* keep update state and notes accurate across load and download ([984e619](https://github.com/discorev/printtally/commit/984e61962204b00bbefa74f491efecfdc5bf0b90))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * peerDependencies
+    * printtally-workspace bumped to 0.4.0
+
+## [0.2.2](https://github.com/discorev/printtally/compare/app-v0.2.1...app-v0.2.2) (2026-10-01)
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * peerDependencies
+    * printtally-workspace bumped to 0.3.0
+
 ## [0.2.1](https://github.com/discorev/printtally/compare/app-v0.2.0...app-v0.2.1) (2026-09-30)
 
 

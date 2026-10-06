@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.4.0](https://github.com/discorev/printtally/compare/backend-v0.3.0...backend-v0.4.0) (2026-10-03)
+
+
+### Features
+
+* **desktop:** download and install updates from inside the app ([d08dc61](https://github.com/discorev/printtally/commit/d08dc6148bc25952b109cec284d65244f553de2e))
+* **marketing:** static marketing site for printtally.ink ([113e603](https://github.com/discorev/printtally/commit/113e6037b189141b0d51fedc2bc98603d2d408a6))
+* **marketing:** static marketing site for printtally.ink ([f38209f](https://github.com/discorev/printtally/commit/f38209f8e14385122433dafbc950ba62723adc07))
+* self-updating desktop app ([d8eb6cf](https://github.com/discorev/printtally/commit/d8eb6cf0780e95d4f3ccc93c1ce36d25868f056f))
+* **web:** show desktop updates as an ink splat with a receipt of changes ([160928d](https://github.com/discorev/printtally/commit/160928d19ffc26b7129a807fb106ee235cfc980f))
+
+
+### Bug Fixes
+
+* keep update state and notes accurate across load and download ([984e619](https://github.com/discorev/printtally/commit/984e61962204b00bbefa74f491efecfdc5bf0b90))
+* **web:** accept a printer MAC typed with hyphens ([d6b59b4](https://github.com/discorev/printtally/commit/d6b59b46e1cf87e8480e0210db7859bce0d85c14))
+
+## [0.3.0](https://github.com/discorev/printtally/compare/backend-v0.2.1...backend-v0.3.0) (2026-10-01)
+
+
+### Features
+
+* **web:** default a new paper's name to its printer media ([3573c6a](https://github.com/discorev/printtally/commit/3573c6a1d845f68f1917e29ebd8b851483f7ec82))
+* **web:** default a new paper's name to its printer media ([688bfa2](https://github.com/discorev/printtally/commit/688bfa28ed47124687c830f3c418ff734c8997e8))
+
 ## [0.2.1](https://github.com/discorev/printtally/compare/backend-v0.2.0...backend-v0.2.1) (2026-09-30)
 
 

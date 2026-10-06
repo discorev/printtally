@@ -31,10 +31,16 @@
   --animate-push: push 180ms ease-out;
   --animate-pulse-dot: pulse-dot 1.5s ease-in-out infinite;
   --animate-sweep: sweep 1.4s ease-in-out infinite;
+  --animate-feed: feed 420ms cubic-bezier(.2,.8,.2,1);
+  --animate-drip: drip .5s ease-in infinite;
+  --animate-blot: blot 150ms ease-out;
   @keyframes slide { from { transform: translateX(14px) } to { transform: none } }
   @keyframes push { from { transform: translateX(40px) } to { transform: none } }
   @keyframes pulse-dot { 50% { opacity: .3 } }
   @keyframes sweep { from { left: -30% } to { left: 100% } }
+  @keyframes feed { from { transform: translateY(-100%) } }
+  @keyframes drip { 0% { transform: translateY(-7px); opacity: 0 } 15% { opacity: 1 } 55%, 100% { transform: translateY(5px); opacity: 0 } }
+  @keyframes blot { from { opacity: 0 } }
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -142,6 +148,23 @@
   /* the costing sheet's total: a rule above and a double rule below */
   .total-rule { border-top: 1px solid var(--color-ink); position: relative; }
   .total-rule::after { content: ""; position: absolute; left: 0; right: 0; bottom: -3px; border-bottom: 1px solid var(--color-ink); border-top: 1px solid var(--color-ink); padding-top: 2px; }
+
+  /* the update receipt: a till slip fed out from under the top bar (clipped at its top edge), torn off at the bottom */
+  .receipt {
+    filter: drop-shadow(0 12px 18px rgba(0,0,0,.2)) drop-shadow(0 2px 3px rgba(0,0,0,.12));
+    clip-path: inset(0 -40px -60px -40px); -webkit-app-region: no-drag; app-region: no-drag;
+  }
+  .receipt-slip {
+    --tooth: 8px; position: relative; padding-bottom: calc(var(--tooth) + 14px);
+    background: color-mix(in oklab, var(--color-paper), #fff 4%);
+    mask: linear-gradient(#000 0 0) top / 100% calc(100% - var(--tooth)) no-repeat,
+      conic-gradient(from 135deg at top, #000 90deg, #0000 0) bottom / calc(var(--tooth) * 2) var(--tooth) repeat-x;
+  }
+  .receipt-slip::before { content: ""; position: absolute; inset: 0 0 auto; height: 5px; background: linear-gradient(rgba(0,0,0,.1), transparent); }
+  @media (prefers-color-scheme: dark) {
+    .receipt { filter: drop-shadow(0 12px 20px rgba(0,0,0,.5)) drop-shadow(0 2px 3px rgba(0,0,0,.4)); }
+    .receipt-slip::before { background: linear-gradient(rgba(0,0,0,.35), transparent); }
+  }
 
   /* radio dots in pickers */
   .dot { width: 14px; height: 14px; border: 1px solid var(--color-rule-2); border-radius: 50%; flex: none; position: relative; }

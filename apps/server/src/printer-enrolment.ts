@@ -1,5 +1,5 @@
 import { randomUUID, X509Certificate } from 'node:crypto';
-import { enrolmentRequestSchema, confirmPrinterSchema, printerPasswordSchema, type KnownPrinter, type KnownPrinterListing, type PrinterTrustPreview, type DiscoveredPrinter, type CollectOptions } from 'print-accounting-contracts';
+import { enrolmentRequestSchema, confirmPrinterSchema, printerPasswordSchema, renamePrinterSchema, type KnownPrinter, type KnownPrinterListing, type PrinterTrustPreview, type DiscoveredPrinter, type CollectOptions } from 'print-accounting-contracts';
 import { KnownPrinters, TrustConflictError, type StoredPrinter } from 'print-accounting-database';
 import { discoverPrinters, isPrinterAddress } from './printer-discovery.ts';
 import { inspectPrinter, verifyPrinter } from './printer-certificate.ts';
@@ -98,6 +98,12 @@ export class PrinterEnrolment {
     const printer = this.known.get(id);
     if (!printer) throw new EnrolmentError('known_printer_not_found', 404);
     return printer;
+  }
+  rename(id: string, input: unknown): KnownPrinter {
+    this.get(id);
+    const parsed = renamePrinterSchema.safeParse(input);
+    if (!parsed.success) throw new EnrolmentError('invalid_printer_name');
+    return publicPrinter(this.known.rename(id, parsed.data.name)!);
   }
   async setPassword(id: string, input: unknown): Promise<void> {
     const printer = this.get(id), parsed = printerPasswordSchema.safeParse(input);

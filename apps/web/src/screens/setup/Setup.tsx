@@ -28,11 +28,16 @@ const MAC = /^(?:[0-9a-f]{12}|(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2})$/i;
 export function Setup({ host }: { host?: string }) {
   const [stage, setStage] = useState<Stage>({ at: 'find' });
   // First run: no printer is ready yet. Otherwise this was opened from Settings or Collect, and can be cancelled.
-  const firstRun = useHealth()?.state === 'needs_printer';
+  // Health stops saying so once the printer is confirmed, but it's still the first run until setup closes.
+  const needsPrinter = useHealth()?.state === 'needs_printer', wasFirstRun = useRef(false);
+  if (needsPrinter) wasFirstRun.current = true;
+  const firstRun = wasFirstRun.current;
   const step = ORDER[stage.at];
+  // Opened from Settings to add another; a ?host re-check is still about that printer.
+  const title = firstRun || host ? 'Set up your printer' : 'Add a printer';
   return (
-    <Docket centered label="Set up your printer">
-      <DocketHead when="Print Tally" title="Set up your printer" subtitle="Three steps, then jobs start arriving on their own." />
+    <Docket centered label={title}>
+      <DocketHead when="Print Tally" title={title} subtitle="Three steps, then jobs start arriving on their own." />
       <div>
         <Step n={1} title="Find your printer" step={step}>
           <FindPrinter host={host} onPreview={preview => setStage({ at: 'confirm', preview })} />
@@ -107,7 +112,8 @@ function FindPrinter({ host, onPreview }: { host?: string; onPreview: (preview: 
     const ip = address.trim();
     if (!IPV4.test(ip)) { setMessage("Enter the printer's IP address, such as 192.168.1.42."); return; }
     if (needsMac && !MAC.test(mac.trim())) { setMessage('Enter the MAC address as six pairs, such as 00:1E:8F:12:34:56.'); return; }
-    void check({ host: ip }, needsMac ? mac.trim() : undefined);
+    // People copy MACs with hyphens too; the API takes colons.
+    void check({ host: ip }, needsMac ? mac.trim().replaceAll('-', ':') : undefined);
   };
 
   // Opened to check a known printer again (?host=…): start straight away. The ref keeps StrictMode from asking twice.

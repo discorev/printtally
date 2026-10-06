@@ -72,6 +72,11 @@ export const LOCAL_NETWORK_BLOCKED = 'macOS is blocking Print Tally from your lo
 // The server's error codes, in words. Screens may map a code to something more specific first.
 const MESSAGES: Record<string, string> = {
   in_use: "It's still in use, so it can't be deleted.",
+  fitting_conflict: 'That fitting conflicts with another cartridge or print.',
+  printer_not_found: 'That printer no longer exists.',
+  purchase_not_found: 'That purchase no longer exists.',
+  channel_mismatch: 'That purchase is for another cartridge.',
+  invalid_limit: 'Choose a valid number of prints.',
   already_exists: 'That already exists.',
   not_found: 'It no longer exists. It may have been deleted on another device.',
   job_not_found: 'That print no longer exists.',
@@ -97,6 +102,7 @@ const MESSAGES: Record<string, string> = {
   too_many_previews: 'Too many printers are being checked at once. Try again in a moment.',
   invalid_password: 'Enter the password.',
   known_printer_not_found: 'That printer is no longer set up.',
+  invalid_printer_name: 'Enter a name of up to 120 characters.',
 };
 export const errorMessage = (code: string, edit = true): string =>
   (edit ? 'Not saved. ' : '') + (MESSAGES[code] ?? `The server refused it (${code.replace(/_/g, ' ')}).`);

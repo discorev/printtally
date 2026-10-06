@@ -7,7 +7,7 @@ import {
 } from '../../components/index.ts';
 import { api } from '../../api/endpoints.ts';
 import { describeError } from '../../api/client.ts';
-import { useEdit, useJob, useMediaTypes, usePapers, useSettings } from '../../api/queries.ts';
+import { useEdit, useJob, useMediaTypes, usePapers, usePrinters, useSettings } from '../../api/queries.ts';
 import { useCanEdit } from '../../connection/index.ts';
 import { clock, dateLong, duration, ml, mm, plural, printerTime, printerTimeFull } from '../../lib/format.ts';
 import { jobCancelled, jobPaperName, jobSize, jobSizeLabel } from '../../lib/jobs.ts';
@@ -40,6 +40,8 @@ export function JobDocket({ jobId }: { jobId: number }) {
 function JobDocketBody({ job }: { job: LedgerJob }) {
   const papers = usePapers().data?.papers ?? [], mediaTypes = useMediaTypes().data?.media_types ?? [];
   const method = useSettings().data?.costing_method ?? 'oldest', canEdit = useCanEdit();
+  // Which printer it came from, when there's more than one.
+  const printers = usePrinters().data?.printers ?? [], printer = printers.length > 1 ? printers.find(item => item.id === job.printer_id) : undefined;
   const [mode, setMode] = usePerJob<PaperMode>(job.job_id, 'view');
   const [status, setStatus] = usePerJob<{ text: string; error?: boolean } | null>(job.job_id, null);
   const annotate = useEdit(({ id, annotation }: { id: number; annotation: Annotation }) => api.annotateJob(id, annotation));
@@ -76,7 +78,7 @@ function JobDocketBody({ job }: { job: LedgerJob }) {
     <Docket label="Print docket" close={CLOSE} tone={PAPER_TONE}>
       <DocketHead when={<>{dateLong(job.date)}{start && <> · {start}{end && ` – ${end}`}</>}</>}
         title={`${jobSizeLabel(job)} · ${jobPaperName(job)}`}
-        subtitle={cancelled ? `Cancelled after ${ml(volume)} of ink` : [`${ml(volume)} of ink`, took].filter(Boolean).join(' · ')}>
+        subtitle={[printer && `On ${printer.name}`, ...cancelled ? [`Cancelled after ${ml(volume)} of ink`] : [`${ml(volume)} of ink`, took]].filter(Boolean).join(' · ')}>
         {job.notes && <NoteText className="mt-2">{job.notes}</NoteText>}
         {(cancelled || hidden || corrected) && (
           <div className="mt-2 flex flex-wrap gap-1.5">
@@ -91,6 +93,7 @@ function JobDocketBody({ job }: { job: LedgerJob }) {
       <Note key={job.job_id} job={job} save={save} status={status} />
       <DocketSection label="Printer reported">
         <KV rows={[
+          !!printer && ['Printer', <>{printer.name} · <Mono>{printer.host}</Mono></>],
           ['Job name', <Mono>{job.job_name ?? '—'}</Mono>],
           ['Media', job.configured_paper_name ?? job.paper_name_at_import ?? job.source_media_id ?? '—'],
           job.impressions !== null && ['Sheets used', <>{String(job.impressions)} <span className="text-muted">(impressions completed)</span></>],

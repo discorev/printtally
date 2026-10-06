@@ -89,7 +89,7 @@ test('fresh database is migrated and marked; reopening is idempotent', t => {
     const reopened = new AccountingDatabase(path);
     try {
       assert.equal(reopened.get('PRAGMA application_id')!.application_id, APPLICATION_ID);
-      assert.equal(reopened.all('SELECT * FROM __drizzle_migrations').length, 2);
+      assert.equal(reopened.all('SELECT * FROM __drizzle_migrations').length, 5);
       assert.equal(reopened.get('SELECT name FROM papers')!.name, 'Keep this paper');
       assert.deepEqual(reopened.all("SELECT name FROM sqlite_master WHERE type='view'"), [{ name: 'job_details' }]);
     } finally { reopened.close(); }

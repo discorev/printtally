@@ -55,6 +55,27 @@ test('API validates annotations, keeps hidden jobs accessible and returns safe c
   assert.ok(!collection.text.includes('secret printer data'));
   assert.equal(f.db.get('SELECT status FROM import_runs ORDER BY id DESC')!.status, 'failed');
 });
+test('GET /jobs filters before pagination and counts only the selected archived printer', async t => {
+  const f = await apiFixture(t);
+  const older = sample();
+  older.printer = { host: '192.0.2.11', mac: '020000000002' };
+  older.media_catalogue!.printer_mac = older.printer.mac;
+  f.db.importSnapshot(older); // Printer B's only job has id 1; A's later jobs occupy the first page.
+  f.db.importSnapshot(batch([{ day: '2026-09-02' }, { day: '2026-09-03' }]));
+  const jobs = async (query: string) => f.request('/api/v1/jobs?' + query);
+  const firstPage = (await jobs('limit=1')).json<JobsResponse>();
+  assert.deepEqual([firstPage.total, firstPage.jobs[0].printer_id], [3, 2]);
+  const selected = (await jobs('printer=1&limit=1')).json<JobsResponse>();
+  assert.deepEqual([selected.total, selected.jobs.length, selected.jobs[0].job_id, selected.jobs[0].printer_id], [1, 1, 1, 1]);
+  assert.deepEqual((await jobs('printer=2&limit=1')).json<JobsResponse>().jobs.map(job => job.job_id), [3]);
+  const missing = (await jobs('printer=999&limit=1')).json<JobsResponse>();
+  assert.deepEqual([missing.jobs, missing.total], [[], 0]);
+  for (const value of ['', '0', '-1', '1.5', '1e2', 'nope', '9007199254740992', '1&printer=2']) {
+    const response = await jobs('printer=' + value);
+    assert.deepEqual([response.status, response.json()], [400, { error: 'invalid_request' }], value);
+  }
+});
+
 test('API manages papers, stock, purchases, ink and write-offs and returns costed, searchable jobs', async t => {
   const f = await apiFixture(t), db = f.db;
   db.importSnapshot(batch([{ day: '2026-02-01' }, { day: '2026-02-02', imp: 2 }]));
@@ -135,8 +156,8 @@ test('a purchase is set up with its new stock, paper or cartridge in one go or n
 test('API adds a whole ink set in one request: the price split by capacity, missing products created, or nothing on failure', async t => {
   const f = await apiFixture(t);
   const call = async (body: unknown) => { const reply = await f.request('/api/v1/ink-purchases/set', { method: 'POST', body }); return { status: reply.status, body: reply.json() }; };
-  const cyan = (await f.request('/api/v1/ink-cartridges', { method: 'POST', body: { name: 'PFI-1100 C', channel: 'C', capacity_nl: 160_000_000 } })).json<{ id: number }>().id;
-  const body = { ink_product_ids: [cyan], new_cartridges: { series: 'PFI-1100', capacity_nl: 80_000_000, channels: ['PM', 'R'] }, purchased_on: '2026-03-01', sets: 1, price_micros: 100_000_000 };
+  const cyan = (await f.request('/api/v1/ink-cartridges', { method: 'POST', body: { name: 'PFI-3100 C', channel: 'C', capacity_nl: 160_000_000 } })).json<{ id: number }>().id;
+  const body = { ink_product_ids: [cyan], new_cartridges: { series: 'PFI-4100', capacity_nl: 80_000_000, channels: ['PM', 'R'] }, purchased_on: '2026-03-01', sets: 1, price_micros: 100_000_000 };
   assert.deepEqual((await call({ ...body, ink_product_ids: [cyan, 999] })), { status: 400, body: { error: 'unknown_reference' } });
   assert.equal((await call({ ...body, sets: 0 })).status, 400);
   assert.equal(f.db.all('SELECT * FROM ink_purchases').length + f.db.all('SELECT * FROM ink_products').length, 1, 'nothing was written');
@@ -144,7 +165,7 @@ test('API adds a whole ink set in one request: the price split by capacity, miss
   assert.equal(saved.status, 201);
   assert.deepEqual((saved.body as unknown as InkSetPurchaseResult).purchases.map(p => [p.channel, p.price_micros]), [['C', 50_000_000], ['PM', 25_000_000], ['R', 25_000_000]]);
   const ink = (await f.request('/api/v1/ink')).json<InkResponse>();
-  assert.deepEqual(ink.cartridges.map(c => [c.name, c.purchases.map(p => p.price_micros)]), [['PFI-1100 C', [50_000_000]], ['PFI-1100 PM', [25_000_000]], ['PFI-1100 R', [25_000_000]]]);
+  assert.deepEqual(ink.cartridges.map(c => [c.name, c.purchases.map(p => p.price_micros)]), [['PFI-3100 C', [50_000_000]], ['PFI-4100 PM', [25_000_000]], ['PFI-4100 R', [25_000_000]]]);
 });
 test('an allocation preview costs a job as corrected to a paper or stock item without saving it, and says when stock runs short', async t => {
   const f = await apiFixture(t);

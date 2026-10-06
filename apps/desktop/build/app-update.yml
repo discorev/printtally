@@ -1,0 +1,4 @@
+# Copied into the app's Resources by electron-builder.yml. The URL matches src/updater.ts's release feed.
+provider: generic
+url: https://github.com/discorev/printtally/releases/latest/download
+updaterCacheDirName: printtally-desktop-updater
