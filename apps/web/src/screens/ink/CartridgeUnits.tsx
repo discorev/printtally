@@ -5,6 +5,8 @@ import { Button, LedgerList, PurchaseLine } from '../../components/index.ts';
 import { dateShort, ml, mlValue } from '../../lib/format.ts';
 import { productName, type InkChannelView } from './channels.ts';
 import { CartridgeFittingForm, type CartridgeUnit } from './CartridgeFittingForm.tsx';
+// Dates never break across lines inside a cartridge's place.
+const day = (value: string) => dateShort(value).replaceAll(' ', '\u00a0');
 
 function UnitLine({ unit, cartridge, printers, selectedPrinterId, fittedPurchaseId, fittedIndex }: {
   unit: CartridgeUnit; cartridge: CartridgeView; printers: ArchivedPrinter[]; selectedPrinterId?: number; fittedPurchaseId?: number; fittedIndex?: number;
@@ -20,11 +22,11 @@ function UnitLine({ unit, cartridge, printers, selectedPrinterId, fittedPurchase
   };
   const printer = printers.find(item => item.id === unit.printer_id)?.name ?? 'the printer';
   const place = unit.state === 'shelf' ? <>On the shelf{unit.remaining_nl > 0 && unit.remaining_nl < cartridge.capacity_nl && <> · ~{ml(unit.remaining_nl, 1)} left</>}</>
-    : unit.state === 'fitted' ? <>In {printer} {unit.started_on ? `since ${dateShort(unit.started_on)}` : 'from the next print'}{unit.printed_nl > 0 && <> · {ml(unit.printed_nl, 1)} printed</>}</>
-    : <>Used up{unit.printer_id && ` in ${printer}`}{unit.started_on && <> · {unit.ended_on ? <>{dateShort(unit.started_on)} – {dateShort(unit.ended_on)}</> : `since ${dateShort(unit.started_on)}`}</>}{unit.printed_nl > 0 && <> · {ml(unit.printed_nl, 1)} printed</>}{unit.waste_nl > 0 && <>{unit.printed_nl > 0 ? ', ' : ' · '}{ml(unit.waste_nl, 1)} waste</>}</>;
+    : unit.state === 'fitted' ? <>In {printer} {unit.started_on ? `since ${day(unit.started_on)}` : 'from the next print'}{unit.printed_nl > 0 && <> · {ml(unit.printed_nl, 1)} printed</>}</>
+    : <>Used up{unit.printer_id && ` in ${printer}`}{unit.started_on && <> · {unit.ended_on ? <>{day(unit.started_on)} – {day(unit.ended_on)}</> : `since ${day(unit.started_on)}`}</>}{unit.printed_nl > 0 && <> · {ml(unit.printed_nl, 1)} printed</>}{unit.waste_nl > 0 && <>{unit.printed_nl > 0 ? ', ' : ' · '}{ml(unit.waste_nl, 1)} waste</>}</>;
   return <div ref={row} tabIndex={-1} className="border-t border-rule py-1.5 first:border-t-0">
     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-2 text-[12.5px] leading-[19px]">
-      <span className="min-w-0"><span className="text-ink">{place}</span>{unit.fitting_id && <> <span className="ml-1 text-[11px] text-muted">set by you</span></>}</span>
+      <span className="min-w-0"><span className="text-ink">{place}</span>{unit.fitting_id && <> <span className="ml-1 text-[11px] whitespace-nowrap text-muted">set by you</span></>}</span>
       <Button variant="text" size="sm" edit className="-mr-2 justify-self-end" onClick={() => editing ? close() : setEditing(true)}>{unit.state === 'shelf' ? 'Fit in printer' : 'Change'}</Button>
     </div>
     {editing && <CartridgeFittingForm key={`${unit.purchase_id}:${unit.index}`} cartridge={cartridge} unit={unit} printers={printers}
