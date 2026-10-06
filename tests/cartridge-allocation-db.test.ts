@@ -141,6 +141,20 @@ test('reading-covered cartridge rejects printer all-remaining on create, update 
   assert.ok(ledger.createWriteOff({ ink_product_id: product, written_off_on: '2026-02-03', quantity: 100_000 }));
 });
 
+test('changing an all-remaining write-off printer to null rechecks reading coverage', async t => {
+  const { db, request } = await apiFixture(t);
+  db.importSnapshot(snapshot(['2026-02-01'], '2026-02-03T12:00:00Z', 1));
+  const other = snapshot(['2026-02-01'], '2026-02-03T12:00:00Z', 0, '020000000002');
+  other.inks = undefined;
+  db.importSnapshot(other);
+  const ledger = new Ledger(db), { product } = stock(ledger);
+  const off = ledger.createWriteOff({ ink_product_id: product, printer_id: 2, written_off_on: '2026-02-03', all_remaining: true });
+  const response = await request(`/api/v1/write-offs/${off}`, { method: 'PATCH', body: { printer_id: null } });
+  assert.equal(response.status, 400);
+  assert.deepEqual(response.json(), { error: 'printer_required' });
+  assert.equal(db.get('SELECT printer_id FROM stock_write_offs WHERE id=?', off)!.printer_id, 2);
+});
+
 test('a candidate fitting cannot invalidate an existing later fitting', async t => {
   const { db, request } = await apiFixture(t);
   const noReading = snapshot(['2026-02-01', '2026-02-02', '2026-02-03'], '2026-02-04T12:00:00Z', 0);

@@ -227,6 +227,27 @@ test('a fitting after the last print is applied before a later printer write-off
   assert.equal(result.units.find(unit => unit.purchase_id === 2)!.waste_nl, 2 * ml);
 });
 
+test('a dated write-off does not advance a reading or fitting past the next job in printer record order', () => {
+  for (const kind of ['reading', 'fitting'] as const) {
+    const input = base();
+    input.inkPurchases.push({ id: 2, ink_product_id: 1, purchased_on: '2026-01-02', cartridges: 1, price_micros: 20 * GBP });
+    input.jobs = [job(1, 1, 1, ml, '2026-02-10T12:00:00'), job(2, 1, 2, ml, '2026-02-11T12:00:00')];
+    input.writeOffs = [{ id: 1, paper_stock_id: null, ink_product_id: 1, printer_id: null,
+      written_off_on: '2026-02-04', quantity: ml / 4, all_remaining: false }];
+    if (kind === 'reading') input.inkEvents = [
+      { printer_id: 1, channel: 'C', after_record: 0, observed_on: '2026-02-01', series: 'PFI-4100', swaps: 0 },
+      { printer_id: 1, channel: 'C', after_record: 1, observed_on: '2026-02-03', series: 'PFI-4100', swaps: 1 },
+    ];
+    else input.inkFittings = [{ id: 7, printer_id: 1, channel: 'C', after_record: 1, created_on: '2026-02-03',
+      ink_purchase_id: 2, replaced: 'used' }];
+    const result = computeLedger(input);
+    assert.deepEqual(result.jobs.get(1)!.ink[0].from.map(use => [use.purchase_id, use.index]), [[1, 1]],
+      `${kind} must follow record 1, despite its earlier date`);
+    assert.deepEqual(result.jobs.get(2)!.ink[0].from.map(use => [use.purchase_id, use.index]),
+      [kind === 'reading' ? [1, 2] : [2, 1]], `${kind} must precede record 2`);
+  }
+});
+
 test('a reading crossed by a later print prices waste and claims stock on its own observed day', () => {
   const input = base(); input.jobs = [job(1, 1, 1), job(2, 1, 2, ml, '2026-02-10T12:00:00')];
   input.inkPurchases = [{ id: 1, ink_product_id: 1, purchased_on: '2026-01-01', cartridges: 1, price_micros: 10 * GBP },

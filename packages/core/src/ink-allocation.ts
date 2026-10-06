@@ -178,7 +178,10 @@ export function allocateInk(input: LedgerInput) {
       let next: typeof positions[number] | undefined, selected: typeof positions | undefined;
       for (const queue of pending.values()) {
         const event = queue[0];
-        if (event && (day === undefined || eventDay(event) <= day) && (!next || eventDay(event) < eventDay(next))) {
+        const nextRecord = event && jobsByPrinter.get(event.printer_id)?.[0]?.source_record_id;
+        if (event && (day === undefined || eventDay(event) <= day)
+          && (nextRecord === undefined || event.after_record < nextRecord)
+          && (!next || eventDay(event) < eventDay(next))) {
           next = event; selected = queue;
         }
       }

@@ -200,6 +200,7 @@ test('reading-mode write-off offers only measured quantity and does not request 
   const { screen, user } = await renderApp('/ink/C?form=writeoff', api);
   expect(await screen.findByText(/Cartridge changes are already counted as waste/)).toBeTruthy();
   expect(screen.queryByText(/the ledger thinks is left/)).toBeNull();
+  expect(screen.queryByRole('combobox', { name: 'Type' })).toBeNull();
   await user.clear(screen.getByRole('spinbutton', { name: 'Quantity (ml)' }));
   await user.type(screen.getByRole('spinbutton', { name: 'Quantity (ml)' }), '1.25');
   await user.click(screen.getByRole('button', { name: 'Save write-off' }));
@@ -214,10 +215,41 @@ test('reading-mode write-off uses the selected printer’s fitted product, not i
   const api = fakeApi({ ...routes(ink({ cartridges: [cartridge({ open_remaining_nl: null, open_purchase_id: null }), other],
     fitted: { C: { product_id: 2, purchase_id: 22, index: 1, remaining_nl: 40_000_000 } } })), 'POST /write-offs': { id: 43 } });
   const { screen, user } = await renderApp('/ink/C?form=writeoff', api);
-  await user.click(await screen.findByRole('button', { name: 'Save write-off' }));
+  const type = await screen.findByRole('combobox', { name: 'Type' }) as HTMLSelectElement;
+  expect(type.value).toBe('2');
+  expect(within(type).getByRole('option', { name: 'PFI-4100 · 80 ml' })).toBeTruthy();
+  expect(within(type).getByRole('option', { name: 'PFI-3300 · 80 ml' })).toBeTruthy();
+  await user.click(screen.getByRole('button', { name: 'Save write-off' }));
   expect(await screen.findByText('Saved. It shows as waste in totals.')).toBeTruthy();
   expect(api.sent('POST /write-offs')).toEqual([{
     ink_product_id: 2, written_off_on: today(), quantity: 1_000_000, reason: null,
+  }]);
+});
+
+test('a measured write-off defaults to the reported series when no product is fitted', async () => {
+  const other = cartridge({ id: 2, name: 'PFI-3300 C', open_remaining_nl: null, open_purchase_id: null });
+  const data = ink({ cartridges: [other, cartridge({ open_remaining_nl: null, open_purchase_id: null })] });
+  const { screen } = await renderApp('/ink/C?form=writeoff', fakeApi(routes(data)));
+  expect((await screen.findByRole('combobox', { name: 'Type' }) as HTMLSelectElement).value).toBe('1');
+});
+
+test('a measured historical write-off submits the selected product instead of today’s fitted product', async () => {
+  const other = cartridge({ id: 2, name: 'PFI-3300 C', capacity_nl: 330_000_000,
+    open_remaining_nl: 40_000_000, open_purchase_id: 22 });
+  const data = ink({ cartridges: [cartridge({ open_remaining_nl: null, open_purchase_id: null }), other],
+    fitted: { C: { product_id: 2, purchase_id: 22, index: 1, remaining_nl: 40_000_000 } } });
+  const api = fakeApi({ ...routes(data), 'POST /write-offs': { id: 44 } });
+  const { screen, user } = await renderApp('/ink/C?form=writeoff', api);
+  const type = await screen.findByRole('combobox', { name: 'Type' }) as HTMLSelectElement;
+  expect(type.value).toBe('2');
+  expect(within(type).getByRole('option', { name: 'PFI-3300 · 330 ml' })).toBeTruthy();
+  await user.clear(screen.getByLabelText('Date'));
+  await user.type(screen.getByLabelText('Date'), '2026-09-05');
+  await user.selectOptions(await screen.findByRole('combobox', { name: 'Type' }), '1');
+  await user.click(screen.getByRole('button', { name: 'Save write-off' }));
+  expect(await screen.findByText('Saved. It shows as waste in totals.')).toBeTruthy();
+  expect(api.sent('POST /write-offs')).toEqual([{
+    ink_product_id: 1, written_off_on: '2026-09-05', quantity: 1_000_000, reason: null,
   }]);
 });
 

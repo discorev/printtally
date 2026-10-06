@@ -231,7 +231,7 @@ export class Ledger {
       const { id: _id, ...fields } = current;
       const merged = writeOffSchema.parse({ ...fields, ...values, all_remaining: values.all_remaining === undefined ? current.all_remaining === 1 : values.all_remaining === 1 });
       this.checkWriteOff(merged, current.all_remaining !== 1 || current.ink_product_id !== merged.ink_product_id
-        || current.written_off_on !== merged.written_off_on);
+        || current.printer_id !== merged.printer_id || current.written_off_on !== merged.written_off_on);
       this.update(stock_write_offs, id, values);
     });
   }

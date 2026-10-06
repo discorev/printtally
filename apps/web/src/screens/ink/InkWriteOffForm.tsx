@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { api } from '../../api/endpoints.ts';
 import { describeError } from '../../api/client.ts';
 import { useEdit, useWriteOffPreview } from '../../api/queries.ts';
-import { Button, DateInput, DocketSection, Field, FieldPair, FieldStack, NumberInput, RowActions, StatusLine, Sub, TextInput } from '../../components/index.ts';
-import { ml, today } from '../../lib/format.ts';
+import { Button, DateInput, DocketSection, Field, FieldPair, FieldStack, NumberInput, RowActions, Select, StatusLine, Sub, TextInput } from '../../components/index.ts';
+import { ml, mlValue, today } from '../../lib/format.ts';
 import { productName, type InkChannelView } from './channels.ts';
 import { useSelectedInkPrinter } from './useSelectedInkPrinter.ts';
 
@@ -15,11 +15,14 @@ export function InkWriteOffForm({ channel, onSaved, onCancel }: { channel: InkCh
   const [date, setDate] = useState(today());
   const [quantity, setQuantity] = useState('1');
   const [reason, setReason] = useState('');
+  const [productId, setProductId] = useState<number | null>(null);
   const reading = selected?.inks.find(ink => ink.channel === channel.code);
   const reportsSwaps = !!reading && (reading.first_observed_at ?? reading.observed_at).slice(0, 10) <= date;
   const fittedProduct = channel.cartridges.find(item => item.id === channel.fittedProductId);
-  const product = fittedProduct ?? (reportsSwaps && reading.series
-    ? channel.cartridges.find(item => productName(item) === reading.series) ?? channel.product : channel.product);
+  const reportedProduct = reading?.series ? channel.cartridges.find(item => productName(item) === reading.series) : undefined;
+  const product = reportsSwaps
+    ? channel.cartridges.find(item => item.id === productId) ?? fittedProduct ?? reportedProduct ?? channel.product
+    : fittedProduct ?? channel.product;
   const preview = useWriteOffPreview(!reportsSwaps && channel.fitted && product ? { ink_product_id: product.id, printer_id } : undefined, date).data;
   const left = preview?.written_off ?? 0;
   const units = Math.round(Number(quantity) * 1e6);
@@ -39,6 +42,10 @@ export function InkWriteOffForm({ channel, onSaved, onCancel }: { channel: InkCh
           <Field label="Date">{id => <DateInput id={id} value={date} onChange={e => setDate(e.target.value)} />}</Field>
           <Field label="Reason" optional>{id => <TextInput id={id} value={reason} maxLength={1000} onChange={e => setReason(e.target.value)} />}</Field>
         </FieldPair>
+        {reportsSwaps && channel.cartridges.length > 1 && <Field label="Type" className="max-w-56">{id =>
+          <Select id={id} value={product?.id ?? ''} onChange={e => setProductId(Number(e.target.value))}>
+            {channel.cartridges.map(item => <option key={item.id} value={item.id}>{productName(item)} · {mlValue(item.capacity_nl, 0)} ml</option>)}
+          </Select>}</Field>}
         {reportsSwaps && <Field label="Quantity (ml)" className="max-w-40">{id =>
           <NumberInput id={id} min={0.001} step="any" value={quantity} onChange={e => setQuantity(e.target.value)} />}</Field>}
         <div>
