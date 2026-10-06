@@ -209,6 +209,18 @@ test('reading-mode write-off offers only measured quantity and does not request 
 });
 
 
+test('reading-mode write-off uses the selected printer’s fitted product, not its reported series', async () => {
+  const other = cartridge({ id: 2, name: 'PFI-3300 C', open_remaining_nl: 40_000_000, open_purchase_id: 22 });
+  const api = fakeApi({ ...routes(ink({ cartridges: [cartridge({ open_remaining_nl: null, open_purchase_id: null }), other],
+    fitted: { C: { product_id: 2, purchase_id: 22, index: 1, remaining_nl: 40_000_000 } } })), 'POST /write-offs': { id: 43 } });
+  const { screen, user } = await renderApp('/ink/C?form=writeoff', api);
+  await user.click(await screen.findByRole('button', { name: 'Save write-off' }));
+  expect(await screen.findByText('Saved. It shows as waste in totals.')).toBeTruthy();
+  expect(api.sent('POST /write-offs')).toEqual([{
+    ink_product_id: 2, written_off_on: today(), quantity: 1_000_000, reason: null,
+  }]);
+});
+
 test('a measured write-off is labeled as a quantity rather than a changed cartridge', async () => {
   const writeOff: WriteOffView = { id: 12, paper_stock_id: null, ink_product_id: 1, printer_id: null,
     written_off_on: '2026-09-02', quantity: 1_250_000, all_remaining: false, reason: null,

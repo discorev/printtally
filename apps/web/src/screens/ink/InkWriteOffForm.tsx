@@ -17,8 +17,9 @@ export function InkWriteOffForm({ channel, onSaved, onCancel }: { channel: InkCh
   const [reason, setReason] = useState('');
   const reading = selected?.inks.find(ink => ink.channel === channel.code);
   const reportsSwaps = !!reading && (reading.first_observed_at ?? reading.observed_at).slice(0, 10) <= date;
-  const product = reportsSwaps && reading.series
-    ? channel.cartridges.find(item => productName(item) === reading.series) ?? channel.product : channel.product;
+  const fittedProduct = channel.cartridges.find(item => item.id === channel.fittedProductId);
+  const product = fittedProduct ?? (reportsSwaps && reading.series
+    ? channel.cartridges.find(item => productName(item) === reading.series) ?? channel.product : channel.product);
   const preview = useWriteOffPreview(!reportsSwaps && channel.fitted && product ? { ink_product_id: product.id, printer_id } : undefined, date).data;
   const left = preview?.written_off ?? 0;
   const units = Math.round(Number(quantity) * 1e6);

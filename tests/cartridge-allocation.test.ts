@@ -50,6 +50,16 @@ test('a baseline reading with no jobs fits the oldest available unit of the repo
   assert.equal(result.swapWaste.length, 0);
 });
 
+test('pending readings on different printers claim stock in observed-day order', () => {
+  const input = base(); input.inkPurchases[0].cartridges = 2;
+  input.inkEvents = [
+    { printer_id: 1, channel: 'C', after_record: 1, observed_on: '2026-02-03', series: 'PFI-4100', swaps: 0 },
+    { printer_id: 2, channel: 'C', after_record: 2, observed_on: '2026-02-01', series: 'PFI-4100', swaps: 0 },
+  ];
+  const result = computeLedger(input);
+  assert.deepEqual(result.units.map(unit => unit.printer_id), [2, 1]);
+});
+
 test('a reading swap retires the old unit and fits the next one without a job', () => {
   const input = base();
   input.inkEvents = [
@@ -190,6 +200,56 @@ test('a reading swap after the last print is reflected in units and waste', () =
   assert.deepEqual(result.units.map(unit => unit.state), ['used', 'fitted', 'shelf']);
 });
 
+test('a swap observed before a later legacy write-off retires the fitted ink first', () => {
+  const input = base(); input.jobs = [job(1, 1, 1)];
+  input.inkEvents = [
+    { printer_id: 1, channel: 'C', after_record: 1, observed_on: '2026-02-01', series: 'PFI-4100', swaps: 0 },
+    { printer_id: 1, channel: 'C', after_record: 1, observed_on: '2026-02-03', series: 'PFI-4100', swaps: 1 },
+  ];
+  input.writeOffs = [{ id: 1, paper_stock_id: null, ink_product_id: 1, printer_id: null,
+    written_off_on: '2026-02-04', quantity: null, all_remaining: true }];
+  const result = computeLedger(input);
+  assert.deepEqual(result.swapWaste.map(event => [event.date, event.quantity]), [['2026-02-03', ml]]);
+  assert.equal(result.writeOffs.get(1)!.written_off, 2 * ml, 'legacy write-off selects the shelf spare, not the newly fitted unit');
+  assert.deepEqual(result.units.map(unit => [unit.waste_nl, unit.state]), [[ml, 'used'], [0, 'fitted'], [2 * ml, 'used']]);
+});
+
+test('a fitting after the last print is applied before a later printer write-off', () => {
+  const input = base(); input.jobs = [job(1, 1, 1)];
+  input.inkPurchases.push({ id: 2, ink_product_id: 1, purchased_on: '2026-02-02', cartridges: 1, price_micros: 20 * GBP });
+  input.inkFittings = [{ id: 7, printer_id: 1, channel: 'C', after_record: 1, created_on: '2026-02-03',
+    ink_purchase_id: 2, replaced: 'used' }];
+  input.writeOffs = [{ id: 1, paper_stock_id: null, ink_product_id: 1, printer_id: 1,
+    written_off_on: '2026-02-04', quantity: null, all_remaining: true }];
+  const result = computeLedger(input);
+  assert.deepEqual(result.swapWaste.map(event => [event.date, event.quantity]), [['2026-02-03', ml]]);
+  assert.equal(result.writeOffs.get(1)!.cost_micros, 20 * GBP, 'the newly fitted purchase is written off');
+  assert.equal(result.units.find(unit => unit.purchase_id === 2)!.waste_nl, 2 * ml);
+});
+
+test('a reading crossed by a later print prices waste and claims stock on its own observed day', () => {
+  const input = base(); input.jobs = [job(1, 1, 1), job(2, 1, 2, ml, '2026-02-10T12:00:00')];
+  input.inkPurchases = [{ id: 1, ink_product_id: 1, purchased_on: '2026-01-01', cartridges: 1, price_micros: 10 * GBP },
+    { id: 2, ink_product_id: 1, purchased_on: '2026-02-02', cartridges: 1, price_micros: 20 * GBP },
+    { id: 3, ink_product_id: 1, purchased_on: '2026-02-08', cartridges: 1, price_micros: 100 * GBP }];
+  input.inkEvents = [{ printer_id: 1, channel: 'C', after_record: 1, observed_on: '2026-02-03', series: 'PFI-4100', swaps: 1 }];
+  input.method = 'average';
+  const result = computeLedger(input);
+  assert.deepEqual(result.swapWaste.map(event => [event.date, event.quantity, event.cost_micros]),
+    [['2026-02-03', ml, 7.5 * GBP]], 'future expensive stock must not change the waste price');
+  assert.equal(result.jobs.get(2)!.ink[0].from[0].purchase_id, 2, 'the observed replacement claims stock bought by its observation, not the print');
+});
+
+test('a legacy write-off skips another printer’s reading-mode fit but keeps the oldest capacity-mode target', () => {
+  const input = base(); input.jobs = [job(1, 1, 1), job(2, 2, 1)];
+  input.inkEvents = [{ printer_id: 1, channel: 'C', after_record: 1, observed_on: '2026-02-02', series: 'PFI-4100', swaps: 0 }];
+  input.writeOffs = [{ id: 1, paper_stock_id: null, ink_product_id: 1, printer_id: null,
+    written_off_on: '2026-02-03', quantity: null, all_remaining: true }];
+  const result = computeLedger(input);
+  assert.equal(result.writeOffs.get(1)!.written_off, ml);
+  assert.deepEqual(result.units.map(unit => [unit.printer_id, unit.waste_nl]), [[1, 0], [null, ml], [null, 0]]);
+});
+
 test('a fitting after the last print executes and claims its specified purchase', () => {
   const input = base(); input.inkPurchases.push({ id: 2, ink_product_id: 1, purchased_on: '2026-01-02', cartridges: 1, price_micros: 12 * GBP });
   input.jobs = [job(1, 1, 1)];
@@ -255,6 +315,18 @@ test('a series mismatch preserves the intermediate replacement when two swaps we
   assert.deepEqual(result.swapWaste.map(event => [event.product_id, event.quantity]), [[2, 2 * ml]]);
   assert.equal(result.units.find(unit => unit.purchase_id === 2 && unit.index === 1)!.state, 'used');
   assert.deepEqual(result.jobs.get(2)!.ink[0].from.map(use => [use.purchase_id, use.index]), [[2, 2]]);
+});
+
+test('5,000 prints and 200 purchases allocate in well under a second', () => {
+  const input = base(); input.method = 'max';
+  input.inkPurchases = Array.from({ length: 200 }, (_, i) => ({ id: i + 1, ink_product_id: 1,
+    purchased_on: '2026-01-01', cartridges: 1, price_micros: (10 + i % 5) * GBP }));
+  input.inkPurchases[0].purchased_on = '2026-01-02';
+  input.jobs = Array.from({ length: 5_000 }, (_, i) => job(i + 1, 1, i + 1, 50_000, '2026-02-01T12:00:00'));
+  const started = performance.now(), result = computeLedger(input), elapsed = performance.now() - started;
+  assert.equal(result.jobs.size, 5_000);
+  assert.ok(result.jobs.get(5_000)!.ink[0].cost_micros !== null);
+  assert.ok(elapsed < 900, `5,000 jobs and 200 purchases took ${elapsed.toFixed(1)} ms`);
 });
 
 test('a capacity write-off leaves the next shelf unit unfitted until another job claims it', () => {

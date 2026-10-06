@@ -206,18 +206,18 @@ export class Ledger {
   }
   deleteInkFitting(id: number): void { this.remove(ink_fittings, id); }
 
-  private checkWriteOff(row: { ink_product_id?: number | null; printer_id?: number | null; written_off_on: string; all_remaining?: boolean }): void {
-    if (!row.all_remaining || row.printer_id == null || row.ink_product_id == null) return;
+  private checkWriteOff(row: { ink_product_id?: number | null; printer_id?: number | null; written_off_on: string; all_remaining?: boolean }, newWriteOff = false): void {
+    if (!row.all_remaining || row.ink_product_id == null || (row.printer_id == null && !newWriteOff)) return;
     const product = this.db.orm.select({ channel: ink_products.channel }).from(ink_products).where(eq(ink_products.id, row.ink_product_id)).get();
     if (!product) return; // The foreign key reports an unknown product on insert.
-    const covered = this.db.orm.select({ channel: printer_ink_readings.channel, first_seen_at: printer_ink_readings.first_seen_at })
-      .from(printer_ink_readings).where(eq(printer_ink_readings.printer_id, row.printer_id)).all()
-      .some(reading => reading.channel === product.channel && reading.first_seen_at.slice(0, 10) <= row.written_off_on);
-    if (covered) throw new LedgerError(400, 'printer_reports_swaps');
+    const readings = this.db.orm.select({ channel: printer_ink_readings.channel, first_seen_at: printer_ink_readings.first_seen_at })
+      .from(printer_ink_readings).where(row.printer_id == null ? undefined : eq(printer_ink_readings.printer_id, row.printer_id)).all();
+    const covered = readings.some(reading => reading.channel === product.channel && reading.first_seen_at.slice(0, 10) <= row.written_off_on);
+    if (covered) throw new LedgerError(400, row.printer_id == null ? 'printer_required' : 'printer_reports_swaps');
   }
   createWriteOff(input: unknown): number {
     const { all_remaining, ...writeOff } = writeOffSchema.parse(input);
-    return this.write(() => { this.checkWriteOff({ ...writeOff, all_remaining }); return this.insert(stock_write_offs, { ...writeOff, all_remaining: flag(all_remaining) }); });
+    return this.write(() => { this.checkWriteOff({ ...writeOff, all_remaining }, true); return this.insert(stock_write_offs, { ...writeOff, all_remaining: flag(all_remaining) }); });
   }
   updateWriteOff(id: number, input: unknown): void {
     const { all_remaining, ...changes } = writeOffPatchSchema.parse(input);
@@ -230,7 +230,8 @@ export class Ledger {
       if (!current) throw new LedgerError(404, 'not_found');
       const { id: _id, ...fields } = current;
       const merged = writeOffSchema.parse({ ...fields, ...values, all_remaining: values.all_remaining === undefined ? current.all_remaining === 1 : values.all_remaining === 1 });
-      this.checkWriteOff(merged);
+      this.checkWriteOff(merged, current.all_remaining !== 1 || current.ink_product_id !== merged.ink_product_id
+        || current.written_off_on !== merged.written_off_on);
       this.update(stock_write_offs, id, values);
     });
   }
@@ -240,7 +241,7 @@ export class Ledger {
     const writeOff = writeOffSchema.parse({ ...target, written_off_on: day, all_remaining: true });
     const [table, id] = writeOff.paper_stock_id != null ? [paper_stocks, writeOff.paper_stock_id] : [ink_products, writeOff.ink_product_id!];
     if (!this.db.orm.select({ id: table.id }).from(table).where(eq(table.id, id)).get()) throw new LedgerError(404, 'not_found');
-    this.checkWriteOff(writeOff);
+    this.checkWriteOff(writeOff, true);
     const { input } = this.load(), preview = Number.MAX_SAFE_INTEGER; // After every saved write-off that day, as a new one would be.
     const result = computeLedger({ ...input, writeOffs: [...input.writeOffs, { paper_stock_id: null, ink_product_id: null, printer_id: null, quantity: null, ...writeOff, id: preview, all_remaining: true }] });
     return result.writeOffs.get(preview)!;

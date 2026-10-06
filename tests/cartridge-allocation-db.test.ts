@@ -124,12 +124,20 @@ test('reading-covered cartridge rejects printer all-remaining on create, update 
   const target = { ink_product_id: product, printer_id: 1, written_off_on: '2026-02-03', all_remaining: true };
   const rejected = await post('/write-offs', 'POST', target);
   assert.equal(rejected.status, 400); assert.deepEqual(rejected.json(), { error: 'printer_reports_swaps' });
+  const withoutPrinter = await post('/write-offs', 'POST', { ink_product_id: product, written_off_on: '2026-02-03', all_remaining: true });
+  assert.equal(withoutPrinter.status, 400); assert.deepEqual(withoutPrinter.json(), { error: 'printer_required' });
+  const legacyPreview = await post(`/write-offs/preview?ink_product_id=${product}&written_off_on=2026-02-03`, 'GET');
+  assert.equal(legacyPreview.status, 400); assert.deepEqual(legacyPreview.json(), { error: 'printer_required' });
   const preview = await post(`/write-offs/preview?ink_product_id=${product}&printer_id=1&written_off_on=2026-02-03`, 'GET');
   assert.equal(preview.status, 400); assert.deepEqual(preview.json(), { error: 'printer_reports_swaps' });
   const earlier = ledger.createWriteOff({ ...target, written_off_on: '2026-02-02' });
   const updated = await post(`/write-offs/${earlier}`, 'PATCH', { written_off_on: '2026-02-03' });
   assert.equal(updated.status, 400); assert.deepEqual(updated.json(), { error: 'printer_reports_swaps' });
   assert.equal(db.get('SELECT written_off_on FROM stock_write_offs WHERE id=?', earlier)!.written_off_on, '2026-02-02');
+  const legacy = ledger.createWriteOff({ ink_product_id: product, written_off_on: '2026-02-02', all_remaining: true });
+  assert.equal((await post(`/write-offs/${legacy}`, 'PATCH', { reason: 'Historical note' })).status, 200);
+  const moved = await post(`/write-offs/${legacy}`, 'PATCH', { written_off_on: '2026-02-03' });
+  assert.equal(moved.status, 400); assert.deepEqual(moved.json(), { error: 'printer_required' });
   assert.ok(ledger.createWriteOff({ ink_product_id: product, written_off_on: '2026-02-03', quantity: 100_000 }));
 });
 
