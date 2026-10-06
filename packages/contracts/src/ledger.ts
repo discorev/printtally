@@ -63,17 +63,21 @@ export const inkSetPurchaseSchema = z.object({
 }).strict().refine(v => v.ink_product_ids.length + (v.new_cartridges?.channels.length ?? 0) > 0, 'Give the cartridges in the set');
 
 // A write-off names a stock item or a cartridge, and a quantity or all that's left of the open pack, roll or cartridge.
-const writeOffFields = { paper_stock_id: id.nullable(), ink_product_id: id.nullable(), written_off_on: day, quantity: count.nullable(), all_remaining: z.boolean(), reason: z.string().trim().min(1).max(1000).nullable() };
-export const writeOffSchema = z.object(writeOffFields).partial({ paper_stock_id: true, ink_product_id: true, quantity: true, all_remaining: true, reason: true }).strict()
+const writeOffFields = { paper_stock_id: id.nullable(), ink_product_id: id.nullable(), printer_id: id.nullable(), written_off_on: day, quantity: count.nullable(), all_remaining: z.boolean(), reason: z.string().trim().min(1).max(1000).nullable() };
+export const writeOffSchema = z.object(writeOffFields).partial({ paper_stock_id: true, ink_product_id: true, printer_id: true, quantity: true, all_remaining: true, reason: true }).strict()
   .refine(value => (value.paper_stock_id == null) !== (value.ink_product_id == null), 'Write off a stock item or a cartridge')
-  .refine(value => (value.quantity == null) === !!value.all_remaining, 'Give a quantity or all_remaining');
-export const writeOffPatchSchema = someFields({ written_off_on: day, quantity: count.nullable(), all_remaining: z.boolean(), reason: writeOffFields.reason });
+  .refine(value => (value.quantity == null) === !!value.all_remaining, 'Give a quantity or all_remaining')
+  .refine(value => value.printer_id == null || (value.ink_product_id != null && value.all_remaining === true), 'A printer requires an all_remaining ink write-off');
+export const writeOffPatchSchema = someFields({ written_off_on: day, quantity: count.nullable(), all_remaining: z.boolean(), printer_id: id.nullable(), reason: writeOffFields.reason });
 
 export type PaperInput = z.infer<typeof paperSchema>;
 export type StockInput = z.infer<typeof stockSchema>;
 export type PaperPurchaseInput = z.infer<typeof paperPurchaseSchema>;
 export type CartridgeInput = z.infer<typeof cartridgeSchema>;
 export type InkPurchaseInput = z.infer<typeof inkPurchaseSchema>;
+export const inkFittingSchema = z.object({ printer_id: id, channel, ink_purchase_id: id, after_record: z.number().int().min(-1).max(Number.MAX_SAFE_INTEGER), replaced: z.enum(['shelf', 'used']) }).strict();
+export const inkFittingPatchSchema = someFields({ printer_id: id, channel, ink_purchase_id: id, after_record: z.number().int().min(-1).max(Number.MAX_SAFE_INTEGER), replaced: z.enum(['shelf', 'used']) });
+export type InkFittingInput = z.infer<typeof inkFittingSchema>;
 export type WriteOffInput = z.infer<typeof writeOffSchema>;
 export type PaperPurchaseSetup = z.infer<typeof paperPurchaseSetupSchema>;
 export type InkPurchaseSetup = z.infer<typeof inkPurchaseSetupSchema>;
@@ -102,7 +106,7 @@ export interface PaperLine {
   quantity: number | null; // Sheets, or micrometres of roll.
   cost_micros: number | null; unknown_reason: UnknownReason | null; from: LotUse[];
 }
-export interface InkLine { channel: string; volume_nl: number | null; cost_micros: number | null; from: (LotUse & { ink_product_id: number })[] }
+export interface InkLine { channel: string; volume_nl: number | null; cost_micros: number | null; from: (LotUse & { ink_product_id: number; printer_id: number; index: number })[] }
 export interface LedgerJob extends JobDetails {
   date: string; paper: PaperLine; ink: InkLine[];
   paper_micros: number | null; ink_micros: number; total_micros: number | null; // total is null while any part is unknown.
@@ -128,7 +132,7 @@ export interface TotalsResponse {
 }
 export interface Usage { bought: number; used: number; wasted: number; remaining: number; used_micros: number; waste_micros: number }
 export interface WriteOffView {
-  id: number; paper_stock_id: number | null; ink_product_id: number | null; written_off_on: string;
+  id: number; paper_stock_id: number | null; ink_product_id: number | null; printer_id: number | null; written_off_on: string;
   quantity: number | null; all_remaining: boolean; reason: string | null;
   written_off: number; cost_micros: number | null;
 }
@@ -153,9 +157,10 @@ export interface CartridgeView extends Usage {
   spares: number; // Whole cartridges left on the shelf, besides the one in use.
   jobs: number; // Prints that drew ink from this cartridge (hidden ones too: they use ink like any other).
   purchases: InkPurchaseView[]; write_offs: WriteOffView[];
+  units: { purchase_id: number; index: number; state: 'shelf' | 'fitted' | 'used'; printer_id: number | null; starts_after_record: number | null; ended_after_record: number | null; printed_nl: number; waste_nl: number; remaining_nl: number; fitting_id: number | null }[];
 }
 /** totals: visible prints' ink as Jobs and Totals count it (unknown_jobs: prints with an ink cost unknown) and ink written off; paper figures are 0. */
-export interface InkResponse { cartridges: CartridgeView[]; channels: string[]; settings: Settings; totals: CostTotals }
+export interface InkResponse { cartridges: CartridgeView[]; channels: string[]; settings: Settings; totals: CostTotals; fitted: Record<string, { product_id: number; purchase_id: number; index: number; remaining_nl: number }> }
 export interface MediaTypeView {
   source_media_id: string; name: string | null; present_on_printer: boolean; jobs: number; papers: { id: number; name: string }[];
   last_seen_at: string | null; // When a collection last read it from the printer (ISO UTC); null if only a paper names it.

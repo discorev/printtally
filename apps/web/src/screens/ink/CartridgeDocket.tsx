@@ -6,10 +6,11 @@ import {
 } from '../../components/index.ts';
 import { useCurrency } from '../../api/queries.ts';
 import { api } from '../../api/endpoints.ts';
-import { dateShort, ml, mlValue, money, plural } from '../../lib/format.ts';
+import { dateShort, ml, mlValue, money, plural, today } from '../../lib/format.ts';
 import { fittedPurchase, productName, type InkChannelView } from './channels.ts';
 import { InkPurchaseForm, useShowAdded } from './InkPurchaseForm.tsx';
 import { InkWriteOffForm } from './InkWriteOffForm.tsx';
+import { useSelectedInkPrinter } from './useSelectedInkPrinter.ts';
 
 // A cartridge's docket (vInkDocket): what's in the printer, what prints used, purchases and write-offs.
 // `form` (from the URL) swaps the sections for the Add stock or Write off form, or its confirmation.
@@ -19,6 +20,7 @@ export function CartridgeDocket({ channel, channels, settings, form }: {
   channel: InkChannelView; channels: InkChannelView[]; settings: Settings | undefined; form?: CartridgeForm;
 }) {
   const navigate = useNavigate(), currency = useCurrency(), showAdded = useShowAdded();
+  const { selected } = useSelectedInkPrinter();
   const { printer } = useSearch({ from: '/_app/ink' }), close = { to: { to: '/ink', search: { printer } }, label: 'Ink' } as const;
   const show = (next?: CartridgeForm) => void navigate({ to: '/ink/$channel', params: { channel: channel.code }, search: { printer, form: next } });
   // Escape leaves a form before it closes the docket (the Docket's own handler checks defaultPrevented).
@@ -32,7 +34,8 @@ export function CartridgeDocket({ channel, channels, settings, form }: {
     addEventListener('keydown', onKey, true);
     return () => removeEventListener('keydown', onKey, true);
   });
-  const { product, fitted } = channel, bought = fittedPurchase(channel), left = fitted ? product!.open_remaining_nl! : 0;
+  const { product, fitted } = channel, bought = fittedPurchase(channel), left = fitted ? Math.max(0, product!.open_remaining_nl!) : 0;
+  const reportsSwaps = selected?.inks.some(ink => ink.channel === channel.code && (ink.first_observed_at ?? ink.observed_at).slice(0, 10) <= today());
   const spares = channel.spares ? `${plural(channel.spares, 'spare cartridge')} on the shelf.` : 'No spare on the shelf.';
   return (
     <Docket label="Cartridge" close={close}>
@@ -52,7 +55,7 @@ export function CartridgeDocket({ channel, channels, settings, form }: {
             <Sub className="mt-1.5">A rough guide: the printer's job log doesn't count ink used for cleaning, so the real level is lower. {spares}</Sub>
             <RowActions>
               <Button variant="primary" size="sm" edit onClick={() => show('purchase')}>Add stock</Button>
-              <Button size="sm" edit disabled={!fitted || left <= 0} onClick={() => show('writeoff')}>Write off</Button>
+              <Button size="sm" edit disabled={!product || (reportsSwaps ? product.remaining <= 0 : !fitted || left <= 0)} onClick={() => show('writeoff')}>Write off</Button>
             </RowActions>
           </DocketSection>
           <DocketSection label="Used by prints">

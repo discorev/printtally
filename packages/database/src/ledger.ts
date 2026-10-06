@@ -1,16 +1,17 @@
 import { eq, inArray, sql } from 'drizzle-orm';
 import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core';
 import {
-  allocationPreviewQuerySchema, cartridgePatchSchema, cartridgeSchema, inkPurchasePatchSchema, inkPurchaseSchema, inkPurchaseSetupSchema, inkSetPurchaseSchema, jobDetailsSchema, paperPatchSchema,
+  allocationPreviewQuerySchema, inkFittingSchema, inkFittingPatchSchema, cartridgePatchSchema, cartridgeSchema, inkPurchasePatchSchema, inkPurchaseSchema, inkPurchaseSetupSchema, inkSetPurchaseSchema, jobDetailsSchema, paperPatchSchema,
   paperPurchasePatchSchema, paperPurchaseSchema, paperPurchaseSetupSchema, paperSchema, settingsSchema, stockPatchSchema, stockSchema,
   writeOffPatchSchema, writeOffSchema,
   type AllocationPreview, type CartridgeView, type CostTotals, type InkPurchaseSetupResult, type InkResponse, type InkSetPurchaseResult, type JobDetails, type JobsResponse, type LedgerJob,
   type MediaTypesResponse, type PaperPurchaseSetupResult, type PapersResponse, type Settings, type StockFormat, type TotalsResponse,
   type WriteOffPreview, type WriteOffView,
 } from 'print-accounting-contracts';
-import { computeLedger, splitByWeight, type LedgerInput, type LedgerResult } from 'print-accounting-core';
+import { computeLedger, splitByWeight, now, type LedgerInput, type LedgerResult } from 'print-accounting-core';
 import type { AccountingDatabase } from './index.ts';
-import { ink_products, ink_purchases, paper_media_types, paper_purchases, paper_stocks, papers, settings, stock_write_offs } from './schema.ts';
+import { KnownPrinters } from './known-printers.ts';
+import { ink_fittings, printer_ink_readings, import_runs, printers, ink_products, ink_purchases, paper_media_types, paper_purchases, paper_stocks, papers, settings, stock_write_offs } from './schema.ts';
 
 export class LedgerError extends Error {
   readonly status: 400 | 404 | 409;
@@ -166,9 +167,57 @@ export class Ledger {
     });
   }
 
+  private checkFittingReferences(row: { printer_id: number; channel: string; ink_purchase_id: number }): void {
+    if (!this.db.orm.select({ id: printers.id }).from(printers).where(eq(printers.id, row.printer_id)).get())
+      throw new LedgerError(400, 'printer_not_found');
+    const purchase = this.db.orm.select({ product: ink_purchases.ink_product_id, channel: ink_products.channel }).from(ink_purchases)
+      .innerJoin(ink_products, eq(ink_products.id, ink_purchases.ink_product_id))
+      .where(eq(ink_purchases.id, row.ink_purchase_id)).get();
+    if (!purchase) throw new LedgerError(400, 'purchase_not_found');
+    if (purchase.channel !== row.channel) throw new LedgerError(400, 'channel_mismatch');
+  }
+  private checkFitting(row: { id: number; printer_id: number; channel: string; ink_purchase_id: number; after_record: number; created_at: string; replaced: 'shelf' | 'used' }): void {
+    this.checkFittingReferences(row);
+    const { input } = this.load();
+    const result = computeLedger({ ...input, inkFittings: [...input.inkFittings!.filter(item => item.id !== row.id), { ...row, created_on: row.created_at.slice(0, 10) }] });
+    const duplicates = input.inkFittings!.filter(fit => fit.printer_id === row.printer_id && fit.channel === row.channel && fit.after_record === row.after_record);
+    if (result.invalidFittings.length || duplicates.length > 1) throw new LedgerError(400, 'fitting_conflict');
+  }
+  createInkFitting(input: unknown): number {
+    const fitting = inkFittingSchema.parse(input);
+    return this.write(() => {
+      this.checkFittingReferences(fitting);
+      const created_at = now();
+      const id = this.insert(ink_fittings, { ...fitting, created_at });
+      this.checkFitting({ id, ...fitting, created_at });
+      return id;
+    });
+  }
+  updateInkFitting(id: number, input: unknown): void {
+    const changes = inkFittingPatchSchema.parse(input);
+    this.write(() => {
+      const current = this.db.orm.select().from(ink_fittings).where(eq(ink_fittings.id, id)).get();
+      if (!current) throw new LedgerError(404, 'not_found');
+      const merged = { ...current, ...changes };
+      this.checkFittingReferences(merged);
+      this.update(ink_fittings, id, changes);
+      this.checkFitting(merged);
+    });
+  }
+  deleteInkFitting(id: number): void { this.remove(ink_fittings, id); }
+
+  private checkWriteOff(row: { ink_product_id?: number | null; printer_id?: number | null; written_off_on: string; all_remaining?: boolean }, newWriteOff = false): void {
+    if (!row.all_remaining || row.ink_product_id == null || (row.printer_id == null && !newWriteOff)) return;
+    const product = this.db.orm.select({ channel: ink_products.channel }).from(ink_products).where(eq(ink_products.id, row.ink_product_id)).get();
+    if (!product) return; // The foreign key reports an unknown product on insert.
+    const readings = this.db.orm.select({ channel: printer_ink_readings.channel, first_seen_at: printer_ink_readings.first_seen_at })
+      .from(printer_ink_readings).where(row.printer_id == null ? undefined : eq(printer_ink_readings.printer_id, row.printer_id)).all();
+    const covered = readings.some(reading => reading.channel === product.channel && reading.first_seen_at.slice(0, 10) <= row.written_off_on);
+    if (covered) throw new LedgerError(400, row.printer_id == null ? 'printer_required' : 'printer_reports_swaps');
+  }
   createWriteOff(input: unknown): number {
     const { all_remaining, ...writeOff } = writeOffSchema.parse(input);
-    return this.write(() => this.insert(stock_write_offs, { ...writeOff, all_remaining: flag(all_remaining) }));
+    return this.write(() => { this.checkWriteOff({ ...writeOff, all_remaining }, true); return this.insert(stock_write_offs, { ...writeOff, all_remaining: flag(all_remaining) }); });
   }
   updateWriteOff(id: number, input: unknown): void {
     const { all_remaining, ...changes } = writeOffPatchSchema.parse(input);
@@ -176,16 +225,25 @@ export class Ledger {
     const values = { ...changes, all_remaining: flag(all_remaining) };
     if (all_remaining) values.quantity = null;
     else if (changes.quantity != null) values.all_remaining = 0;
-    this.write(() => this.update(stock_write_offs, id, values));
+    this.write(() => {
+      const current = this.db.orm.select().from(stock_write_offs).where(eq(stock_write_offs.id, id)).get();
+      if (!current) throw new LedgerError(404, 'not_found');
+      const { id: _id, ...fields } = current;
+      const merged = writeOffSchema.parse({ ...fields, ...values, all_remaining: values.all_remaining === undefined ? current.all_remaining === 1 : values.all_remaining === 1 });
+      this.checkWriteOff(merged, current.all_remaining !== 1 || current.ink_product_id !== merged.ink_product_id
+        || current.printer_id !== merged.printer_id || current.written_off_on !== merged.written_off_on);
+      this.update(stock_write_offs, id, values);
+    });
   }
   deleteWriteOff(id: number): void { this.remove(stock_write_offs, id); }
   /** What writing off all that's left of a stock item or cartridge on `day` would take, as if saved now. */
-  writeOffPreview(target: { paper_stock_id?: number; ink_product_id?: number }, day: string): WriteOffPreview {
+  writeOffPreview(target: { paper_stock_id?: number; ink_product_id?: number; printer_id?: number }, day: string): WriteOffPreview {
     const writeOff = writeOffSchema.parse({ ...target, written_off_on: day, all_remaining: true });
     const [table, id] = writeOff.paper_stock_id != null ? [paper_stocks, writeOff.paper_stock_id] : [ink_products, writeOff.ink_product_id!];
     if (!this.db.orm.select({ id: table.id }).from(table).where(eq(table.id, id)).get()) throw new LedgerError(404, 'not_found');
+    this.checkWriteOff(writeOff, true);
     const { input } = this.load(), preview = Number.MAX_SAFE_INTEGER; // After every saved write-off that day, as a new one would be.
-    const result = computeLedger({ ...input, writeOffs: [...input.writeOffs, { paper_stock_id: null, ink_product_id: null, quantity: null, ...writeOff, id: preview, all_remaining: true }] });
+    const result = computeLedger({ ...input, writeOffs: [...input.writeOffs, { paper_stock_id: null, ink_product_id: null, printer_id: null, quantity: null, ...writeOff, id: preview, all_remaining: true }] });
     return result.writeOffs.get(preview)!;
   }
 
@@ -219,15 +277,35 @@ export class Ledger {
       const line = { channel: String(row.channel), volume_nl: number(row.volume_nl) }, id = Number(row.job_id);
       ink.set(id, [...ink.get(id) ?? [], line]);
     }
+    const fittings = orm.select().from(ink_fittings).orderBy(ink_fittings.after_record, ink_fittings.id).all()
+      .map(fit => ({ ...fit, created_on: fit.created_at.slice(0, 10) }));
+    const readings = orm.select().from(printer_ink_readings).orderBy(printer_ink_readings.printer_id, printer_ink_readings.channel, printer_ink_readings.first_seen_at, printer_ink_readings.id).all();
+    const runs = orm.select({ id: import_runs.id, printer_id: import_runs.printer_id, observed_at: import_runs.observed_at,
+      requested_last: import_runs.requested_last, status: import_runs.status }).from(import_runs).all()
+      .filter(run => run.status === 'succeeded' && run.printer_id !== null && run.observed_at !== null && run.requested_last !== null);
+    const after = (printer: number, at: string) => runs.filter(run => run.printer_id === printer && run.observed_at! <= at)
+      .reduce((max, run) => Math.max(max, run.requested_last!), -1);
+    const prior = new Map<string, typeof readings[number]>();
+    const inkEvents: NonNullable<LedgerInput['inkEvents']> = [];
+    for (const row of readings) {
+      const key = `${row.printer_id}:${row.channel}`, previous = prior.get(key);
+      // The first reading establishes a baseline; changes position after the prior interval's last import.
+      const count = previous?.replacement_count;
+      inkEvents.push({ printer_id: row.printer_id, channel: row.channel,
+        after_record: after(row.printer_id, previous?.last_seen_at ?? row.first_seen_at),
+        upper_record: after(row.printer_id, row.first_seen_at), observed_on: row.first_seen_at.slice(0, 10), series: row.series,
+        swaps: count === null || count === undefined || row.replacement_count === null ? 0 : Math.max(0, row.replacement_count - count) });
+      prior.set(key, row);
+    }
     const settings = this.settings();
     const input: LedgerInput = {
-      method: settings.costing_method, papers: paperRows, stock, cartridges, writeOffs,
+      method: settings.costing_method, papers: paperRows, stock, cartridges, writeOffs, inkEvents, inkFittings: fittings,
       paperPurchases: purchases.map(p => p.length_um === null
         ? { ...p, quantity: p.packs! * p.sheets_per_pack!, unit: p.sheets_per_pack! } : { ...p, quantity: p.length_um, unit: p.length_um }),
       inkPurchases,
       jobs: details.map(job => {
         const at = moment(job);
-        return { id: job.job_id, date: at.slice(0, 10), at, source_media_id: job.source_media_id, width_um: number(job.width_um), height_um: number(job.height_um),
+        return { id: job.job_id, printer_id: job.printer_id, source_record_id: job.source_record_id, date: at.slice(0, 10), at, source_media_id: job.source_media_id, width_um: number(job.width_um), height_um: number(job.height_um),
           impressions: number(job.impressions), stock_id: job.stock_override_id, paper_id: job.paper_override_id,
           ink: ink.get(job.job_id) ?? [] };
       }),
@@ -263,6 +341,9 @@ export class Ledger {
     const overall = blank(), days = new Map<string, CostTotals>(), byPaper = new Map<number | null, CostTotals>();
     const bucket = <K>(map: Map<K, CostTotals>, key: K) => map.get(key) ?? map.set(key, blank()).get(key)!;
     for (const job of jobs) if (!job.hidden) for (const totals of [overall, bucket(days, job.date), bucket(byPaper, job.paper.paper_id)]) addJob(totals, job);
+    for (const event of result.swapWaste) {
+      overall.waste_micros += event.cost_micros; bucket(days, event.date).waste_micros += event.cost_micros;
+    }
     for (const writeOff of writeOffs) {
       const cost = result.writeOffs.get(writeOff.id)!.cost_micros ?? 0;
       const paperId = stock.find(item => item.id === writeOff.paper_stock_id)?.paper_id;
@@ -302,34 +383,55 @@ export class Ledger {
         }) };
     }) };
   }
-  ink(): InkResponse {
+  ink(printerId?: number): InkResponse {
     const { settings, result, jobs, cartridges, inkPurchases, writeOffs } = this.load();
+    const selected = printerId ?? new KnownPrinters(this.db).archived()[0]?.id;
+    if (printerId !== undefined && !this.db.orm.select({ id: printers.id }).from(printers).where(eq(printers.id, printerId)).get())
+      throw new LedgerError(404, 'printer_not_found');
     const views = this.writeOffViews(writeOffs, result), totals = blank();
-    // Visible prints' ink as Jobs and Totals count it (unknown_jobs: those with an ink cost unknown), and ink written off.
     for (const job of jobs) if (!job.hidden) {
       totals.jobs++; totals.ink_micros += job.ink_micros; totals.ink_nl += job.ink.reduce((sum, line) => sum + (line.volume_nl ?? 0), 0);
       if (job.ink.some(line => line.cost_micros === null)) totals.unknown_jobs++;
     }
     totals.total_micros = totals.ink_micros;
-    totals.waste_micros = views.reduce((sum, w) => sum + (w.ink_product_id !== null ? w.cost_micros ?? 0 : 0), 0);
+    totals.waste_micros = views.reduce((sum, w) => sum + (w.ink_product_id !== null ? w.cost_micros ?? 0 : 0), 0)
+      + result.swapWaste.reduce((sum, w) => sum + w.cost_micros, 0);
     const channels = this.db.all('SELECT DISTINCT channel FROM job_ink_usage ORDER BY channel').map(row => String(row.channel));
-    // Ink is used oldest first across a channel, so the cartridge in use is the channel's oldest purchase with ink left.
-    const channelOf = new Map(cartridges.map(c => [c.id, c.channel])), inUse = new Map<string, number>();
-    for (const p of inkPurchases) if (result.lots.get('ink:' + p.id)!.remaining > 0 && !inUse.has(channelOf.get(p.ink_product_id)!)) inUse.set(channelOf.get(p.ink_product_id)!, p.id);
-    return { settings, channels, totals, cartridges: cartridges.map((cartridge): CartridgeView => {
-      const bought = inkPurchases.filter(p => p.ink_product_id === cartridge.id).map(p => ({ ...p, remaining_nl: result.lots.get('ink:' + p.id)!.remaining }));
+    const readingChannels = new Set(this.db.orm.select({ channel: printer_ink_readings.channel }).from(printer_ink_readings)
+      .where(eq(printer_ink_readings.printer_id, selected ?? -1)).all().map(row => row.channel));
+    const fittedUnits = result.units.filter(unit => unit.state === 'fitted' && unit.printer_id === selected);
+    const fitted = Object.fromEntries(fittedUnits.map(unit => [cartridges.find(product => product.id === unit.product_id)!.channel,
+      { product_id: unit.product_id, purchase_id: unit.purchase_id, index: unit.index, remaining_nl: Math.max(0, unit.remaining_nl) }]));
+    const openUnits = new Map<string, LedgerResult['units'][number]>();
+    for (const cartridge of cartridges) {
+      const channel = cartridge.channel;
+      if (openUnits.has(channel)) continue;
+      const unit = fittedUnits.find(candidate => cartridges.find(product => product.id === candidate.product_id)?.channel === channel);
+      const open = (!unit || unit.remaining_nl <= 0) && !readingChannels.has(channel)
+        ? result.units.find(candidate => cartridges.find(product => product.id === candidate.product_id)?.channel === channel
+          && candidate.state === 'shelf' && candidate.remaining_nl > 0) : unit;
+      if (open) openUnits.set(channel, open);
+    }
+    return { settings, channels, totals, fitted, cartridges: cartridges.map((cartridge): CartridgeView => {
+      const own = result.units.filter(unit => unit.product_id === cartridge.id);
+      const bought = inkPurchases.filter(p => p.ink_product_id === cartridge.id)
+        .map(p => ({ ...p, remaining_nl: own.filter(unit => unit.purchase_id === p.id).reduce((sum, unit) => sum + unit.remaining_nl, 0) }));
       const printed = jobs.filter(job => job.ink.some(line => line.from.some(use => use.ink_product_id === cartridge.id)));
       const lines = printed.flatMap(job => job.ink.flatMap(line => line.from)).filter(use => use.ink_product_id === cartridge.id);
-      const wasted = views.filter(w => w.ink_product_id === cartridge.id), out = wasted.filter(w => w.cost_micros !== null);
-      const open = bought.find(p => p.id === inUse.get(cartridge.channel));
-      const openRemaining = open ? open.remaining_nl % cartridge.capacity_nl || cartridge.capacity_nl : null;
-      const remaining = bought.reduce((sum, p) => sum + p.remaining_nl, 0);
-      return { ...cartridge, purchases: bought, write_offs: wasted,
-        open_purchase_id: open?.id ?? null, open_remaining_nl: openRemaining,
-        spares: Math.max(0, Math.round((remaining - (openRemaining ?? 0)) / cartridge.capacity_nl)), jobs: printed.length,
-        bought: bought.reduce((sum, p) => sum + p.cartridges * cartridge.capacity_nl, 0), remaining,
+      const wasted = views.filter(w => w.ink_product_id === cartridge.id);
+      const channelOpen = openUnits.get(cartridge.channel);
+      const open = channelOpen?.product_id === cartridge.id ? channelOpen : undefined;
+      const wasteEvents = result.swapWaste.filter(event => event.product_id === cartridge.id);
+      const writeOffWaste = [...result.inkWaste.values()].filter(event => event.product_id === cartridge.id);
+      return { ...cartridge, units: own, purchases: bought, write_offs: wasted,
+        open_purchase_id: open && (open.remaining_nl > 0 || readingChannels.has(cartridge.channel)) ? open.purchase_id : null,
+        open_remaining_nl: open && (open.remaining_nl > 0 || readingChannels.has(cartridge.channel)) ? Math.max(0, open.remaining_nl) : null,
+        spares: own.filter(unit => unit.state === 'shelf' && unit !== open && unit.remaining_nl > 0).length, jobs: printed.length,
+        bought: bought.reduce((sum, p) => sum + p.cartridges * cartridge.capacity_nl, 0),
+        remaining: own.reduce((sum, unit) => sum + unit.remaining_nl, 0),
         used: lines.reduce((sum, use) => sum + use.quantity, 0), used_micros: lines.reduce((sum, use) => sum + use.cost_micros, 0),
-        wasted: out.reduce((sum, w) => sum + w.written_off, 0), waste_micros: out.reduce((sum, w) => sum + w.cost_micros!, 0) };
+        wasted: writeOffWaste.reduce((sum, event) => sum + event.quantity, 0) + wasteEvents.reduce((sum, event) => sum + event.quantity, 0),
+        waste_micros: writeOffWaste.reduce((sum, event) => sum + event.cost_micros, 0) + wasteEvents.reduce((sum, event) => sum + event.cost_micros, 0) };
     }) };
   }
 

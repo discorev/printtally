@@ -115,7 +115,7 @@ test('readings extend unchanged observations, while level or count changes creat
   entries = db.all('SELECT first_seen_at,last_seen_at,replacement_count FROM printer_ink_readings ORDER BY id');
   assert.deepEqual(entries.map(item => item.replacement_count), [0, 1]);
   assert.notEqual(entries[0].last_seen_at, entries[1].first_seen_at);
-  assert.deepEqual(new KnownPrinters(db).archived()[0].inks, [{ channel: 'PM', series: 'PFI-4100', level: 10, replacement_count: 1, observed_at: entries[1].last_seen_at }]);
+  assert.deepEqual(new KnownPrinters(db).archived()[0].inks, [{ channel: 'PM', series: 'PFI-4100', level: 10, replacement_count: 1, observed_at: entries[1].last_seen_at, first_observed_at: entries[0].first_seen_at }]);
   assert.deepEqual([new KnownPrinters(db).archived()[0].model, new KnownPrinters(db).archived()[0].firmware], ['PRO-1100 series', '2.050']);
   // Failed imports roll back ink facts together with jobs.
   const invalid = structuredClone(third); invalid.collected_at = '2026-10-01T00:00:00Z'; invalid.inks![0].level = 20;

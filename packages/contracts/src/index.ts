@@ -151,7 +151,7 @@ export const renamePrinterSchema = z.object({ name: z.string().trim().min(1).max
 // GET /printers: one entry per printer the archive holds (by MAC), whether or not it is still set up.
 // name and host are its known printer's when one has the same MAC (known_printer_id), else the archive's.
 export interface ArchivedPrinter { id: number; name: string; host: string; known_printer_id: string | null; jobs: number;
-  model: string | null; firmware: string | null; inks: (InkReading & { observed_at: string })[] }
+  model: string | null; firmware: string | null; inks: (InkReading & { observed_at: string; first_observed_at?: string })[] }
 export interface PrintersResponse { printers: ArchivedPrinter[] }
 export type EnrolmentRequest = z.infer<typeof enrolmentRequestSchema>;
 export type ConfirmPrinterRequest = z.infer<typeof confirmPrinterSchema>;

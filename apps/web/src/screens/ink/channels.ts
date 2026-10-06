@@ -8,6 +8,7 @@ export interface InkChannelView {
   cartridges: CartridgeView[];
   /** The product in the printer, else the first one set up; undefined when the channel has none yet. */
   product: CartridgeView | undefined;
+  fittedProductId: number | undefined; // The selected printer's fitted unit from /ink, even when exhausted.
   fitted: boolean; // Whether the ledger has a cartridge in the printer (some ink left).
   spares: number; used: number; usedMicros: number; wasteMicros: number; jobs: number;
   purchases: { purchase: InkPurchaseView; capacityNl: number }[]; // Newest first.
@@ -22,7 +23,7 @@ export function inkChannels(data: InkResponse): InkChannelView[] {
   return codes.map(code => {
     const cartridges = data.cartridges.filter(c => c.channel === code), fitted = cartridges.find(c => c.open_remaining_nl !== null);
     return {
-      code, name: inkChannel(code).name, cartridges, product: fitted ?? cartridges[0], fitted: !!fitted,
+      code, name: inkChannel(code).name, cartridges, product: fitted ?? cartridges[0], fittedProductId: data.fitted?.[code]?.product_id, fitted: !!fitted,
       spares: sum(cartridges, c => c.spares), used: sum(cartridges, c => c.used), jobs: sum(cartridges, c => c.jobs),
       usedMicros: sum(cartridges, c => c.used_micros), wasteMicros: sum(cartridges, c => c.waste_micros),
       purchases: cartridges.flatMap(c => c.purchases.map(purchase => ({ purchase, capacityNl: c.capacity_nl })))
@@ -34,7 +35,7 @@ export function inkChannels(data: InkResponse): InkChannelView[] {
 
 /** A PRO-1100 channel the ledger hasn't seen yet (no prints, no cartridge), so stock can be added from its docket. */
 export const unseenChannel = (code: string): InkChannelView | undefined => INK_CHANNELS.some(ink => ink.code === code) ? {
-  code, name: inkChannel(code).name, cartridges: [], product: undefined, fitted: false,
+  code, name: inkChannel(code).name, cartridges: [], product: undefined, fittedProductId: undefined, fitted: false,
   spares: 0, used: 0, usedMicros: 0, wasteMicros: 0, jobs: 0, purchases: [], writeOffs: [],
 } : undefined;
 

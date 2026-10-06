@@ -7,16 +7,16 @@ import { today } from '../../lib/format.ts';
 
 const cartridge = (id: number, name: string, channel: string, capacity_nl: number): CartridgeView => ({
   id, name, channel, capacity_nl, product_code: null, open_remaining_nl: null, open_purchase_id: null,
-  spares: 0, bought: 0, used: 0, wasted: 0, remaining: 0, used_micros: 0, waste_micros: 0, jobs: 0, purchases: [], write_offs: [],
+  spares: 0, bought: 0, used: 0, wasted: 0, remaining: 0, used_micros: 0, waste_micros: 0, jobs: 0, purchases: [], write_offs: [], units: [],
 });
-const ink: InkResponse = { channels: ['PM', 'C', 'MBK'], cartridges: [cartridge(1, 'PFI-3300 C', 'C', 330_000_000)], settings: settings(), totals: totals() };
+const ink: InkResponse = { fitted: {}, channels: ['PM', 'C', 'MBK'], cartridges: [cartridge(1, 'PFI-3300 C', 'C', 330_000_000)], settings: settings(), totals: totals() };
 const printers = [archivedPrinter({ id: 1, name: 'Small', model: 'PRO-1100 series' }),
   archivedPrinter({ id: 2, name: 'Wide', model: 'PRO-2600 series', inks: [
     { channel: 'PM', series: 'PFI-3100', level: 20, replacement_count: 1, observed_at: '2026-09-02T00:00:00Z' },
     { channel: 'C', series: 'PFI-3300', level: 50, replacement_count: 1, observed_at: '2026-09-02T00:00:00Z' },
     { channel: 'MBK', series: 'PFI-2300', level: 70, replacement_count: 1, observed_at: '2026-09-02T00:00:00Z' },
   ] })];
-const routes = () => ({ 'GET /ink': ink, 'GET /settings': ink.settings, 'GET /printers': { printers },
+const routes = () => ({ 'GET /ink': ink, 'GET /ink?printer=1': ink, 'GET /ink?printer=2': ink, 'GET /settings': ink.settings, 'GET /printers': { printers },
   'POST /ink-purchases/setup': { ink_product_id: 42, id: 6 }, 'POST /ink-purchases/set': { purchases: [] } });
 
 test('Type offers model sizes and defaults to the selected printer reading, without expanding Cartridge', async () => {
@@ -56,7 +56,7 @@ test('a set with no selected-printer reading defaults to the most recently bough
     { ...cartridge(1, 'PFI-3300 C', 'C', 330_000_000), purchases: [purchase(8, 1, '2026-09-10')] },
     { ...cartridge(2, 'PFI-3100 PM', 'PM', 160_000_000), purchases: [purchase(9, 2, '2026-09-12')] },
   ] };
-  const { screen, user } = await renderApp('/ink/new?printer=1', fakeApi({ ...routes(), 'GET /ink': data }));
+  const { screen, user } = await renderApp('/ink/new?printer=1', fakeApi({ ...routes(), 'GET /ink?printer=1': data }));
   expect(await screen.findByText('A cartridge, or a whole set, bought for the shelf.')).toBeTruthy();
   await user.selectOptions(screen.getByRole('combobox', { name: 'Cartridge' }), '*');
   expect((screen.getByRole('combobox', { name: 'Type' }) as HTMLSelectElement).value).toBe('PFI-3100');
@@ -68,7 +68,7 @@ test('a recent MBK purchase selects the matching set type when the printer has n
     id: 12, ink_product_id: 3, purchased_on: '2026-09-15', cartridges: 1, price_micros: 40_000_000, remaining_nl: 330_000_000,
   }] };
   const data: InkResponse = { ...ink, channels: ['C', 'MBK'], cartridges: [...ink.cartridges, mbk] };
-  const { screen, user } = await renderApp('/ink/new?printer=1', fakeApi({ ...routes(), 'GET /ink': data }));
+  const { screen, user } = await renderApp('/ink/new?printer=1', fakeApi({ ...routes(), 'GET /ink?printer=1': data }));
   await user.selectOptions(await screen.findByRole('combobox', { name: 'Cartridge' }), '*');
   expect((screen.getByRole('combobox', { name: 'Type' }) as HTMLSelectElement).value).toBe('PFI-3300');
 });

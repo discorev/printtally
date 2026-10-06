@@ -35,6 +35,8 @@ export class KnownPrinters {
     const jobs = this.db.orm.select({ printer: print_jobs.printer_id, jobs: count() }).from(print_jobs).groupBy(print_jobs.printer_id).all();
     const inks = this.db.orm.select().from(printer_ink_readings)
       .orderBy(desc(printer_ink_readings.first_seen_at), desc(printer_ink_readings.id)).all();
+    const firstSeen = new Map<string, string>();
+    for (const ink of inks) firstSeen.set(`${ink.printer_id}:${ink.channel}`, ink.first_seen_at);
     return this.db.orm.select().from(printers).all().map(row => {
       const latest = new Map<string, typeof inks[number]>();
       for (const ink of inks) if (ink.printer_id === row.id && !latest.has(ink.channel)) latest.set(ink.channel, ink);
@@ -43,6 +45,7 @@ export class KnownPrinters {
         known_printer_id: match?.id ?? null, jobs: jobs.find(item => item.printer === row.id)?.jobs ?? 0,
         model: row.model, firmware: row.firmware, inks: [...latest.values()].map(ink => ({
           channel: ink.channel, series: ink.series, level: ink.level, replacement_count: ink.replacement_count, observed_at: ink.last_seen_at,
+          first_observed_at: firstSeen.get(`${row.id}:${ink.channel}`),
         })).sort((a, b) => a.channel.localeCompare(b.channel)) };
     }).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0) || a.id - b.id);
   }
