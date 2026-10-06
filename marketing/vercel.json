@@ -1,6 +1,6 @@
 {
   "cleanUrls": true,
-  "ignoreCommand": "if [ -n \"$VERCEL_GIT_PREVIOUS_SHA\" ]; then git diff --quiet \"$VERCEL_GIT_PREVIOUS_SHA\" HEAD -- .; else git fetch --quiet --depth=100 origin main && git diff --quiet FETCH_HEAD...HEAD -- .; fi",
+  "ignoreCommand": "if [ -n \"$VERCEL_GIT_PREVIOUS_SHA\" ]; then git diff --quiet \"$VERCEL_GIT_PREVIOUS_SHA\" HEAD -- .; elif [ \"$VERCEL_GIT_COMMIT_REF\" = main ]; then false; else git fetch --quiet --depth=100 origin main && git diff --quiet FETCH_HEAD...HEAD -- .; fi",
   "redirects": [
     {
       "source": "/:path(.*)",
