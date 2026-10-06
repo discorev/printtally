@@ -320,7 +320,7 @@ test('a shelf write-off shows its date without an old printer even after partial
     ended_after_record: 2, started_on: '2026-09-01', ended_by: 'write_off', written_off_from_shelf: true,
     written_off_on: '2026-10-02', printed_nl: 20_000_000, waste_nl: 60_000_000, remaining_nl: 0 })] });
   const { inside } = await open(data({ cartridges: [product] }));
-  const place = inside.getByText('Written off · 2 Oct 2026');
+  const place = inside.getByText('Written off · 2 Oct 2026 · 20.0 ml printed, 60.0 ml waste');
   expect(place.textContent).not.toContain('Unknown');
   expect(place.textContent).not.toContain('since');
   expect(place.textContent?.includes('\u00a0')).toBe(true);
