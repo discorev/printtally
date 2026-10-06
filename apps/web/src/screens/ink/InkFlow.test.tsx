@@ -18,7 +18,7 @@ const cartridge = (overrides: Partial<CartridgeView> = {}): CartridgeView => ({
   purchases: [purchase()], write_offs: [], units: [], ...overrides,
 });
 const ink = (overrides: Partial<InkResponse> = {}): InkResponse => ({
-  channels: ['C'], cartridges: [cartridge()], fitted: { C: { product_id: 1, purchase_id: 21, index: 1, remaining_nl: 60_000_000 } }, settings: settings(),
+  channels: ['C'], cartridges: [cartridge()], fitted: {}, settings: settings(),
   totals: totals({ jobs: 3, ink_micros: 9_000_000 }), ...overrides,
 });
 const preview = (overrides: Partial<WriteOffPreview> = {}): WriteOffPreview => ({
@@ -194,7 +194,6 @@ test('writing off the fitted cartridge sends all remaining and only confirms aft
   }));
 });
 
-
 test('reading-mode write-off offers only measured quantity and does not request all-remaining preview', async () => {
   const api = fakeApi({ ...routes(), 'POST /write-offs': { id: 42 } });
   const { screen, user } = await renderApp('/ink/C?form=writeoff', api);
@@ -208,7 +207,6 @@ test('reading-mode write-off offers only measured quantity and does not request 
   expect(api.sent('POST /write-offs')).toEqual([{ ink_product_id: 1, written_off_on: today(), quantity: 1_250_000, reason: null }]);
   expect(api.sent(`GET /write-offs/preview?ink_product_id=1&printer_id=1&written_off_on=${today()}`)).toEqual([]);
 });
-
 
 test('reading-mode write-off uses the selected printer’s fitted product, not its reported series', async () => {
   const other = cartridge({ id: 2, name: 'PFI-3300 C', open_remaining_nl: 40_000_000, open_purchase_id: 22 });
@@ -270,4 +268,26 @@ test('reading mode uses the first observation even when the latest reading is in
   const { screen } = await renderApp('/ink/C?form=writeoff', api);
   expect(await screen.findByRole('spinbutton', { name: 'Quantity (ml)' })).toBeTruthy();
   expect(screen.queryByText(/the ledger thinks is left/)).toBeNull();
+});
+
+for (const [label, product, fitted] of [
+  ['shelf preview after write-off', cartridge({ open_remaining_nl: 80_000_000, open_purchase_id: 22,
+    purchases: [purchase({ id: 22, purchased_on: '2026-09-02' }), purchase()] }), {}],
+  ['exhausted fitted unit', cartridge({ open_remaining_nl: null, open_purchase_id: null }),
+    { C: { product_id: 1, purchase_id: 21, index: 1, remaining_nl: 0 } }],
+] satisfies [string, CartridgeView, InkResponse['fitted']][]) test(`capacity-mode ${label} agrees between row and docket`, async () => {
+  const api = fakeApi(routes(ink({ cartridges: [product], fitted })));
+  const { screen, user } = await renderApp('/ink', api);
+  const row = await screen.findByRole('option', { name: /C Cyan/ });
+  await user.click(row);
+  const docket = await screen.findByRole('complementary', { name: 'Cartridge' });
+  if (product.open_remaining_nl === null) {
+    expect(row.textContent).toContain('None in the printer');
+    expect(within(docket).getByText('None fitted.')).toBeTruthy();
+    expect(within(docket).queryByText(/Bought 1 Sep/)).toBeNull();
+  } else {
+    expect(row.textContent).toContain('~80.0 ml');
+    expect(within(docket).getByText('~80.0 ml')).toBeTruthy();
+    expect(within(docket).getByText('Bought 2 Sep 2026')).toBeTruthy();
+  }
 });

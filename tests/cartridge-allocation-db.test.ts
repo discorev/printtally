@@ -320,3 +320,40 @@ test('unit dates follow its printer records and a future fitting has no start da
   assert.deepEqual([fitted.state, fitted.started_on, fitted.ended_on, fitted.replaced],
     ['fitted', null, null, 'shelf']);
 });
+
+test('a write-off ends the fitted unit at the last processed printer record, not a later print', t => {
+  const { db, ledger } = fixture(t);
+  const batch = snapshot(['2026-02-01', '2026-02-02', '2026-02-04'], '2026-02-05T12:00:00Z', 0);
+  batch.inks = undefined;
+  batch.records[1].raw.job_used_ink_C = 100;
+  db.importSnapshot(batch);
+  const { product, purchase } = stock(ledger, 'PFI-4100', 2);
+  ledger.createWriteOff({ printer_id: 1, ink_product_id: product, written_off_on: '2026-02-03', all_remaining: true });
+  const units = ledger.ink(1).cartridges[0].units.filter(unit => unit.purchase_id === purchase);
+  assert.deepEqual([units[0].state, units[0].starts_after_record, units[0].ended_after_record, units[0].started_on, units[0].ended_on],
+    ['used', 0, 2, '2026-02-01', '2026-02-02']);
+  assert.ok(units[0].waste_nl > 0, 'the write-off consumed remaining ink');
+  assert.equal(units[1].state, 'fitted', 'later print claims the next unit');
+});
+
+test('a moved unit written off in its new printer uses only that printer’s bounded history', t => {
+  const { db, ledger } = fixture(t);
+  const first = snapshot(['2026-02-01', '2026-02-02'], '2026-02-06T12:00:00Z', 0);
+  first.inks = undefined;
+  first.records[0].raw.job_used_ink_C = 100;
+  db.importSnapshot(first);
+  const second = snapshot(['2026-02-03', '2026-02-05'], '2026-02-06T12:00:00Z', 0, '020000000002');
+  second.inks = undefined;
+  second.records[0].raw.job_used_ink_C = 100;
+  db.importSnapshot(second);
+  const { product, purchase } = stock(ledger, 'PFI-4100', 2);
+  const replacement = ledger.createInkPurchase({ ink_product_id: product, purchased_on: '2026-01-02', cartridges: 1, price_micros: 10 * GBP });
+  ledger.createInkFitting({ printer_id: 1, channel: 'C', ink_purchase_id: replacement, after_record: 1, replaced: 'shelf' });
+  ledger.createInkFitting({ printer_id: 2, channel: 'C', ink_purchase_id: purchase, after_record: 0, replaced: 'shelf' });
+  ledger.createWriteOff({ printer_id: 2, ink_product_id: product, written_off_on: '2026-02-04', all_remaining: true });
+  const units = ledger.ink(2).cartridges[0].units;
+  const moved = units.find(unit => unit.index === 1)!;
+  assert.ok(moved.waste_nl > 0, 'the write-off consumed ink moved between printers');
+  assert.deepEqual([moved.state, moved.printer_id, moved.starts_after_record, moved.ended_after_record, moved.started_on, moved.ended_on],
+    ['used', 2, 0, 1, '2026-02-03', '2026-02-03']);
+});

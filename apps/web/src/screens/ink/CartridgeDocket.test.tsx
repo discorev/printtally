@@ -96,15 +96,18 @@ test('multiple types get headings under Cartridges', async () => {
 
 test('Fit in printer posts the selected printer and its highest record for The next print', async () => {
   const { inside, user, api } = await open();
-  await user.click(inside.getAllByRole('button', { name: 'Fit in printer' })[0]);
+  const action = inside.getAllByRole('button', { name: 'Fit in printer' })[0];
+  await user.click(action);
   const form = inside.getByRole('group', { name: 'Fit in printer' });
   expect((within(form).getByRole('combobox', { name: 'Printer' }) as HTMLSelectElement).value).toBe('1');
   expect((within(form).getByRole('combobox', { name: 'From' }) as HTMLSelectElement).value).toBe('next');
   expect(within(form).getByRole('combobox', { name: 'The cartridge it replaces' })).toBeTruthy();
   await user.click(within(form).getByRole('button', { name: 'Fit' }));
   await waitFor(() => expect(api.sent('POST /ink-fittings')).toEqual([{
-    printer_id: 1, channel: 'C', ink_purchase_id: 22, after_record: 10, replaced: 'used',
+    printer_id: 1, channel: 'C', ink_purchase_id: 22, after_record: 10, replaced: 'shelf',
   }]));
+  await waitFor(() => expect(inside.queryByRole('group', { name: 'Fit in printer' })).toBeNull());
+  await waitFor(() => expect(document.activeElement).toBe(action));
 });
 
 test('Fit in printer starts before the chosen print and filters compatible printers', async () => {
@@ -129,7 +132,7 @@ test('a printer without a fitted channel hides The cartridge it replaces', async
   await waitFor(() => expect(within(form).queryByRole('combobox', { name: 'The cartridge it replaces' })).toBeNull());
   await user.click(within(form).getByRole('button', { name: 'Fit' }));
   await waitFor(() => expect(api.sent('POST /ink-fittings')).toEqual([{
-    printer_id: 3, channel: 'C', ink_purchase_id: 22, after_record: 3, replaced: 'used',
+    printer_id: 3, channel: 'C', ink_purchase_id: 22, after_record: 3, replaced: 'shelf',
   }]));
 });
 
@@ -138,7 +141,7 @@ test('Change patches a correction with its current printer, start and replacemen
   await user.click(inside.getAllByRole('button', { name: 'Change' })[1]);
   let form = inside.getByRole('group', { name: 'Change cartridge' });
   expect((within(form).getByRole('combobox', { name: 'From' }) as HTMLSelectElement).value).toBe('4');
-  expect((within(form).getByRole('combobox', { name: 'The cartridge it replaces' }) as HTMLSelectElement).value).toBe('shelf');
+  expect(within(form).queryByRole('combobox', { name: 'The cartridge it replaces' })).toBeNull();
   await user.selectOptions(within(form).getByRole('combobox', { name: 'From' }), '7');
   await user.click(within(form).getByRole('button', { name: 'Save' }));
   await waitFor(() => expect(api.sent('PATCH /ink-fittings/50')).toEqual([{
@@ -157,10 +160,9 @@ test('Change on an automatic used unit creates a fitting from that purchase', as
   expect((within(form).getByRole('combobox', { name: 'From' }) as HTMLSelectElement).value).toBe('0');
   await user.click(within(form).getByRole('button', { name: 'Save' }));
   await waitFor(() => expect(api.sent('POST /ink-fittings')).toEqual([{
-    printer_id: 1, channel: 'C', ink_purchase_id: 21, after_record: 0, replaced: 'used',
+    printer_id: 1, channel: 'C', ink_purchase_id: 21, after_record: 0, replaced: 'shelf',
   }]));
 });
-
 
 test('a single printer keeps the In the printer label', async () => {
   const api = fakeApi({ ...routes(), 'GET /printers': { printers: printers.slice(0, 1) } });
@@ -189,4 +191,114 @@ test('refitting a returned shelf unit creates a new event without moving its ear
   await user.click(within(form).getByRole('button', { name: 'Fit' }));
   await waitFor(() => expect(api.sent('POST /ink-fittings')).toHaveLength(1));
   expect(api.sent('PATCH /ink-fittings/60')).toHaveLength(0);
+});
+
+test('a fitted unit from the next print has no printed amount or replacement choice for itself', async () => {
+  const product = cartridge({ units: [unit(1, { state: 'fitted', printer_id: 1, starts_after_record: 10,
+    started_on: null, printed_nl: 0, fitting_id: 50 })] });
+  const { inside, user } = await open(data({ cartridges: [product], fitted: { C: { product_id: 1, purchase_id: 21, index: 1, remaining_nl: 80_000_000 } } }));
+  expect(inside.getByText('In Studio from the next print')).toBeTruthy();
+  expect(inside.queryByText(/0\.0 ml printed/)).toBeNull();
+  await user.click(inside.getByRole('button', { name: 'Change' }));
+  const form = inside.getByRole('group', { name: 'Change cartridge' });
+  await waitFor(() => expect((within(form).getByRole('combobox', { name: 'From' }) as HTMLSelectElement).value).toBe('next'));
+  expect(within(form).queryByRole('option', { name: 'Current start' })).toBeNull();
+  expect(within(form).queryByRole('combobox', { name: 'The cartridge it replaces' })).toBeNull();
+});
+
+test('a historical start absent from recent jobs is labelled by its date and resets on printer change', async () => {
+  const product = cartridge({ units: [unit(1, { state: 'used', printer_id: 1, starts_after_record: 6,
+    started_on: '2026-09-01', fitting_id: 50 })] });
+  const { inside, user, api } = await open(data({ cartridges: [product] }));
+  await user.click(inside.getByRole('button', { name: 'Change' }));
+  const form = inside.getByRole('group', { name: 'Change cartridge' });
+  const from = within(form).getByRole('combobox', { name: 'From' }) as HTMLSelectElement;
+  expect(from.value).toBe('6');
+  expect(within(from).getByRole('option', { name: '1 Sep 2026' })).toBeTruthy();
+  expect(within(from).queryByRole('option', { name: 'Current start' })).toBeNull();
+  await user.selectOptions(from, '7');
+  await user.selectOptions(within(form).getByRole('combobox', { name: 'Printer' }), '3');
+  expect(from.value).toBe('next');
+  expect(within(from).queryByRole('option', { name: '1 Sep 2026' })).toBeNull();
+  await user.click(within(form).getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(api.sent('PATCH /ink-fittings/50')).toEqual([{
+    printer_id: 3, channel: 'C', ink_purchase_id: 21, after_record: 3, replaced: 'shelf',
+  }]));
+});
+
+test('an ineligible current printer starts on the eligible printer next print', async () => {
+  const product = cartridge({ units: [unit(1, { state: 'used', printer_id: 2, starts_after_record: 8,
+    started_on: '2026-09-01', fitting_id: 50 })] });
+  const { inside, user, api } = await open(data({ cartridges: [product] }));
+  await user.click(inside.getByRole('button', { name: 'Change' }));
+  const form = inside.getByRole('group', { name: 'Change cartridge' });
+  expect((within(form).getByRole('combobox', { name: 'Printer' }) as HTMLSelectElement).value).toBe('1');
+  expect((within(form).getByRole('combobox', { name: 'From' }) as HTMLSelectElement).value).toBe('next');
+  await user.click(within(form).getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(api.sent('PATCH /ink-fittings/50')).toEqual([{
+    printer_id: 1, channel: 'C', ink_purchase_id: 21, after_record: 10, replaced: 'shelf',
+  }]));
+});
+
+test('a unit in another printer checks that printer fitting, excluding itself', async () => {
+  const product = cartridge({ units: [unit(1, { state: 'fitted', printer_id: 3, starts_after_record: 1, fitting_id: 50 })] });
+  const response = data({ cartridges: [product] });
+  const other = data({ cartridges: [product], fitted: { C: { product_id: 1, purchase_id: 21, index: 1, remaining_nl: 80_000_000 } } });
+  const api = fakeApi({ ...routes(response), 'GET /ink?printer=3': other });
+  const { screen, user } = await renderApp('/ink/C?printer=1', api);
+  const docket = await screen.findByText('In Studio').then(() => screen.getByRole('complementary', { name: 'Cartridge' }));
+  await user.click(within(docket).getByRole('button', { name: 'Change' }));
+  const form = within(docket).getByRole('group', { name: 'Change cartridge' });
+  expect((within(form).getByRole('combobox', { name: 'Printer' }) as HTMLSelectElement).value).toBe('3');
+  await waitFor(() => expect(api.requests.some(request => request.path === '/ink?printer=3')).toBe(true));
+  expect(within(form).queryByRole('combobox', { name: 'The cartridge it replaces' })).toBeNull();
+});
+
+test('Escape and Cancel close only the inline form and return focus to its row action', async () => {
+  const { inside, user, screen } = await open();
+  const action = inside.getAllByRole('button', { name: 'Fit in printer' })[0];
+  await user.click(action);
+  let form = inside.getByRole('group', { name: 'Fit in printer' });
+  expect(document.activeElement).toBe(within(form).getByRole('combobox', { name: 'Printer' }));
+  await user.keyboard('{Escape}');
+  expect(inside.queryByRole('group', { name: 'Fit in printer' })).toBeNull();
+  expect(inside.getByText('In Studio')).toBeTruthy();
+  await waitFor(() => expect(document.activeElement).toBe(action));
+  await user.click(action);
+  form = inside.getByRole('group', { name: 'Fit in printer' });
+  await user.click(within(form).getByRole('button', { name: 'Cancel' }));
+  expect(screen.queryByRole('group', { name: 'Fit in printer' })).toBeNull();
+  await waitFor(() => expect(document.activeElement).toBe(action));
+});
+
+test('a failed Remove correction keeps the form open and reports its API error', async () => {
+  const api = fakeApi({ ...routes(), 'DELETE /ink-fittings/50': reply(400, { error: 'fitting_conflict' }) });
+  const { screen, user } = await renderApp('/ink/C?printer=1', api);
+  const docket = await screen.findByText('In Studio').then(() => screen.getByRole('complementary', { name: 'Cartridge' }));
+  await user.click(within(docket).getAllByRole('button', { name: 'Change' })[1]);
+  const form = within(docket).getByRole('group', { name: 'Change cartridge' });
+  await user.click(within(form).getByRole('button', { name: 'Remove correction' }));
+  expect(await within(form).findByText('Not saved. That fitting conflicts with another cartridge or print.')).toBeTruthy();
+  expect(within(docket).getByRole('group', { name: 'Change cartridge' })).toBeTruthy();
+});
+
+test('write-off used rows show a date without an unfinished range or zero printed amount', async () => {
+  const product = cartridge({ units: [unit(1, { state: 'used', printer_id: 1, starts_after_record: 0,
+    ended_after_record: 1, started_on: '2026-09-01', ended_on: null, waste_nl: 80_000_000 })] });
+  const { inside } = await open(data({ cartridges: [product] }));
+  expect(inside.getByText('Used up in Studio · since 1 Sep 2026 · 80.0 ml waste')).toBeTruthy();
+  expect(inside.queryByText(/0\.0 ml printed/)).toBeNull();
+});
+
+test('Change on a unit in another printer offers replacement for a different fitted unit', async () => {
+  const product = cartridge({ units: [unit(1, { state: 'used', printer_id: 3, starts_after_record: 1, fitting_id: 50 })] });
+  const response = data({ cartridges: [product] });
+  const other = data({ cartridges: [product], fitted: { C: { product_id: 1, purchase_id: 21, index: 2, remaining_nl: 80_000_000 } } });
+  const api = fakeApi({ ...routes(response), 'GET /ink?printer=3': other });
+  const { screen, user } = await renderApp('/ink/C?printer=1', api);
+  const docket = await screen.findByText('In Studio').then(() => screen.getByRole('complementary', { name: 'Cartridge' }));
+  await user.click(within(docket).getByRole('button', { name: 'Change' }));
+  const form = within(docket).getByRole('group', { name: 'Change cartridge' });
+  expect((within(form).getByRole('combobox', { name: 'Printer' }) as HTMLSelectElement).value).toBe('3');
+  expect((await within(form).findByRole('combobox', { name: 'The cartridge it replaces' }) as HTMLSelectElement).value).toBe('shelf');
 });

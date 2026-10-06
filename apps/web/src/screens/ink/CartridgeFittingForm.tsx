@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { cartridgeTypes } from 'print-accounting-core/printer-models';
 import type { ArchivedPrinter, CartridgeView } from 'print-accounting-contracts';
 import { api } from '../../api/endpoints.ts';
@@ -17,26 +17,42 @@ export function canFit(printer: ArchivedPrinter, cartridge: CartridgeView): bool
   return known.some(type => type.series === series) || reading?.series === series || (!known.length && !reading);
 }
 
-export function CartridgeFittingForm({ cartridge, unit, printers, selectedPrinterId, fittedProductId, onClose }: {
+export function CartridgeFittingForm({ cartridge, unit, printers, selectedPrinterId, fittedPurchaseId, fittedIndex, onClose }: {
   cartridge: CartridgeView; unit: CartridgeUnit; printers: ArchivedPrinter[]; selectedPrinterId?: number;
-  fittedProductId?: number; onClose: () => void;
+  fittedPurchaseId?: number; fittedIndex?: number; onClose: () => void;
 }) {
   const eligible = printers.filter(printer => canFit(printer, cartridge));
   const preferred = unit.state === 'shelf' ? selectedPrinterId : unit.printer_id;
   const initialPrinterId = eligible.find(printer => printer.id === preferred)?.id
     ?? eligible.find(printer => printer.id === selectedPrinterId)?.id ?? eligible[0]?.id;
   const [printerId, setPrinterId] = useState(initialPrinterId);
-  const [from, setFrom] = useState(unit.state === 'shelf' || unit.starts_after_record === null ? 'next' : String(unit.starts_after_record));
-  const [replaced, setReplaced] = useState<'shelf' | 'used'>(unit.replaced ?? 'used');
+  const [from, setFrom] = useState(unit.state === 'shelf' || unit.printer_id !== initialPrinterId || unit.starts_after_record === null
+    ? 'next' : String(unit.starts_after_record));
+  const [replaced, setReplaced] = useState<'shelf' | 'used'>(unit.replaced ?? 'shelf');
+  const form = useRef<HTMLDivElement>(null);
+  useEffect(() => { form.current?.querySelector<HTMLElement>('select:not(:disabled), button:not(:disabled)')?.focus(); }, []);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !form.current?.contains(event.target as Node)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+    };
+    addEventListener('keydown', onKey, true);
+    return () => removeEventListener('keydown', onKey, true);
+  }, [onClose]);
   const recent = useQueryRecentPrinterJobs(printerId);
   // /ink is per printer. The selected printer's fitted channel is already in the docket's read model.
   const otherInk = useInk(printerId, !!printerId && printerId !== selectedPrinterId);
-  const fitted = printerId === selectedPrinterId ? fittedProductId !== undefined : !!otherInk.data?.fitted?.[cartridge.channel];
+  const current = printerId === selectedPrinterId
+    ? { purchase_id: fittedPurchaseId, index: fittedIndex } : otherInk.data?.fitted?.[cartridge.channel];
+  const fitted = current?.purchase_id !== undefined && (current.purchase_id !== unit.purchase_id || current.index !== unit.index);
   const choices = recent.data?.jobs ?? [];
+  const selectedFrom = from !== 'next' && printerId === unit.printer_id && Number(from) === recent.data?.highest_source_record_id ? 'next' : from;
   const starts = choices.map(job => job.source_record_id - 1);
-  const existing = unit.starts_after_record !== null && from !== 'next' && !starts.includes(Number(from));
+  const existing = selectedFrom !== 'next' && !starts.includes(Number(selectedFrom));
   const input = () => ({ printer_id: printerId!, channel: cartridge.channel, ink_purchase_id: unit.purchase_id,
-    after_record: from === 'next' ? recent.data!.highest_source_record_id : Number(from), replaced });
+    after_record: selectedFrom === 'next' ? recent.data!.highest_source_record_id : Number(selectedFrom), replaced });
   // A returned shelf unit may still carry its earlier correction: fitting it again creates a new event.
   const correction = unit.state !== 'shelf' ? unit.fitting_id : null;
   const save = useEdit(async () => {
@@ -46,16 +62,16 @@ export function CartridgeFittingForm({ cartridge, unit, printers, selectedPrinte
   const remove = useEdit(() => api.inkFitting.remove(correction!));
   const pending = save.isPending || remove.isPending;
   return (
-    <div className="mt-2 rounded-[3px] border border-rule-2 bg-paper-2 p-3 text-[13px]" role="group" aria-label={unit.state === 'shelf' ? 'Fit in printer' : 'Change cartridge'}>
+    <div ref={form} className="mt-2 rounded-[3px] border border-rule-2 bg-paper-2 p-3 text-[13px]" role="group" aria-label={unit.state === 'shelf' ? 'Fit in printer' : 'Change cartridge'}>
       <FieldStack>
         {eligible.length ? <>
           <FieldPair>
             <Field label="Printer">{id => <Select id={id} value={printerId} onChange={event => { setPrinterId(Number(event.target.value)); setFrom('next'); }}>
               {eligible.map(printer => <option key={printer.id} value={printer.id}>{printer.name}</option>)}
             </Select>}</Field>
-            <Field label="From">{id => <Select id={id} value={from} onChange={event => setFrom(event.target.value)}>
+            <Field label="From">{id => <Select id={id} value={selectedFrom} onChange={event => setFrom(event.target.value)}>
               <option value="next">The next print</option>
-              {existing && <option value={from}>Current start</option>}
+              {existing && <option value={selectedFrom}>{unit.started_on ? dateShort(unit.started_on) : `After record ${selectedFrom}`}</option>}
               {choices.map(job => <option key={job.job_id} value={job.source_record_id - 1}>
                 {dateShort(job.date).replace(/ \d{4}$/, '')}, {job.time} · {job.label}
               </option>)}

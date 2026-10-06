@@ -7,11 +7,11 @@ import { byChannelOrder, inkChannel, INK_CHANNELS } from '../../lib/inks.ts';
 export interface InkChannelView {
   code: string; name: string;
   cartridges: CartridgeView[];
-  /** The product in the printer, else the first one set up; undefined when the channel has none yet. */
+  /** The product in the server preview (possibly on the shelf), else the first set up. */
   product: CartridgeView | undefined;
   fittedProductId: number | undefined; // The selected printer's fitted unit from /ink, even when exhausted.
-  fittedPurchaseId: number | undefined; fittedRemainingNl: number | undefined;
-  fitted: boolean; // Whether the ledger has a cartridge in the printer (some ink left).
+  fittedPurchaseId: number | undefined; fittedIndex: number | undefined;
+  fitted: boolean; // Whether the server previews an open cartridge for this channel.
   spares: number; used: number; usedMicros: number; wasteMicros: number; jobs: number;
   purchases: { purchase: InkPurchaseView; capacityNl: number }[]; // Newest first.
   writeOffs: WriteOffView[]; // Newest first.
@@ -25,8 +25,8 @@ export function inkChannels(data: InkResponse): InkChannelView[] {
   return codes.map(code => {
     const cartridges = data.cartridges.filter(c => c.channel === code), fitted = cartridges.find(c => c.open_remaining_nl !== null);
     return {
-      code, name: inkChannel(code).name, cartridges, product: fitted ?? cartridges[0], fittedProductId: data.fitted?.[code]?.product_id, fittedPurchaseId: data.fitted?.[code]?.purchase_id,
-      fittedRemainingNl: data.fitted?.[code]?.remaining_nl, fitted: !!fitted,
+      code, name: inkChannel(code).name, cartridges, product: fitted ?? cartridges[0], fittedProductId: data.fitted?.[code]?.product_id, fittedPurchaseId: data.fitted?.[code]?.purchase_id, fittedIndex: data.fitted?.[code]?.index,
+      fitted: !!fitted,
       spares: sum(cartridges, c => c.spares), used: sum(cartridges, c => c.used), jobs: sum(cartridges, c => c.jobs),
       usedMicros: sum(cartridges, c => c.used_micros), wasteMicros: sum(cartridges, c => c.waste_micros),
       purchases: cartridges.flatMap(c => c.purchases.map(purchase => ({ purchase, capacityNl: c.capacity_nl })))
@@ -38,7 +38,7 @@ export function inkChannels(data: InkResponse): InkChannelView[] {
 
 /** A PRO-1100 channel the ledger hasn't seen yet (no prints, no cartridge), so stock can be added from its docket. */
 export const unseenChannel = (code: string): InkChannelView | undefined => INK_CHANNELS.some(ink => ink.code === code) ? {
-  code, name: inkChannel(code).name, cartridges: [], product: undefined, fittedProductId: undefined, fittedPurchaseId: undefined, fittedRemainingNl: undefined, fitted: false,
+  code, name: inkChannel(code).name, cartridges: [], product: undefined, fittedProductId: undefined, fittedPurchaseId: undefined, fittedIndex: undefined, fitted: false,
   spares: 0, used: 0, usedMicros: 0, wasteMicros: 0, jobs: 0, purchases: [], writeOffs: [],
 } : undefined;
 
@@ -48,10 +48,10 @@ export const purchasableChannels = (channels: InkChannelView[]): { code: string;
 
 /** "PFI-4100" from the product "PFI-4100 MBK": the channel is already in the title. */
 export const productName = (c: Pick<CartridgeView, 'name' | 'channel'>): string => c.name.replace(new RegExp(`\\s+${c.channel}$`), '') || c.name;
-/** The cartridge in the printer's purchase, when the ledger knows it. */
+/** The purchase of the cartridge shown in the server preview, if known. */
 export const fittedPurchase = (channel: InkChannelView): InkPurchaseView | undefined => {
-  const product = channel.cartridges.find(item => item.id === channel.fittedProductId);
-  return product?.purchases.find(p => p.id === channel.fittedPurchaseId);
+  const product = channel.product;
+  return product?.purchases.find(p => p.id === product.open_purchase_id);
 };
 /** A whole set is one cartridge for every channel in the list: the channel's product, or a new one where it has none. */
 export const inkSet = (channels: InkChannelView[]): { productIds: number[]; missing: string[] } =>

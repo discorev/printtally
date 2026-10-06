@@ -190,6 +190,7 @@ export function allocateInk(input: LedgerInput) {
       applyEvent(next, eventDay(next));
     }
   };
+  const processedRecords = new Map<number, number>();
   const heads = [...jobsByPrinter.values()];
   const offs = [...input.writeOffs].sort((a, b) => a.written_off_on.localeCompare(b.written_off_on) || a.id - b.id);
   while (heads.some(list => list.length) || offs.length) {
@@ -214,7 +215,8 @@ export function allocateInk(input: LedgerInput) {
         if (unit) {
           unit.waste_nl += quantity; unit.remaining_nl -= quantity;
           if (unit.printer_id !== null) fitted.delete(key(unit.printer_id, unit.channel));
-          unit.printer_id = null; unit.state = 'used'; unit.ended_after_record = null;
+          unit.ended_after_record = unit.printer_id === null ? null : (processedRecords.get(unit.printer_id) ?? 0);
+          unit.printer_id = null; unit.state = 'used';
         }
         if (unit) inkWaste.set(off.id, { product_id: unit.product_id, quantity, cost_micros: cost });
         offCosts.set(off.id, { written_off: quantity, cost_micros: cost, remaining });
@@ -247,6 +249,7 @@ export function allocateInk(input: LedgerInput) {
       continue;
     }
     const job = next.shift()!;
+    processedRecords.set(job.printer_id, job.source_record_id);
     jobLines.set(job.id, job.ink.map(({ channel, volume_nl }): InkLine => {
       position(job, channel);
       if (volume_nl === 0) return { channel, volume_nl, cost_micros: 0, from: [] };

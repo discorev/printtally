@@ -35,9 +35,9 @@ export function CartridgeDocket({ channel, channels, settings, form }: {
     addEventListener('keydown', onKey, true);
     return () => removeEventListener('keydown', onKey, true);
   });
-  const product = channel.cartridges.find(item => item.id === channel.fittedProductId) ?? channel.product;
-  const bought = fittedPurchase(channel), fitted = channel.fittedProductId !== undefined;
-  const left = fitted ? Math.max(0, channel.fittedRemainingNl ?? 0) : 0;
+  const product = channel.product;
+  const bought = fittedPurchase(channel), fitted = product?.open_remaining_nl != null;
+  const left = Math.max(0, product?.open_remaining_nl ?? 0);
   const reportsSwaps = selected?.inks.some(ink => ink.channel === channel.code && (ink.first_observed_at ?? ink.observed_at).slice(0, 10) <= today());
   const count = spareCount(channel, selected), spares = count ? `${plural(count, 'spare cartridge')} on the shelf.` : 'No spare on the shelf.';
   const reading = selected?.inks.find(ink => ink.channel === channel.code);
