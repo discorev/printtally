@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.1](https://github.com/discorev/printtally/compare/app-v0.3.0...app-v0.3.1) (2026-10-06)
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * peerDependencies
+    * printtally-workspace bumped to 0.5.0
+
 ## [0.3.0](https://github.com/discorev/printtally/compare/app-v0.2.2...app-v0.3.0) (2026-10-03)
 
 
