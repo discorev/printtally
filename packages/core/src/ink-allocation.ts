@@ -35,6 +35,7 @@ export function allocateInk(input: LedgerInput) {
   const invalidFittings: number[] = [];
   const swapWaste: { date: string; cost_micros: number; product_id: number; quantity: number }[] = [];
   const fits = input.inkFittings ?? [], observations = input.inkEvents ?? [];
+  const overriddenFittings = new Set<number>();
   const positions = [...observations.map(event => ({ ...event, kind: 'reading' as const, id: 0 })), ...fits.map(event => ({ ...event, kind: 'fitting' as const, series: null, swaps: 0 }))]
     .sort((a, b) => a.after_record - b.after_record || (a.kind === b.kind ? a.id - b.id : a.kind === 'reading' ? -1 : 1));
   const pending = new Map<string, typeof positions>();
@@ -92,10 +93,11 @@ export function allocateInk(input: LedgerInput) {
       const mismatch = current && event.series !== null && current.series !== event.series;
       if (mismatch) retire(current, day, event.after_record, 'shelf');
       else if (current) current.poolSeries = event.series;
-      // A fitting anywhere in the observed interval accounts for one replacement step.
-      const overridden = fits.filter(fit => fit.printer_id === event.printer_id && fit.channel === event.channel
-        && fit.after_record >= event.after_record && fit.after_record <= (event.upper_record ?? event.after_record)).length;
-      const automatic = Math.max(0, event.swaps - overridden - (mismatch ? 1 : 0));
+      // A fitting accounts for one replacement step in its earliest available swap window.
+      const overrides = fits.filter(fit => !overriddenFittings.has(fit.id) && fit.printer_id === event.printer_id && fit.channel === event.channel
+        && fit.after_record >= event.after_record && fit.after_record <= (event.upper_record ?? event.after_record)).slice(0, event.swaps);
+      for (const fit of overrides) overriddenFittings.add(fit.id);
+      const automatic = Math.max(0, event.swaps - overrides.length);
       if (automatic > 0) {
         if (current && !mismatch) retire(current, day, event.after_record, 'used');
         // Each extra observed replacement is a separate cartridge even without a print.
@@ -136,17 +138,10 @@ export function allocateInk(input: LedgerInput) {
           : fitted.get(key(off.printer_id, product.channel));
         const quantity = Math.max(0, unit?.remaining_nl ?? 0);
         const cost = unit ? price(unit, quantity, off.written_off_on) : 0;
-        const printer = unit?.printer_id;
         if (unit) {
           unit.waste_nl += quantity; unit.remaining_nl -= quantity;
           if (unit.printer_id !== null) fitted.delete(key(unit.printer_id, unit.channel));
           unit.printer_id = null; unit.state = 'used'; unit.ended_after_record = null;
-        }
-        // The capacity-only legacy view moves directly to the next open cartridge after a write-off.
-        if (printer != null && !readings.has(key(printer, product.channel))) {
-          const last = input.jobs.filter(job => job.printer_id === printer && job.date <= off.written_off_on).reduce((n, job) => Math.max(n, job.source_record_id), -1);
-          const shelf = poolFor(product.channel, null, off.written_off_on).some(u => u.state === 'shelf' && u.remaining_nl > 0);
-          if (shelf) claim(printer, product.channel, off.written_off_on, last);
         }
         if (unit) inkWaste.set(off.id, { product_id: unit.product_id, quantity, cost_micros: cost });
         offCosts.set(off.id, { written_off: quantity, cost_micros: cost, remaining });

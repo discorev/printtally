@@ -187,3 +187,52 @@ test('first reading of another series returns guessed unit to shelf and prices o
   assert.equal(result.jobs.get(2)!.ink[0].from[0].ink_product_id, 2);
   assert.equal(result.jobs.get(2)!.ink[0].cost_micros, 50 * GBP);
 });
+
+test('one fitting on adjacent swap-window bounds overrides only the earlier window', () => {
+  const input = base();
+  input.jobs = [job(1, 1, 1), job(2, 1, 2, 0), job(3, 1, 3, 0)];
+  input.inkPurchases.push({ id: 2, ink_product_id: 1, purchased_on: '2026-01-02', cartridges: 1, price_micros: 12 * GBP });
+  input.inkEvents = [
+    { printer_id: 1, channel: 'C', after_record: 1, upper_record: 2, series: 'PFI-4100', swaps: 1 },
+    { printer_id: 1, channel: 'C', after_record: 2, upper_record: 3, series: 'PFI-4100', swaps: 1 },
+  ];
+  input.inkFittings = [{ id: 9, printer_id: 1, channel: 'C', after_record: 2, ink_purchase_id: 2, replaced: 'shelf' }];
+  const result = computeLedger(input);
+  assert.deepEqual(result.swapWaste.map(event => event.quantity), [ml]);
+  assert.equal(result.units.find(unit => unit.purchase_id === 2)!.fitting_id, 9);
+  assert.equal(result.units[0].waste_nl, ml);
+});
+
+test('a series mismatch preserves the intermediate replacement when two swaps were reported', () => {
+  const input = base();
+  input.cartridges.push({ id: 2, name: 'PFI-3300 C', channel: 'C', capacity_nl: 2 * ml });
+  input.inkPurchases.push({ id: 2, ink_product_id: 2, purchased_on: '2026-01-01', cartridges: 3, price_micros: 30 * GBP });
+  input.jobs = [job(1, 1, 1), job(2, 1, 2)];
+  input.inkEvents = [
+    { printer_id: 1, channel: 'C', after_record: 1, series: 'PFI-4100', swaps: 0 },
+    { printer_id: 1, channel: 'C', after_record: 1, series: 'PFI-3300', swaps: 2 },
+  ];
+  const result = computeLedger(input);
+  assert.equal(result.units[0].state, 'shelf');
+  assert.equal(result.units[0].remaining_nl, ml);
+  assert.deepEqual(result.swapWaste.map(event => [event.product_id, event.quantity]), [[2, 2 * ml]]);
+  assert.equal(result.units.find(unit => unit.purchase_id === 2 && unit.index === 1)!.state, 'used');
+  assert.deepEqual(result.jobs.get(2)!.ink[0].from.map(use => [use.purchase_id, use.index]), [[2, 2]]);
+});
+
+test('a capacity write-off leaves the next shelf unit unfitted until another job claims it', () => {
+  const input = base();
+  input.inkPurchases[0].cartridges = 2;
+  input.inkPurchases.push({ id: 2, ink_product_id: 1, purchased_on: '2026-01-02', cartridges: 1, price_micros: 12 * GBP });
+  input.jobs = [job(1, 1, 1, ml / 2)];
+  input.writeOffs = [{ id: 1, paper_stock_id: null, ink_product_id: 1, printer_id: 1,
+    written_off_on: '2026-02-02', quantity: null, all_remaining: true }];
+  input.inkFittings = [{ id: 7, printer_id: 1, channel: 'C', after_record: 1, ink_purchase_id: 2,
+    created_on: '2026-02-03', replaced: 'used' }];
+  const result = computeLedger(input);
+  assert.equal(result.writeOffs.get(1)!.written_off, 1.5 * ml);
+  assert.equal(result.units.reduce((total, unit) => total + unit.waste_nl, 0), 1.5 * ml);
+  assert.deepEqual(result.units.map(unit => [unit.purchase_id, unit.index, unit.state]),
+    [[1, 1, 'used'], [1, 2, 'shelf'], [2, 1, 'fitted']]);
+  assert.equal(result.swapWaste.length, 0);
+});

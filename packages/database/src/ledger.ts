@@ -176,10 +176,10 @@ export class Ledger {
     if (!purchase) throw new LedgerError(400, 'purchase_not_found');
     if (purchase.channel !== row.channel) throw new LedgerError(400, 'channel_mismatch');
   }
-  private checkFitting(row: { id: number; printer_id: number; channel: string; ink_purchase_id: number; after_record: number; replaced: 'shelf' | 'used' }): void {
+  private checkFitting(row: { id: number; printer_id: number; channel: string; ink_purchase_id: number; after_record: number; created_at: string; replaced: 'shelf' | 'used' }): void {
     this.checkFittingReferences(row);
     const { input } = this.load();
-    const result = computeLedger({ ...input, inkFittings: [...input.inkFittings!.filter(item => item.id !== row.id), row] });
+    const result = computeLedger({ ...input, inkFittings: [...input.inkFittings!.filter(item => item.id !== row.id), { ...row, created_on: row.created_at.slice(0, 10) }] });
     const duplicates = input.inkFittings!.filter(fit => fit.printer_id === row.printer_id && fit.channel === row.channel && fit.after_record === row.after_record);
     if (result.invalidFittings.length || duplicates.length > 1) throw new LedgerError(400, 'fitting_conflict');
   }
@@ -187,8 +187,9 @@ export class Ledger {
     const fitting = inkFittingSchema.parse(input);
     return this.write(() => {
       this.checkFittingReferences(fitting);
-      const id = this.insert(ink_fittings, { ...fitting, created_at: now() });
-      this.checkFitting({ id, ...fitting });
+      const created_at = now();
+      const id = this.insert(ink_fittings, { ...fitting, created_at });
+      this.checkFitting({ id, ...fitting, created_at });
       return id;
     });
   }
@@ -401,9 +402,11 @@ export class Ledger {
     const fitted = Object.fromEntries(fittedUnits.map(unit => [cartridges.find(product => product.id === unit.product_id)!.channel,
       { product_id: unit.product_id, purchase_id: unit.purchase_id, index: unit.index, remaining_nl: Math.max(0, unit.remaining_nl) }]));
     const openUnits = new Map<string, LedgerResult['units'][number]>();
-    for (const unit of fittedUnits) {
-      const channel = cartridges.find(product => product.id === unit.product_id)!.channel;
-      const open = unit.remaining_nl <= 0 && !readingChannels.has(channel)
+    for (const cartridge of cartridges) {
+      const channel = cartridge.channel;
+      if (openUnits.has(channel)) continue;
+      const unit = fittedUnits.find(candidate => cartridges.find(product => product.id === candidate.product_id)?.channel === channel);
+      const open = (!unit || unit.remaining_nl <= 0) && !readingChannels.has(channel)
         ? result.units.find(candidate => cartridges.find(product => product.id === candidate.product_id)?.channel === channel
           && candidate.state === 'shelf' && candidate.remaining_nl > 0) : unit;
       if (open) openUnits.set(channel, open);

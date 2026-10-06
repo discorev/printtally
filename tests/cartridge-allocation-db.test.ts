@@ -207,3 +207,38 @@ test('a fitting at the upper bound of a reading swap interval does not retire in
   assert.equal(view.cartridges[0].units.find(unit => unit.purchase_id === purchase)!.state, 'shelf');
   assert.equal(view.fitted.C.purchase_id, replacement);
 });
+
+test('a fitting after the last print can claim a cartridge purchased after that print', t => {
+  const { db, ledger } = fixture(t);
+  const noReading = snapshot(['2026-02-01'], '2026-02-02T12:00:00Z', 0);
+  noReading.inks = undefined; db.importSnapshot(noReading);
+  const product = ledger.createCartridge({ name: 'PFI-4100 C', channel: 'C', capacity_nl: ml });
+  const purchase = ledger.createInkPurchase({ ink_product_id: product, purchased_on: '2026-02-05', cartridges: 1, price_micros: 10 * GBP });
+  const id = ledger.createInkFitting({ printer_id: 1, channel: 'C', ink_purchase_id: purchase, after_record: 1, replaced: 'shelf' });
+  assert.equal(ledger.ink(1).fitted.C.purchase_id, purchase);
+  ledger.updateInkFitting(id, { replaced: 'used' });
+  assert.equal(ledger.ink(1).fitted.C.purchase_id, purchase);
+});
+
+test('capacity-mode /ink previews the next shelf unit after a write-off without fitting it', async t => {
+  const { db, request } = await apiFixture(t);
+  const noReading = snapshot(['2026-02-01'], '2026-02-02T12:00:00Z', 0);
+  noReading.inks = undefined; db.importSnapshot(noReading);
+  const ledger = new Ledger(db);
+  const product = ledger.createCartridge({ name: 'PFI-4100 C', channel: 'C', capacity_nl: 2 * ml });
+  const first = ledger.createInkPurchase({ ink_product_id: product, purchased_on: '2026-01-01', cartridges: 2, price_micros: 20 * GBP });
+  const replacement = ledger.createInkPurchase({ ink_product_id: product, purchased_on: '2026-01-02', cartridges: 1, price_micros: 12 * GBP });
+  const off = ledger.createWriteOff({ printer_id: 1, ink_product_id: product, written_off_on: '2026-02-02', all_remaining: true });
+  const response = await request('/api/v1/ink?printer=1');
+  assert.equal(response.status, 200);
+  const view = response.json<{ cartridges: { open_purchase_id: number | null; open_remaining_nl: number | null;
+    units: { purchase_id: number; index: number; state: string }[] }[] }>().cartridges[0];
+  assert.deepEqual([view.open_purchase_id, view.open_remaining_nl], [first, 2 * ml]);
+  assert.equal(view.units.find(unit => unit.purchase_id === first && unit.index === 2)!.state, 'shelf');
+  ledger.createInkFitting({ printer_id: 1, channel: 'C', ink_purchase_id: replacement, after_record: 1, replaced: 'used' });
+  const after = ledger.ink(1).cartridges[0];
+  assert.equal(after.write_offs.find(item => item.id === off)!.written_off, 1.5 * ml);
+  assert.equal(after.wasted, 1.5 * ml);
+  assert.equal(after.units.find(unit => unit.purchase_id === first && unit.index === 2)!.state, 'shelf');
+  assert.equal(ledger.ink(1).fitted.C.purchase_id, replacement);
+});
