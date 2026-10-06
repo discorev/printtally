@@ -38,7 +38,7 @@ function InkRow({ channel, printer, selected }: { channel: InkChannelView; print
   const matchingProduct = reading?.series ? channel.cartridges.find(item => productName(item) === reading.series) : undefined;
   // The server's fitted product is specific to the selected printer; the reading is only a level/type hint.
   const product = channel.fitted ? channel.product : reading?.series ? matchingProduct : channel.product;
-  const left = product?.open_remaining_nl ?? 0, fitted = product?.open_remaining_nl != null;
+  const left = Math.max(0, product?.open_remaining_nl ?? 0), fitted = product?.open_remaining_nl != null;
   const compatible = cartridgeTypes(printer?.model, code).map(type => type.series);
   const spares = reading ? channel.cartridges.filter(item => compatible.length
     ? compatible.includes(productName(item)) : productName(item) === reading.series).reduce((total, item) => total + item.spares, 0) : channel.spares;

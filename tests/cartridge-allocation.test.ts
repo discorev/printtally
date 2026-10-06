@@ -123,3 +123,67 @@ test('after an observed swap with no spare, the retired unit is never reclaimed'
   assert.equal(result.units[0].state, 'used');
   assert.equal(result.units[0].waste_nl, ml);
 });
+
+test('quantity write-offs draw fitted and shelf units in product order and overdraw the newest', () => {
+  const input = base(); input.inkPurchases[0].cartridges = 2;
+  input.jobs = [job(1, 1, 1, ml / 2)];
+  input.writeOffs = [{ id: 1, paper_stock_id: null, ink_product_id: 1, printer_id: null,
+    written_off_on: '2026-02-02', quantity: 5 * ml, all_remaining: false }];
+  const result = computeLedger(input);
+  assert.deepEqual(result.units.map(unit => unit.waste_nl), [1.5 * ml, 3.5 * ml]);
+  assert.deepEqual(result.units.map(unit => unit.remaining_nl), [0, -1.5 * ml]);
+  assert.equal(result.writeOffs.get(1)!.cost_micros, 37.5 * GBP);
+});
+
+test('legacy all-remaining with no jobs writes off one full unopened cartridge', () => {
+  const input = base(); input.inkPurchases[0].cartridges = 2;
+  input.writeOffs = [{ id: 1, paper_stock_id: null, ink_product_id: 1, printer_id: null,
+    written_off_on: '2026-02-01', quantity: null, all_remaining: true }];
+  const result = computeLedger(input);
+  assert.equal(result.writeOffs.get(1)!.written_off, 2 * ml);
+  assert.deepEqual(result.units.map(unit => unit.remaining_nl), [0, 2 * ml]);
+});
+
+test('a reading swap after the last print is reflected in units and waste', () => {
+  const input = base(); input.jobs = [job(1, 1, 1, ml)];
+  input.inkEvents = [{ printer_id: 1, channel: 'C', after_record: 1, observed_on: '2026-02-03', series: 'PFI-4100', swaps: 1 }];
+  const result = computeLedger(input);
+  assert.equal(result.swapWaste.length, 1);
+  assert.equal(result.swapWaste[0].quantity, ml);
+  assert.deepEqual(result.units.map(unit => unit.state), ['used', 'shelf', 'shelf']);
+});
+
+test('a fitting after the last print executes and claims its specified purchase', () => {
+  const input = base(); input.inkPurchases.push({ id: 2, ink_product_id: 1, purchased_on: '2026-01-02', cartridges: 1, price_micros: 12 * GBP });
+  input.jobs = [job(1, 1, 1)];
+  input.inkFittings = [{ id: 7, printer_id: 1, channel: 'C', after_record: 1, ink_purchase_id: 2, replaced: 'shelf' }];
+  const result = computeLedger(input);
+  assert.equal(result.units.find(unit => unit.purchase_id === 2)!.state, 'fitted');
+  assert.equal(result.units.find(unit => unit.purchase_id === 1 && unit.index === 1)!.state, 'shelf');
+  assert.equal(result.swapWaste.length, 0);
+});
+
+test('a fitting within a reading swap window replaces the automatic swap step', () => {
+  const input = base(); input.jobs = [job(1, 1, 1), job(2, 1, 2, 0)];
+  input.inkPurchases.push({ id: 2, ink_product_id: 1, purchased_on: '2026-01-02', cartridges: 1, price_micros: 12 * GBP });
+  input.inkEvents = [{ printer_id: 1, channel: 'C', after_record: 1, upper_record: 2, observed_on: '2026-02-03', series: 'PFI-4100', swaps: 1 }];
+  input.inkFittings = [{ id: 9, printer_id: 1, channel: 'C', after_record: 2, ink_purchase_id: 2, replaced: 'shelf' }];
+  const result = computeLedger(input);
+  assert.equal(result.swapWaste.length, 0);
+  assert.equal(result.units[0].state, 'shelf');
+  assert.equal(result.units.find(unit => unit.purchase_id === 2)!.state, 'fitted');
+});
+
+test('first reading of another series returns guessed unit to shelf and prices only reported series', () => {
+  const input = base(); input.cartridges.push({ id: 2, name: 'PFI-3300 C', channel: 'C', capacity_nl: 2 * ml });
+  input.inkPurchases.push({ id: 2, ink_product_id: 2, purchased_on: '2026-01-01', cartridges: 1, price_micros: 100 * GBP });
+  input.jobs = [job(1, 1, 1, ml), job(2, 1, 2, ml)];
+  input.inkEvents = [{ printer_id: 1, channel: 'C', after_record: 1, series: 'PFI-3300', swaps: 0 }];
+  input.method = 'average';
+  const result = computeLedger(input);
+  assert.equal(result.units[0].state, 'shelf');
+  assert.equal(result.units[0].remaining_nl, ml);
+  assert.equal(result.units[0].waste_nl, 0);
+  assert.equal(result.jobs.get(2)!.ink[0].from[0].ink_product_id, 2);
+  assert.equal(result.jobs.get(2)!.ink[0].cost_micros, 50 * GBP);
+});

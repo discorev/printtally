@@ -180,15 +180,8 @@ export class Ledger {
     this.checkFittingReferences(row);
     const { input } = this.load();
     const result = computeLedger({ ...input, inkFittings: [...input.inkFittings!.filter(item => item.id !== row.id), row] });
-    if (result.invalidFittings.includes(row.id)) throw new LedgerError(400, 'unit_unavailable');
-    // A fitting for a future job hasn't executed yet; check the shelf as it stands now.
-    const next = input.jobs.some(job => job.printer_id === row.printer_id && job.source_record_id > row.after_record && job.ink.some(ink => ink.channel === row.channel));
-    if (!next) {
-      const available = result.units.filter(unit => unit.purchase_id === row.ink_purchase_id && unit.state === 'shelf' && unit.remaining_nl > 0).length;
-      const reserved = input.inkFittings!.filter(fit => fit.ink_purchase_id === row.ink_purchase_id
-        && !input.jobs.some(job => job.printer_id === fit.printer_id && job.source_record_id > fit.after_record && job.ink.some(ink => ink.channel === fit.channel))).length;
-      if (reserved > available) throw new LedgerError(400, 'unit_unavailable');
-    }
+    const duplicates = input.inkFittings!.filter(fit => fit.printer_id === row.printer_id && fit.channel === row.channel && fit.after_record === row.after_record);
+    if (result.invalidFittings.length || duplicates.length > 1) throw new LedgerError(400, 'fitting_conflict');
   }
   createInkFitting(input: unknown): number {
     const fitting = inkFittingSchema.parse(input);
@@ -212,9 +205,18 @@ export class Ledger {
   }
   deleteInkFitting(id: number): void { this.remove(ink_fittings, id); }
 
+  private checkWriteOff(row: { ink_product_id?: number | null; printer_id?: number | null; written_off_on: string; all_remaining?: boolean }): void {
+    if (!row.all_remaining || row.printer_id == null || row.ink_product_id == null) return;
+    const product = this.db.orm.select({ channel: ink_products.channel }).from(ink_products).where(eq(ink_products.id, row.ink_product_id)).get();
+    if (!product) return; // The foreign key reports an unknown product on insert.
+    const covered = this.db.orm.select({ channel: printer_ink_readings.channel, first_seen_at: printer_ink_readings.first_seen_at })
+      .from(printer_ink_readings).where(eq(printer_ink_readings.printer_id, row.printer_id)).all()
+      .some(reading => reading.channel === product.channel && reading.first_seen_at.slice(0, 10) <= row.written_off_on);
+    if (covered) throw new LedgerError(400, 'printer_reports_swaps');
+  }
   createWriteOff(input: unknown): number {
     const { all_remaining, ...writeOff } = writeOffSchema.parse(input);
-    return this.write(() => this.insert(stock_write_offs, { ...writeOff, all_remaining: flag(all_remaining) }));
+    return this.write(() => { this.checkWriteOff({ ...writeOff, all_remaining }); return this.insert(stock_write_offs, { ...writeOff, all_remaining: flag(all_remaining) }); });
   }
   updateWriteOff(id: number, input: unknown): void {
     const { all_remaining, ...changes } = writeOffPatchSchema.parse(input);
@@ -226,7 +228,8 @@ export class Ledger {
       const current = this.db.orm.select().from(stock_write_offs).where(eq(stock_write_offs.id, id)).get();
       if (!current) throw new LedgerError(404, 'not_found');
       const { id: _id, ...fields } = current;
-      writeOffSchema.parse({ ...fields, ...values, all_remaining: values.all_remaining === undefined ? current.all_remaining === 1 : values.all_remaining === 1 });
+      const merged = writeOffSchema.parse({ ...fields, ...values, all_remaining: values.all_remaining === undefined ? current.all_remaining === 1 : values.all_remaining === 1 });
+      this.checkWriteOff(merged);
       this.update(stock_write_offs, id, values);
     });
   }
@@ -236,6 +239,7 @@ export class Ledger {
     const writeOff = writeOffSchema.parse({ ...target, written_off_on: day, all_remaining: true });
     const [table, id] = writeOff.paper_stock_id != null ? [paper_stocks, writeOff.paper_stock_id] : [ink_products, writeOff.ink_product_id!];
     if (!this.db.orm.select({ id: table.id }).from(table).where(eq(table.id, id)).get()) throw new LedgerError(404, 'not_found');
+    this.checkWriteOff(writeOff);
     const { input } = this.load(), preview = Number.MAX_SAFE_INTEGER; // After every saved write-off that day, as a new one would be.
     const result = computeLedger({ ...input, writeOffs: [...input.writeOffs, { paper_stock_id: null, ink_product_id: null, printer_id: null, quantity: null, ...writeOff, id: preview, all_remaining: true }] });
     return result.writeOffs.get(preview)!;
@@ -271,13 +275,14 @@ export class Ledger {
       const line = { channel: String(row.channel), volume_nl: number(row.volume_nl) }, id = Number(row.job_id);
       ink.set(id, [...ink.get(id) ?? [], line]);
     }
-    const fittings = orm.select().from(ink_fittings).orderBy(ink_fittings.after_record, ink_fittings.id).all();
+    const fittings = orm.select().from(ink_fittings).orderBy(ink_fittings.after_record, ink_fittings.id).all()
+      .map(fit => ({ ...fit, created_on: fit.created_at.slice(0, 10) }));
     const readings = orm.select().from(printer_ink_readings).orderBy(printer_ink_readings.printer_id, printer_ink_readings.channel, printer_ink_readings.first_seen_at, printer_ink_readings.id).all();
     const runs = orm.select({ id: import_runs.id, printer_id: import_runs.printer_id, observed_at: import_runs.observed_at,
       requested_last: import_runs.requested_last, status: import_runs.status }).from(import_runs).all()
       .filter(run => run.status === 'succeeded' && run.printer_id !== null && run.observed_at !== null && run.requested_last !== null);
     const after = (printer: number, at: string) => runs.filter(run => run.printer_id === printer && run.observed_at! <= at)
-      .sort((a, b) => b.observed_at!.localeCompare(a.observed_at!) || b.id - a.id)[0]?.requested_last ?? -1;
+      .reduce((max, run) => Math.max(max, run.requested_last!), -1);
     const prior = new Map<string, typeof readings[number]>();
     const inkEvents: NonNullable<LedgerInput['inkEvents']> = [];
     for (const row of readings) {
@@ -285,7 +290,8 @@ export class Ledger {
       // The first reading establishes a baseline; changes position after the prior interval's last import.
       const count = previous?.replacement_count;
       inkEvents.push({ printer_id: row.printer_id, channel: row.channel,
-        after_record: after(row.printer_id, previous?.last_seen_at ?? row.first_seen_at), series: row.series,
+        after_record: after(row.printer_id, previous?.last_seen_at ?? row.first_seen_at),
+        upper_record: after(row.printer_id, row.first_seen_at), observed_on: row.first_seen_at.slice(0, 10), series: row.series,
         swaps: count === null || count === undefined || row.replacement_count === null ? 0 : Math.max(0, row.replacement_count - count) });
       prior.set(key, row);
     }
@@ -389,9 +395,19 @@ export class Ledger {
     totals.waste_micros = views.reduce((sum, w) => sum + (w.ink_product_id !== null ? w.cost_micros ?? 0 : 0), 0)
       + result.swapWaste.reduce((sum, w) => sum + w.cost_micros, 0);
     const channels = this.db.all('SELECT DISTINCT channel FROM job_ink_usage ORDER BY channel').map(row => String(row.channel));
-    const fitted = Object.fromEntries(result.units.filter(unit => unit.state === 'fitted' && unit.printer_id === selected)
-      .map(unit => [cartridges.find(product => product.id === unit.product_id)!.channel,
-        { product_id: unit.product_id, purchase_id: unit.purchase_id, index: unit.index, remaining_nl: unit.remaining_nl }]));
+    const readingChannels = new Set(this.db.orm.select({ channel: printer_ink_readings.channel }).from(printer_ink_readings)
+      .where(eq(printer_ink_readings.printer_id, selected ?? -1)).all().map(row => row.channel));
+    const fittedUnits = result.units.filter(unit => unit.state === 'fitted' && unit.printer_id === selected);
+    const fitted = Object.fromEntries(fittedUnits.map(unit => [cartridges.find(product => product.id === unit.product_id)!.channel,
+      { product_id: unit.product_id, purchase_id: unit.purchase_id, index: unit.index, remaining_nl: Math.max(0, unit.remaining_nl) }]));
+    const openUnits = new Map<string, LedgerResult['units'][number]>();
+    for (const unit of fittedUnits) {
+      const channel = cartridges.find(product => product.id === unit.product_id)!.channel;
+      const open = unit.remaining_nl <= 0 && !readingChannels.has(channel)
+        ? result.units.find(candidate => cartridges.find(product => product.id === candidate.product_id)?.channel === channel
+          && candidate.state === 'shelf' && candidate.remaining_nl > 0) : unit;
+      if (open) openUnits.set(channel, open);
+    }
     return { settings, channels, totals, fitted, cartridges: cartridges.map((cartridge): CartridgeView => {
       const own = result.units.filter(unit => unit.product_id === cartridge.id);
       const bought = inkPurchases.filter(p => p.ink_product_id === cartridge.id)
@@ -399,12 +415,14 @@ export class Ledger {
       const printed = jobs.filter(job => job.ink.some(line => line.from.some(use => use.ink_product_id === cartridge.id)));
       const lines = printed.flatMap(job => job.ink.flatMap(line => line.from)).filter(use => use.ink_product_id === cartridge.id);
       const wasted = views.filter(w => w.ink_product_id === cartridge.id);
-      const open = own.find(unit => unit.state === 'fitted' && unit.printer_id === selected);
+      const channelOpen = openUnits.get(cartridge.channel);
+      const open = channelOpen?.product_id === cartridge.id ? channelOpen : undefined;
       const wasteEvents = result.swapWaste.filter(event => event.product_id === cartridge.id);
       const writeOffWaste = [...result.inkWaste.values()].filter(event => event.product_id === cartridge.id);
       return { ...cartridge, units: own, purchases: bought, write_offs: wasted,
-        open_purchase_id: open?.purchase_id ?? null, open_remaining_nl: open?.remaining_nl ?? null,
-        spares: own.filter(unit => unit.state === 'shelf' && unit.remaining_nl > 0).length, jobs: printed.length,
+        open_purchase_id: open && (open.remaining_nl > 0 || readingChannels.has(cartridge.channel)) ? open.purchase_id : null,
+        open_remaining_nl: open && (open.remaining_nl > 0 || readingChannels.has(cartridge.channel)) ? Math.max(0, open.remaining_nl) : null,
+        spares: own.filter(unit => unit.state === 'shelf' && unit !== open && unit.remaining_nl > 0).length, jobs: printed.length,
         bought: bought.reduce((sum, p) => sum + p.cartridges * cartridge.capacity_nl, 0),
         remaining: own.reduce((sum, unit) => sum + unit.remaining_nl, 0),
         used: lines.reduce((sum, use) => sum + use.quantity, 0), used_micros: lines.reduce((sum, use) => sum + use.cost_micros, 0),

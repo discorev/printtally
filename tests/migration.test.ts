@@ -67,3 +67,38 @@ test('the ledger migration keeps every job, observation, ink reading and annotat
     reopened.close();
   } finally { rmSync(dir, { recursive: true }); }
 });
+
+test('cartridge migration preserves existing paper and ink write-offs and backfills identified printers', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'printtally-migrate-stock-')), path = join(dir, 'accounting.sqlite3');
+  try {
+    firstRelease(path);
+    const folder = fileURLToPath(new URL('../packages/database/drizzle/', import.meta.url));
+    const entries = (JSON.parse(readFileSync(folder + 'meta/_journal.json', 'utf8')) as { entries: { tag: string; when: number }[] }).entries;
+    const raw = new Database(path);
+    try {
+      for (const entry of entries.slice(1, 3)) {
+        const query = readFileSync(folder + entry.tag + '.sql', 'utf8');
+        raw.transaction(() => {
+          for (const statement of query.split('--> statement-breakpoint')) raw.exec(statement);
+          raw.query('INSERT INTO __drizzle_migrations(hash,created_at) VALUES(?,?)').run(createHash('sha256').update(query).digest('hex'), entry.when);
+        })();
+      }
+      raw.exec(`UPDATE printers SET model='PRO-1100 series', firmware='1.020' WHERE id=1`);
+      raw.exec(`INSERT INTO papers(id,name) VALUES(1,'Photo Rag');
+        INSERT INTO paper_stocks(id,paper_id,name,format,width_um,height_um) VALUES(1,1,'A4','sheet',210000,297000);
+        INSERT INTO ink_products(id,name,channel,capacity_nl) VALUES(1,'PFI-4100 C','C',80000000);
+        INSERT INTO stock_write_offs(id,paper_stock_id,written_off_on,quantity,reason) VALUES(1,1,'2026-09-01',3,'Creased');
+        INSERT INTO stock_write_offs(id,ink_product_id,written_off_on,all_remaining,reason) VALUES(2,1,'2026-09-02',1,'Damaged');`);
+    } finally { raw.close(); }
+    const db = new AccountingDatabase(path);
+    try {
+      assert.deepEqual(db.all('SELECT id,paper_stock_id,ink_product_id,printer_id,written_off_on,quantity,all_remaining,reason FROM stock_write_offs ORDER BY id'), [
+        { id: 1, paper_stock_id: 1, ink_product_id: null, printer_id: null, written_off_on: '2026-09-01', quantity: 3, all_remaining: 0, reason: 'Creased' },
+        { id: 2, paper_stock_id: null, ink_product_id: 1, printer_id: null, written_off_on: '2026-09-02', quantity: null, all_remaining: 1, reason: 'Damaged' },
+      ]);
+      assert.equal(db.get('SELECT identified_at FROM printers WHERE id=1')!.identified_at, db.get('SELECT last_seen_at FROM printers WHERE id=1')!.last_seen_at);
+      assert.deepEqual(db.all('PRAGMA foreign_key_check'), []);
+      assert.deepEqual(db.get('PRAGMA integrity_check'), { integrity_check: 'ok' });
+    } finally { db.close(); }
+  } finally { rmSync(dir, { recursive: true }); }
+});

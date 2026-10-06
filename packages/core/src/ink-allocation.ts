@@ -14,7 +14,9 @@ const key = (printer: number, channel: string) => `${printer}:${channel}`;
 const seriesOf = (name: string, channel: string) => name.replace(new RegExp(`\\s+${channel}$`), '') || name;
 const order = (a: Unit, b: Unit) => a.date.localeCompare(b.date) || a.purchase_id - b.purchase_id || a.index - b.index;
 
-/** Cartridge identities and allocations are derived afresh on every read; no engine operation writes stock. */
+/** Cartridge identities and allocations are derived afresh on every read; no engine operation writes stock.
+ * Capacity-mode costs match the original single-printer ledger except when printer record order conflicts with
+ * a clock going backwards, and per-unit rounding can differ by up to 1 micro per line. */
 export function allocateInk(input: LedgerInput) {
   const products = new Map(input.cartridges.map(product => [product.id, { ...product, series: seriesOf(product.name, product.channel) }]));
   const units: Unit[] = input.inkPurchases.flatMap(purchase => {
@@ -81,28 +83,35 @@ export function allocateInk(input: LedgerInput) {
     if (unit.printer_id !== null) fitted.delete(key(unit.printer_id, unit.channel));
     unit.printer_id = null;
   };
-  const position = (job: InkJob, channel: string) => {
-    const k = key(job.printer_id, channel), queue = pending.get(k) ?? [];
-    while (queue.length && queue[0].after_record < job.source_record_id) {
-      const event = queue.shift()!, current = fitted.get(k);
-      if (event.kind === 'reading') {
-        readings.set(k, event.series);
-        // A correction at this record boundary chooses both what replaces the unit and
-        // whether the old unit returns to the shelf; do not perform an automatic swap too.
-        const overridden = queue.some(next => next.kind === 'fitting' && next.after_record === event.after_record);
-        if (event.swaps > 0 && !overridden) {
-          if (current) retire(current, job.date, event.after_record, 'used');
-          // Each additional replacement is another unit, even if there was no print in between.
-          for (let step = 1; step < event.swaps; step++) {
-            const intermediate = claim(job.printer_id, channel, job.date, event.after_record);
-            if (intermediate) retire(intermediate, job.date, event.after_record, 'used');
-          }
+  const applyEvent = (event: typeof positions[number], day: string): void => {
+    const k = key(event.printer_id, event.channel), current = fitted.get(k);
+    if (event.kind === 'reading') {
+      readings.set(k, event.series);
+      // A guessed unit from a different series was never the one the printer reported.
+      // Preserve its remaining ink for another printer rather than counting it as waste.
+      const mismatch = current && event.series !== null && current.series !== event.series;
+      if (mismatch) retire(current, day, event.after_record, 'shelf');
+      else if (current) current.poolSeries = event.series;
+      // A fitting anywhere in the observed interval accounts for one replacement step.
+      const overridden = fits.filter(fit => fit.printer_id === event.printer_id && fit.channel === event.channel
+        && fit.after_record >= event.after_record && fit.after_record <= (event.upper_record ?? event.after_record)).length;
+      const automatic = Math.max(0, event.swaps - overridden - (mismatch ? 1 : 0));
+      if (automatic > 0) {
+        if (current && !mismatch) retire(current, day, event.after_record, 'used');
+        // Each extra observed replacement is a separate cartridge even without a print.
+        for (let step = 1; step < automatic; step++) {
+          const intermediate = claim(event.printer_id, event.channel, day, event.after_record);
+          if (intermediate) retire(intermediate, day, event.after_record, 'used');
         }
-      } else {
-        if (current) retire(current, job.date, event.after_record, event.replaced);
-        claim(job.printer_id, channel, job.date, event.after_record, event.ink_purchase_id, event.id);
       }
+    } else {
+      if (current) retire(current, day, event.after_record, event.replaced);
+      claim(event.printer_id, event.channel, day, event.after_record, event.ink_purchase_id, event.id);
     }
+  };
+  const position = (job: InkJob, channel: string) => {
+    const queue = pending.get(key(job.printer_id, channel)) ?? [];
+    while (queue.length && queue[0].after_record < job.source_record_id) applyEvent(queue.shift()!, job.date);
   };
   // Events are consumed only as that printer's source records advance, independent of UTC readings.
   const jobsByPrinter = new Map<number, InkJob[]>();
@@ -120,10 +129,11 @@ export function allocateInk(input: LedgerInput) {
       const own = poolFor(product.channel, null, off.written_off_on).filter(u => u.product_id === product.id);
       const remaining = own.reduce((sum, u) => sum + u.remaining_nl, 0);
       if (off.all_remaining) {
-        // Legacy without printer: the first fitted unit in this channel (even another product),
-        // else the oldest part-used unit of the target product. An explicit printer targets its fit.
-        const unit = off.printer_id == null ? units.find(u => u.channel === product.channel && u.state === 'fitted')
-          ?? own.find(u => u.state === 'shelf' && u.remaining_nl < u.capacity) : fitted.get(key(off.printer_id, product.channel));
+        // Without a printer, the old ledger chooses the channel's oldest cartridge with ink,
+        // even if it belongs to another product or is an unopened shelf cartridge.
+        const unit = off.printer_id == null
+          ? poolFor(product.channel, null, off.written_off_on).find(u => u.remaining_nl > 0)
+          : fitted.get(key(off.printer_id, product.channel));
         const quantity = Math.max(0, unit?.remaining_nl ?? 0);
         const cost = unit ? price(unit, quantity, off.written_off_on) : 0;
         const printer = unit?.printer_id;
@@ -141,20 +151,30 @@ export function allocateInk(input: LedgerInput) {
         if (unit) inkWaste.set(off.id, { product_id: unit.product_id, quantity, cost_micros: cost });
         offCosts.set(off.id, { written_off: quantity, cost_micros: cost, remaining });
       } else {
-        let need = off.quantity!, cost = 0;
-        const available = own.filter(u => u.state === 'shelf' && u.remaining_nl > 0);
-        const draws = available.length ? available : [...own].reverse().filter(u => u.state !== 'fitted').slice(0, 1);
+        let need = off.quantity!;
+        const uses: { unit: Unit; quantity: number }[] = [];
+        // Like the original lot take(), draw from every bought unit with stock left,
+        // including the fitted one, and overdraw the newest unit when stock runs out.
+        const draws = own.filter(u => u.remaining_nl > 0);
+        if (own.length && need > draws.reduce((sum, u) => sum + u.remaining_nl, 0) && !draws.includes(own.at(-1)!)) draws.push(own.at(-1)!);
         for (const unit of draws) {
           if (need <= 0) break;
-          const amount = unit === draws.at(-1) ? need : Math.min(need, unit.remaining_nl);
+          const amount = unit === own.at(-1) ? need : Math.min(need, unit.remaining_nl);
           unit.remaining_nl -= amount; unit.waste_nl += amount;
-          if (unit.remaining_nl <= 0) unit.state = 'used';
-          const unitCost = price(unit, amount, off.written_off_on);
-          const previous = inkWaste.get(off.id);
-          inkWaste.set(off.id, { product_id: unit.product_id, quantity: (previous?.quantity ?? 0) + amount, cost_micros: (previous?.cost_micros ?? 0) + unitCost });
-          cost += unitCost; need -= amount;
+          if (unit.remaining_nl <= 0 && unit.state === 'shelf') unit.state = 'used';
+          uses.push({ unit, quantity: amount });
+          need -= amount;
         }
-        offCosts.set(off.id, { written_off: off.quantity!, cost_micros: need > 0 ? null : cost, remaining });
+        // Round once per purchase, as the old lot-based engine did, not once per unit.
+        const grouped = new Map<string, { unit: Unit; quantity: number }>();
+        for (const use of uses) {
+          const k = `${use.unit.purchase_id}:${use.unit.poolSeries}`;
+          const group = grouped.get(k);
+          grouped.set(k, { unit: use.unit, quantity: (group?.quantity ?? 0) + use.quantity });
+        }
+        const cost = [...grouped.values()].reduce((sum, use) => sum + price(use.unit, use.quantity, off.written_off_on), 0);
+        if (uses.length) inkWaste.set(off.id, { product_id: product.id, quantity: off.quantity!, cost_micros: cost });
+        offCosts.set(off.id, { written_off: off.quantity!, cost_micros: own.length ? cost : null, remaining });
       }
       continue;
     }
@@ -164,29 +184,50 @@ export function allocateInk(input: LedgerInput) {
       if (volume_nl === 0) return { channel, volume_nl, cost_micros: 0, from: [] };
       if (volume_nl === null) return { channel, volume_nl, cost_micros: null, from: [] };
       const k = key(job.printer_id, channel), covered = readings.has(k);
-      let need = volume_nl, cost = 0;
+      let need = volume_nl;
       const from: InkLine['from'] = [];
       while (need > 0) {
         let unit = fitted.get(k);
         if (!unit) unit = claim(job.printer_id, channel, job.date, job.source_record_id - 1);
         if (!unit) return { channel, volume_nl, cost_micros: null, from };
         // In capacity mode a full unit gives way to the next available unit mid-job.
-        const nextUnit = !covered && unit.remaining_nl <= 0 ? poolFor(channel, readings.get(k) ?? null, job.date)
-          .find(u => u.state === 'shelf' && u.remaining_nl > 0) : undefined;
+        const pool = poolFor(channel, readings.get(k) ?? null, job.date), current = unit;
+        const nextUnit = !covered && unit.remaining_nl <= 0 ? pool.find(u => u.state === 'shelf' && u.remaining_nl > 0)
+          ?? [...pool].reverse().find(u => u.state !== 'fitted' && order(u, current) > 0) : undefined;
         if (nextUnit) {
           retire(unit, job.date, job.source_record_id - 1, 'shelf');
           unit = claim(job.printer_id, channel, job.date, job.source_record_id - 1)!;
         }
-        const spare = !covered ? poolFor(channel, readings.get(k) ?? null, job.date).some(u => u.state === 'shelf' && u.remaining_nl > 0) : false;
-        const amount = spare ? Math.min(need, Math.max(0, unit.remaining_nl)) : need;
+        const split = !covered && pool.some(u => (u.state === 'shelf' && u.remaining_nl > 0)
+          || (u.state !== 'fitted' && order(u, unit) > 0));
+        const amount = split ? Math.min(need, Math.max(0, unit.remaining_nl)) : need;
         if (!amount) continue;
         const part = price(unit, amount, job.date);
-        unit.remaining_nl -= amount; unit.printed_nl += amount; cost += part; need -= amount;
+        unit.remaining_nl -= amount; unit.printed_nl += amount; need -= amount;
         from.push({ purchase_id: unit.purchase_id, index: unit.index, printer_id: job.printer_id,
           purchased_on: unit.date, quantity: amount, cost_micros: part, ink_product_id: unit.product_id });
       }
-      return { channel, volume_nl, cost_micros: cost, from };
+      // A legacy lot rounded a purchase once even when the print crossed cartridge boundaries.
+      const grouped = new Map<string, { unit: Unit; indices: number[]; quantity: number }>();
+      for (const [index, use] of from.entries()) {
+        const unit = units.find(u => u.purchase_id === use.purchase_id && u.index === use.index)!;
+        const groupKey = `${use.purchase_id}:${unit.poolSeries}`;
+        const group = grouped.get(groupKey);
+        grouped.set(groupKey, { unit, indices: [...group?.indices ?? [], index], quantity: (group?.quantity ?? 0) + use.quantity });
+      }
+      for (const group of grouped.values()) {
+        const rounded = price(group.unit, group.quantity, job.date);
+        const actual = group.indices.reduce((sum, index) => sum + from[index].cost_micros, 0);
+        from[group.indices.at(-1)!].cost_micros += rounded - actual;
+      }
+      return { channel, volume_nl, cost_micros: from.reduce((sum, use) => sum + use.cost_micros, 0), from };
     }));
+  }
+  // A reading or a fitting after the last print still changes current stock and waste.
+  for (const queue of pending.values()) for (const event of queue) {
+    const day = event.kind === 'reading' ? event.observed_on : event.created_on;
+    const lastJob = input.jobs.filter(job => job.printer_id === event.printer_id).sort((a, b) => b.source_record_id - a.source_record_id)[0];
+    applyEvent(event, day ?? lastJob?.date ?? input.inkPurchases.at(-1)?.purchased_on ?? '9999-12-31');
   }
   return { jobLines, offCosts, inkWaste, swapWaste, invalidFittings, units: units.map(({ date: _date, capacity: _capacity, price: _price, cartridges: _count, channel: _channel, series: _series, poolSeries: _pool, ...unit }) => unit) };
 }

@@ -30,6 +30,8 @@ const routes = (data: InkResponse = ink()) => ({ 'GET /ink': data, 'GET /setting
     { channel: 'PM', series: 'PFI-4100', level: 10, replacement_count: 0, observed_at: '2026-09-01T00:00:00Z' },
   ] })] } });
 
+const routesWithoutReadings = () => ({ ...routes(), 'GET /printers': { printers: [archivedPrinter({ model: 'PRO-1100 series', inks: [] })] } });
+
 test('the ink list shows ledger totals, fitted levels, and a selected channel docket', async () => {
   const data = ink({ totals: totals({ jobs: 3, ink_micros: 9_000_000, unknown_jobs: 2, unknown_ink_jobs: 2 }) });
   const api = fakeApi(routes(data));
@@ -64,7 +66,7 @@ test('no collected channels shows an empty state but still offers adding stock',
   expect(screen.getByRole('button', { name: 'Add stock' }).hasAttribute('disabled')).toBe(true);
 });
 
-test('an unfitted channel cannot be written off, while its purchase and waste history remains visible', async () => {
+test('an unfitted reading-mode channel still offers a measured write-off, while its history remains visible', async () => {
   const writeOff: WriteOffView = {
     id: 31, paper_stock_id: null, ink_product_id: 1, printer_id: null, written_off_on: '2026-09-02',
     quantity: null, all_remaining: true, reason: 'Changed early', written_off: 60_000_000, cost_micros: 27_000_000,
@@ -76,7 +78,7 @@ test('an unfitted channel cannot be written off, while its purchase and waste hi
   const { screen } = await renderApp('/ink/C', api);
   expect(await screen.findByText('None fitted.')).toBeTruthy();
   const docket = screen.getByRole('complementary', { name: 'Cartridge' });
-  expect((within(docket).getByRole('button', { name: 'Write off' }) as HTMLButtonElement).disabled).toBe(true);
+  expect((within(docket).getByRole('button', { name: 'Write off' }) as HTMLButtonElement).disabled).toBe(false);
   expect(within(docket).getByText('Changed early')).toBeTruthy();
   expect(within(docket).queryByText('No purchases yet.')).toBeNull();
 });
@@ -156,7 +158,7 @@ test('write-off waits for the ledger preview and cannot save a zero remainder', 
   const date = today();
   let release!: (value: WriteOffPreview) => void;
   const response = new Promise<WriteOffPreview>(resolve => { release = resolve; });
-  const api = fakeApi({ ...routes(), [`GET /write-offs/preview?ink_product_id=1&printer_id=1&written_off_on=${date}`]: () => response });
+  const api = fakeApi({ ...routesWithoutReadings(), [`GET /write-offs/preview?ink_product_id=1&printer_id=1&written_off_on=${date}`]: () => response });
   const { screen } = await renderApp('/ink/C?form=writeoff', api);
   const save = await screen.findByRole('button', { name: 'Save write-off' }) as HTMLButtonElement;
   expect(save.disabled).toBe(true);
@@ -171,7 +173,7 @@ test('writing off the fitted cartridge sends all remaining and only confirms aft
   const response = new Promise<WriteOffPreview>(resolve => { release = resolve; });
   let attempts = 0;
   const api = fakeApi({
-    ...routes(), [`GET /write-offs/preview?ink_product_id=1&printer_id=1&written_off_on=${date}`]: () => response,
+    ...routesWithoutReadings(), [`GET /write-offs/preview?ink_product_id=1&printer_id=1&written_off_on=${date}`]: () => response,
     'POST /write-offs': () => ++attempts === 1 ? reply(422, { error: 'invalid_request' }) : { id: 41 },
   });
   const { screen, user, router } = await renderApp('/ink/C?form=writeoff', api);
@@ -190,4 +192,38 @@ test('writing off the fitted cartridge sends all remaining and only confirms aft
   expect(api.sent('POST /write-offs')).toEqual(Array(2).fill({
     ink_product_id: 1, printer_id: 1, written_off_on: date, all_remaining: true, reason: 'Changed early',
   }));
+});
+
+
+test('reading-mode write-off offers only measured quantity and does not request all-remaining preview', async () => {
+  const api = fakeApi({ ...routes(), 'POST /write-offs': { id: 42 } });
+  const { screen, user } = await renderApp('/ink/C?form=writeoff', api);
+  expect(await screen.findByText(/Cartridge changes are already counted as waste/)).toBeTruthy();
+  expect(screen.queryByText(/the ledger thinks is left/)).toBeNull();
+  await user.clear(screen.getByRole('spinbutton', { name: 'Quantity (ml)' }));
+  await user.type(screen.getByRole('spinbutton', { name: 'Quantity (ml)' }), '1.25');
+  await user.click(screen.getByRole('button', { name: 'Save write-off' }));
+  expect(await screen.findByText('Saved. It shows as waste in totals.')).toBeTruthy();
+  expect(api.sent('POST /write-offs')).toEqual([{ ink_product_id: 1, written_off_on: today(), quantity: 1_250_000, reason: null }]);
+  expect(api.sent(`GET /write-offs/preview?ink_product_id=1&printer_id=1&written_off_on=${today()}`)).toEqual([]);
+});
+
+
+test('a measured write-off is labeled as a quantity rather than a changed cartridge', async () => {
+  const writeOff: WriteOffView = { id: 12, paper_stock_id: null, ink_product_id: 1, printer_id: null,
+    written_off_on: '2026-09-02', quantity: 1_250_000, all_remaining: false, reason: null,
+    written_off: 1_250_000, cost_micros: 500_000 };
+  const data = ink({ cartridges: [cartridge({ write_offs: [writeOff] })] });
+  const { screen } = await renderApp('/ink/C', fakeApi(routes(data)));
+  expect(await screen.findByText(/1.3 ml written off/)).toBeTruthy();
+  expect(screen.queryByText(/cartridge changed early/)).toBeNull();
+});
+
+test('reading mode uses the first observation even when the latest reading is in the future', async () => {
+  const late = archivedPrinter({ inks: [{ channel: 'C', series: 'PFI-4100', level: 50, replacement_count: 2,
+    first_observed_at: '2026-09-01T12:00:00Z', observed_at: '2026-12-01T12:00:00Z' }] });
+  const api = fakeApi({ ...routes(), 'GET /printers': { printers: [late] } });
+  const { screen } = await renderApp('/ink/C?form=writeoff', api);
+  expect(await screen.findByRole('spinbutton', { name: 'Quantity (ml)' })).toBeTruthy();
+  expect(screen.queryByText(/the ledger thinks is left/)).toBeNull();
 });

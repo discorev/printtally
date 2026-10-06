@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AccountingDatabase, Ledger } from 'print-accounting-database';
+import { AccountingDatabase, KnownPrinters, Ledger } from 'print-accounting-database';
 import { batch } from './fixtures.ts';
 import { apiFixture } from './api-fixtures.ts';
 
@@ -72,7 +72,7 @@ test('fitting routes validate references, channel and available units, then supp
   assert.equal(db.all('SELECT id FROM ink_fittings').length, 0, 'invalid creations roll back');
   const made = await put('POST', '/ink-fittings', fitting);
   assert.equal(made.status, 201);
-  assert.deepEqual(await put('POST', '/ink-fittings', fitting), { status: 400, body: { error: 'unit_unavailable' } }, 'the only spare was reserved');
+  assert.deepEqual(await put('POST', '/ink-fittings', fitting), { status: 400, body: { error: 'fitting_conflict' } }, 'the only spare was reserved');
   const id = made.body.id!;
   assert.equal((await put('PATCH', `/ink-fittings/${id}`, { replaced: 'used' })).status, 200);
   assert.equal(db.get('SELECT replaced FROM ink_fittings WHERE id=?', id)!.replaced, 'used');
@@ -101,17 +101,109 @@ test('selected Ink response exposes each printer’s own fitted product and unit
 
 test('an imported snapshot cannot erase a user fitting, and fitted write-offs target its printer', t => {
   const { db, ledger } = fixture(t);
-  db.importSnapshot(snapshot(['2026-02-01', '2026-02-02'], '2026-02-03T12:00:00Z', 2));
+  db.importSnapshot(snapshot(['2026-02-01', '2026-02-02'], '2026-02-04T12:00:00Z', 2));
   const { product, purchase } = stock(ledger);
   const secondPurchase = ledger.createInkPurchase({ ink_product_id: product, purchased_on: '2026-01-02', cartridges: 1, price_micros: 12 * GBP });
   const id = ledger.createInkFitting({ printer_id: 1, channel: 'C', ink_purchase_id: secondPurchase, after_record: 1, replaced: 'shelf' });
   assert.equal(ledger.job(2)!.job.ink[0].from[0].purchase_id, secondPurchase);
   const off = ledger.createWriteOff({ printer_id: 1, ink_product_id: product, written_off_on: '2026-02-03', all_remaining: true });
   assert.equal(ledger.ink(1).cartridges[0].write_offs.find(item => item.id === off)!.written_off, 500_000);
-  db.importSnapshot(snapshot(['2026-02-01', '2026-02-02'], '2026-02-04T12:00:00Z', 2));
+  db.importSnapshot(snapshot(['2026-02-01', '2026-02-02'], '2026-02-05T12:00:00Z', 2));
   assert.equal(db.get('SELECT id FROM ink_fittings')!.id, id);
   assert.equal(db.get('SELECT id FROM stock_write_offs')!.id, off);
   assert.equal(ledger.job(1)!.job.ink[0].from[0].purchase_id, purchase);
   assert.equal(ledger.job(2)!.job.ink[0].from[0].purchase_id, secondPurchase);
   assert.throws(() => ledger.updateWriteOff(off, { printer_id: 1, quantity: 3 }), /all_remaining/);
+});
+
+test('reading-covered cartridge rejects printer all-remaining on create, update and preview; quantity remains available', async t => {
+  const { db, request } = await apiFixture(t);
+  db.importSnapshot(snapshot(['2026-02-01'], '2026-02-03T12:00:00Z', 1));
+  const ledger = new Ledger(db), { product } = stock(ledger);
+  const post = (path: string, method: string, body?: unknown) => request('/api/v1' + path, { method, body });
+  const target = { ink_product_id: product, printer_id: 1, written_off_on: '2026-02-03', all_remaining: true };
+  const rejected = await post('/write-offs', 'POST', target);
+  assert.equal(rejected.status, 400); assert.deepEqual(rejected.json(), { error: 'printer_reports_swaps' });
+  const preview = await post(`/write-offs/preview?ink_product_id=${product}&printer_id=1&written_off_on=2026-02-03`, 'GET');
+  assert.equal(preview.status, 400); assert.deepEqual(preview.json(), { error: 'printer_reports_swaps' });
+  const earlier = ledger.createWriteOff({ ...target, written_off_on: '2026-02-02' });
+  const updated = await post(`/write-offs/${earlier}`, 'PATCH', { written_off_on: '2026-02-03' });
+  assert.equal(updated.status, 400); assert.deepEqual(updated.json(), { error: 'printer_reports_swaps' });
+  assert.equal(db.get('SELECT written_off_on FROM stock_write_offs WHERE id=?', earlier)!.written_off_on, '2026-02-02');
+  assert.ok(ledger.createWriteOff({ ink_product_id: product, written_off_on: '2026-02-03', quantity: 100_000 }));
+});
+
+test('a candidate fitting cannot invalidate an existing later fitting', async t => {
+  const { db, request } = await apiFixture(t);
+  const noReading = snapshot(['2026-02-01', '2026-02-02', '2026-02-03'], '2026-02-04T12:00:00Z', 0);
+  noReading.inks = undefined; db.importSnapshot(noReading);
+  const ledger = new Ledger(db), { product } = stock(ledger, 'PFI-4100', 1);
+  const purchase = ledger.createInkPurchase({ ink_product_id: product, purchased_on: '2026-01-01', cartridges: 1, price_micros: 10 * GBP });
+  const future = ledger.createInkFitting({ printer_id: 1, channel: 'C', ink_purchase_id: purchase, after_record: 2, replaced: 'used' });
+  const earlier = { printer_id: 1, channel: 'C', ink_purchase_id: purchase, after_record: 1, replaced: 'used' };
+  const created = await request('/api/v1/ink-fittings', { method: 'POST', body: earlier });
+  assert.equal(created.status, 400); assert.deepEqual(created.json(), { error: 'fitting_conflict' });
+  assert.deepEqual(db.all('SELECT id FROM ink_fittings').map(row => row.id), [future]);
+  const alternate = ledger.createInkPurchase({ ink_product_id: product, purchased_on: '2026-01-01', cartridges: 1, price_micros: 10 * GBP });
+  const id = ledger.createInkFitting({ ...earlier, ink_purchase_id: alternate });
+  const updated = await request(`/api/v1/ink-fittings/${id}`, { method: 'PATCH', body: { ink_purchase_id: purchase } });
+  assert.equal(updated.status, 400); assert.deepEqual(updated.json(), { error: 'fitting_conflict' });
+  assert.equal(db.get('SELECT ink_purchase_id FROM ink_fittings WHERE id=?', id)!.ink_purchase_id, alternate);
+});
+
+test('swap bound uses the largest succeeded requested_last before the reading, not the latest run', t => {
+  const { db, ledger } = fixture(t);
+  db.importSnapshot(snapshot(['2026-02-01', '2026-02-02', '2026-02-03'], '2026-02-04T12:00:00Z', 1));
+  stock(ledger);
+  db.importSnapshot(snapshot(['2026-02-01'], '2026-02-05T12:00:00Z', 1));
+  db.importSnapshot(snapshot(['2026-02-01', '2026-02-02', '2026-02-03', '2026-02-04'], '2026-02-06T12:00:00Z', 2));
+  assert.equal(ledger.job(3)!.job.ink[0].from[0].index, 2, 'record 3 still belongs to pre-swap cartridge');
+  assert.equal(ledger.job(4)!.job.ink[0].from[0].index, 3, 'swap occurs after record 3');
+  assert.equal(new KnownPrinters(db).archived()[0].inks.find(ink => ink.channel === 'C')?.first_observed_at?.slice(0, 10), '2026-02-04');
+});
+
+test('exhausted capacity mode shows the next shelf unit or None', t => {
+  const { db, ledger } = fixture(t);
+  const noReading = snapshot(['2026-02-01', '2026-02-02'], '2026-02-03T12:00:00Z', 0);
+  noReading.inks = undefined; db.importSnapshot(noReading);
+  stock(ledger, 'PFI-4100', 1);
+  let view = ledger.ink(1).cartridges[0];
+  assert.equal(view.open_remaining_nl, null);
+  assert.equal(view.open_purchase_id, null);
+  const product = ledger.createCartridge({ name: 'PFI-3300 C', channel: 'C', capacity_nl: ml });
+  const spare = ledger.createInkPurchase({ ink_product_id: product, purchased_on: '2026-02-03', cartridges: 1, price_micros: 10 * GBP });
+  const cartridges = ledger.ink(1).cartridges;
+  assert.equal(cartridges[0].open_remaining_nl, null);
+  view = cartridges.find(item => item.id === product)!;
+  assert.equal(view.open_remaining_nl, ml);
+  assert.equal(view.open_purchase_id, spare);
+  assert.equal(view.spares, 0, 'the displayed open unit is not also a spare');
+});
+
+test('exhausted reading mode shows zero instead of negative ml', t => {
+  const { db, ledger } = fixture(t);
+  db.importSnapshot(snapshot(['2026-02-01'], '2026-02-02T12:00:00Z', 1));
+  stock(ledger, 'PFI-4100', 1);
+  const next = snapshot(['2026-02-01', '2026-02-02'], '2026-02-03T12:00:00Z', 1);
+  next.records[1].raw.job_used_ink_C = 2500;
+  db.importSnapshot(next);
+  const view = ledger.ink(1);
+  assert.ok(view.cartridges[0].units[0].remaining_nl < 0);
+  assert.equal(view.cartridges[0].open_remaining_nl, 0);
+  assert.equal(view.fitted.C.remaining_nl, 0);
+});
+
+test('a fitting at the upper bound of a reading swap interval does not retire ink twice', t => {
+  const { db, ledger } = fixture(t);
+  db.importSnapshot(snapshot(['2026-02-01'], '2026-02-02T12:00:00Z', 1));
+  const { purchase, product } = stock(ledger, 'PFI-4100', 1);
+  const replacement = ledger.createInkPurchase({ ink_product_id: product, purchased_on: '2026-01-01', cartridges: 1, price_micros: 10 * GBP });
+  const second = snapshot(['2026-02-01', '2026-02-02'], '2026-02-03T12:00:00Z', 2);
+  second.records[1].raw.job_used_ink_C = 0;
+  db.importSnapshot(second);
+  ledger.createInkFitting({ printer_id: 1, channel: 'C', ink_purchase_id: replacement, after_record: 2, replaced: 'shelf' });
+  const view = ledger.ink(1);
+  assert.equal(view.totals.waste_micros, 0);
+  assert.equal(view.cartridges[0].units.find(unit => unit.purchase_id === purchase)!.state, 'shelf');
+  assert.equal(view.fitted.C.purchase_id, replacement);
 });

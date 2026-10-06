@@ -113,7 +113,7 @@ export function PurchaseLine(props: ({ paper: PaperPurchaseView; stock: Pick<Sto
  *  or for ink "cartridge changed early, 12.3 ml left in it". */
 export function WriteOffLine(props: { writeOff: WriteOffView; onRemove?: () => Promise<unknown> } & ({ stock: Pick<StockView, 'name' | 'format'> } | { ink: true })) {
   const currency = useCurrency(), { writeOff } = props;
-  const what = 'ink' in props ? `cartridge changed early, ${ml(writeOff.written_off, 1)} left in it`
+  const what = 'ink' in props ? writeOff.all_remaining ? `cartridge changed early, ${ml(writeOff.written_off, 1)} left in it` : `${ml(writeOff.written_off, 1)} written off`
     : writeOff.all_remaining ? `everything left of ${props.stock.name}` : `${stockQuantity(writeOff.written_off, props.stock.format)} ${props.stock.name}`;
   return <LedgerLine what={<>{dateShort(writeOff.written_off_on)} · {what}</>} sub={writeOff.reason ?? undefined} amount={money(writeOff.cost_micros, currency)} waste
     noun="write-off" onRemove={props.onRemove} />;
