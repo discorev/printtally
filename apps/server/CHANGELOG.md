@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.5.0](https://github.com/discorev/printtally/compare/backend-v0.4.0...backend-v0.5.0) (2026-10-06)
+
+
+### Features
+
+* cost ink per printer from cartridges, swaps and fittings ([0d9dc89](https://github.com/discorev/printtally/commit/0d9dc89c94fc196595281327a9f01b43beffbb77))
+* **ink:** archive reported printer cartridge status ([79893b0](https://github.com/discorev/printtally/commit/79893b00a22dffa237f00687cef9490524955ec5))
+* **ink:** cost ink per printer from cartridge units, swaps and fittings ([65ff6d9](https://github.com/discorev/printtally/commit/65ff6d91654365e5b3b934c0156c2466ac514b84))
+* read ink levels and cartridge types from each printer ([65dd97e](https://github.com/discorev/printtally/commit/65dd97e4012a8be8e9a3079c18149daf5216d797))
+* see and allocate cartridges per printer ([cd88922](https://github.com/discorev/printtally/commit/cd88922ec0e34bc8ce7ec29b36dbc840d2a9003f))
+* **server:** list archived printers by name and rename known printers ([e0b4795](https://github.com/discorev/printtally/commit/e0b47956f006bb100d9a39d795528444f5091282))
+* several printers in Settings and a Jobs printer filter ([6cb6862](https://github.com/discorev/printtally/commit/6cb6862f3ed1593cb3ed2c58e6da9a3dc5ef934d))
+* **web:** filter jobs by printer and name the printer on rows and the docket ([e3d2dfb](https://github.com/discorev/printtally/commit/e3d2dfbbcc5227920607eb8b8ecdf5b283316afd))
+* **web:** list and rename printers in Settings, and add a printer from setup ([37f7d7c](https://github.com/discorev/printtally/commit/37f7d7c7761151f17fdb095bd28fd207641e2e2e))
+* **web:** see and allocate cartridges per printer ([c2b8499](https://github.com/discorev/printtally/commit/c2b8499997461dc09552ba6e71fef484226202d7))
+* **web:** show printer ink levels and choose stock by type ([cdc6c03](https://github.com/discorev/printtally/commit/cdc6c03d813a3e3f99a1bd128a54007a23857486))
+
+
+### Bug Fixes
+
+* correct multi-printer job filtering and display ([d735cae](https://github.com/discorev/printtally/commit/d735cae5b69a102bcf229c23b9a0386b1fecbf88))
+* **ink:** date candidate fittings, consume swap overrides once, keep intermediates ([937d84a](https://github.com/discorev/printtally/commit/937d84a104aaae42ac6b883fe85f228f953f6fc5))
+* **ink:** fit a cartridge when a reading shows one is in ([4366adc](https://github.com/discorev/printtally/commit/4366adc70a2e208f92075f54f9b8ff1dd103c07d))
+* **ink:** keep write-offs behind unprocessed jobs, recheck printer edits, choose the write-off type ([e9a2cfd](https://github.com/discorev/printtally/commit/e9a2cfd4f6aa46ee88b237ffe362c9019fd44e8a))
+* **ink:** match legacy write-offs, apply pending events and check fittings as a set ([3e0a7f6](https://github.com/discorev/printtally/commit/3e0a7f6620843a83feb86df9333697b0d4ac2ac6))
+* **ink:** match printer series and backfill missing device details ([ee3590a](https://github.com/discorev/printtally/commit/ee3590a57f934051bd5805c066d2e45b18f23285))
+* **ink:** order readings with write-offs, date swaps by observation, index units ([ce18ac5](https://github.com/discorev/printtally/commit/ce18ac5cb5b7981f7332522b8a5c3bb6f73a36a5))
+* **ink:** pin fittings to a cartridge, mark the next cartridge, label shelf write-offs ([027df3a](https://github.com/discorev/printtally/commit/027df3a67549bcc34a39cae9e4af0201af9bf2ac))
+* **ink:** preserve partial printer readings through imports ([12cbf1c](https://github.com/discorev/printtally/commit/12cbf1cdfd9fa6d8dcd914c796de6faf9ef0741b))
+* keep an unknown printer filter selected, and seed an empty history ([b795c84](https://github.com/discorev/printtally/commit/b795c84b74923ab0f1452c69f5f51b807c46f4cd))
+* name the PRO-1100's cartridges PFI-4100, not PFI-1100 ([59e79d5](https://github.com/discorev/printtally/commit/59e79d50b0f3c79547ee06a95fdec8a1c8821038))
+* name the PRO-1100's cartridges PFI-4100, not PFI-1100 ([703cf6f](https://github.com/discorev/printtally/commit/703cf6f2578d38878034cd785cab0f07f043658b))
+* **web:** distinguish pooled ink estimates from printer series ([334979b](https://github.com/discorev/printtally/commit/334979b848a1ba47f67ba9c86732465c2265f17e))
+* **web:** keep cartridge dates and the 'set by you' tag on one line ([e2c2d47](https://github.com/discorev/printtally/commit/e2c2d4713f29cf46217cfd50e94b4a269d6a6608))
+* **web:** keep the cartridge docket in step with the list and tidy fitting forms ([b9a238b](https://github.com/discorev/printtally/commit/b9a238b90de919e7e62e8d0c5a699259e589520d))
+* **web:** show printed and waste on cartridges written off from the shelf ([0c7abb5](https://github.com/discorev/printtally/commit/0c7abb562be1c02a9987733055c1ad1074de8611))
+
 ## [0.4.0](https://github.com/discorev/printtally/compare/backend-v0.3.0...backend-v0.4.0) (2026-10-03)
 
 
